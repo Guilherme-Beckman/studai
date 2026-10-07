@@ -1,1 +1,6 @@
 .venv/*
+saida/*
+simulados/processados/
+.env
+.env.*
+!.env.example
