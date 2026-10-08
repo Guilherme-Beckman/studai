@@ -304,7 +304,10 @@ def create_attempt(db: sqlite3.Connection, config: dict, course_id: str, pool: l
     subjects = list(weights)
     available_topics = deterministic_topics(pool, subjects)
     if planner_topics is None:
-        planner_topics, planner_meta = plan_topics(provider, profile, available_topics)
+        # A composição do diagnóstico é determinística; o LLM não escolhe a
+        # cobertura de tópicos nem pode tornar a criação dependente de rede.
+        planner_topics = deterministic_topics_from_available(available_topics)
+        planner_meta = {"status": "deterministic", "attempts": 0, "error": None}
     selected, distribution = select_questions(pool, weights, total, planner_topics, seed)
     distribution["excluded"] = excluded or {}
     distribution["unavailable_subjects"] = [s for s in subjects if not distribution["available_by_subject"].get(s)]
@@ -484,17 +487,18 @@ def analyze(provider, metrics: dict, profile: dict) -> tuple[dict | None, str | 
     return None, error
 
 
-def finalize_attempt(db: sqlite3.Connection, attempt_id: str, provider) -> dict:
+def finalize_attempt(db: sqlite3.Connection, attempt_id: str, provider, *, include_analysis: bool = True) -> dict:
     attempt = get_attempt(db, attempt_id)
     pending = list_questions_for_attempt(db, attempt_id, unanswered_only=True)
     if pending:
         raise ValueError(f"ainda faltam {len(pending)} questões; responda todas antes de concluir")
     metrics = calculate_metrics(db, attempt_id)
-    analysis, error = analyze(provider, metrics, attempt["profile_snapshot"])
-    status = "completed" if analysis is not None else "analysis_failed"
+    analysis, error = analyze(provider, metrics, attempt["profile_snapshot"]) if include_analysis else (None, None)
+    status = "completed" if analysis is not None or not include_analysis else "analysis_failed"
     with db:
         db.execute("UPDATE attempts SET status=?,metrics_json=?,analysis_json=?,analysis_status=?,analysis_error=? WHERE id=?",
                    (status, json.dumps(metrics, ensure_ascii=False),
                     json.dumps(analysis, ensure_ascii=False) if analysis else None,
                     status, error, attempt_id))
-    return {"metrics": metrics, "analysis": analysis, "analysis_status": status, "analysis_error": error}
+    return {"metrics": metrics, "analysis": analysis, "analysis_status": status,
+            "analysis_error": error, "analysis_included": include_analysis}

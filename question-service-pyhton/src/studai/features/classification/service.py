@@ -58,8 +58,13 @@ from studai.integrations.llm import (
     AnthropicProvider, GeminiProvider, LLMError, MockProvider, OllamaProvider,
     OPENAI_COMPAT_PRESETS, OpenAICompatProvider, Provider, http_post, load_dotenv, make_provider,
 )
+from studai.settings import DEFAULT_CLASSIFICATION_CACHE, DEFAULT_QUESTIONS_DIR
+from studai.features.classification.cache import ClassificationCache
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v3"
+_CACHE_WRITE_LOCK = threading.Lock()
+_CACHE_WARM_LOCK = threading.Lock()
+_CACHE_WARMED = False
 
 
 
@@ -187,13 +192,21 @@ def validate(obj: dict, taxonomy: dict[str, str]) -> dict:
 def classify_one(provider: Provider, system: str, q: dict, shared: dict | None,
                  taxonomy: dict[str, str], images: list[bytes]) -> dict:
     user = render_questao(q, shared, bool(images))
+    schema = {"type": "object", "required": ["materia", "materias_secundarias", "assunto", "confianca"],
+              "properties": {"materia": {"type": "string", "enum": list(taxonomy)},
+                             "materias_secundarias": {"type": "array", "items": {"type": "string", "enum": list(taxonomy)}},
+                             "assunto": {"type": "string"}, "confianca": {"type": "number", "minimum": 0, "maximum": 1}},
+              "additionalProperties": False}
     last_err = ""
     for attempt in range(2):                       # 2ª tentativa devolve o erro ao modelo
         prompt = user if attempt == 0 else f"{user}\n\nSua resposta anterior foi inválida ({last_err}). " \
                                               "Responda apenas o JSON no formato pedido."
-        raw = provider.complete(system, prompt, images or None)
+        raw = provider.complete_json(system, prompt, schema, images or None)
         try:
-            return validate(extract_json(raw), taxonomy)
+            result = validate(extract_json(raw), taxonomy)
+            result["origem"] = "llm"
+            result["tentativas"] = attempt + 1
+            return result
         except ValueError as e:
             last_err = str(e)
     raise LLMError(f"resposta inválida: {last_err}")
@@ -218,40 +231,84 @@ def load_images(base: Path, q: dict, shared: dict | None, mode: str) -> list[byt
     return out
 
 
+def _cache_key(q: dict, shared: dict | None, imgs: list[bytes], provider_label: str,
+               tax_hash: str, images_mode: str) -> str:
+    # Identidade sem número/ordem e insensível a caixa, acentos e espaços.
+    prompt = unicodedata.normalize("NFKD", render_questao(q, shared, bool(imgs))).casefold()
+    prompt = "".join(c for c in prompt if unicodedata.category(c) != "Mn")
+    prompt = re.sub(r"\s+", " ", prompt).strip()
+    image_hashes = [hashlib.sha256(image).hexdigest() for image in imgs]
+    material = json.dumps({"prompt": prompt, "images": image_hashes}, sort_keys=True, ensure_ascii=False)
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+    return f"{PROMPT_VERSION}|{provider_label}|{tax_hash}|{images_mode}|{digest}"
+
+
+def _warm_cache_from_processed() -> None:
+    """Indexa resultados válidos do acervo no cache compartilhado, uma vez por processo."""
+    global _CACHE_WARMED
+    if _CACHE_WARMED:
+        return
+    with _CACHE_WARM_LOCK:
+        if _CACHE_WARMED:
+            return
+        cache_db = ClassificationCache(DEFAULT_CLASSIFICATION_CACHE)
+        legacy_cache = DEFAULT_CLASSIFICATION_CACHE.parent / "classificacoes.jsonl"
+        cache_db.import_jsonl(legacy_cache)
+        known: set[str] = set()
+        taxonomy_names = list(DEFAULT_TAXONOMY)
+        tax_hash = hashlib.sha1(json.dumps(DEFAULT_TAXONOMY, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:8]
+        additions: list[dict] = []
+        if DEFAULT_QUESTIONS_DIR.is_dir():
+            for path in DEFAULT_QUESTIONS_DIR.rglob("questoes*.json"):
+                if "classificado" not in path.name:
+                    continue
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                    details = data.get("classificacao") or {}
+                    if details.get("taxonomia") != taxonomy_names:
+                        continue
+                    provider_label = str(details.get("modelo") or "")
+                    if not provider_label:
+                        continue
+                    images_mode = str(details.get("imagens") or "nunca")
+                    shared_all = data.get("textos_compartilhados", {})
+                    for question in data.get("questoes", []):
+                        result = question.get("classificacao")
+                        if not isinstance(result, dict) or question.get("classificacao_erro"):
+                            continue
+                        shared = shared_all.get(question.get("texto_id") or "")
+                        imgs = load_images(path.parent, question, shared, images_mode)
+                        key = _cache_key(question, shared, imgs, provider_label, tax_hash, images_mode)
+                        if key not in known and cache_db.get(key) is None:
+                            cache_db.put(key, {k: result[k] for k in
+                                               ("materia", "materias_secundarias", "assunto", "confianca") if k in result},
+                                         result.get("modelo", provider_label))
+                            known.add(key)
+                except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+                    continue
+        cache_db.close()
+        _CACHE_WARMED = True
+
+
 def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], *, workers: int = 4,
                 imagens: str = "nunca", only: set[int] | None = None, limit: int | None = None,
-                use_cache: bool = True, min_conf: float = 0.6, log=print) -> dict:
+                use_cache: bool = True, min_conf: float = 0.6, log=print, progress=None,
+                cancel_check=None) -> dict:
     data = json.loads(input_json.read_text(encoding="utf-8"))
     base = input_json.parent
     shared_all = data.get("textos_compartilhados", {})
     system = build_system(taxonomy)
     tax_hash = hashlib.sha1(json.dumps(taxonomy, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:8]
 
-    cache_path = input_json.with_suffix(".classificacao.cache.jsonl")
-    cache: dict[str, dict] = {}
-    cache_models: dict[str, str] = {}
+    cache_path = DEFAULT_CLASSIFICATION_CACHE
+    cache_db = ClassificationCache(cache_path) if use_cache else None
     cached_model_default = provider.models[0] if isinstance(provider, GeminiProvider) else provider.label
-    if use_cache and cache_path.exists():
-        for line in cache_path.read_text(encoding="utf-8").splitlines():
-            try:
-                row = json.loads(line)
-                cached_key = row["key"]
-                cache[cached_key] = row["resultado"]
-                cache_models[cached_key] = row.get("modelo", cached_model_default)
-                # Reaproveita resultados salvos antes de habilitar a rotação Gemini.
-                if isinstance(provider, GeminiProvider):
-                    old_prefix = f"{PROMPT_VERSION}|GeminiProvider:{provider.models[0]}|"
-                    if cached_key.startswith(old_prefix):
-                        rotated_key = f"{PROMPT_VERSION}|{provider.label}|" + cached_key[len(old_prefix):]
-                        cache[rotated_key] = cache[cached_key]
-                        cache_models[rotated_key] = cache_models[cached_key]
-            except (json.JSONDecodeError, KeyError):
-                pass
-
-    def key_of(q):
-        h = hashlib.sha1((q.get("enunciado", "") + json.dumps(q.get("alternativas", {}), sort_keys=True)
-                          ).encode()).hexdigest()[:10]
-        return f"{PROMPT_VERSION}|{provider.label}|{tax_hash}|{imagens}|{q['numero']}|{h}"
+    if use_cache:
+        _warm_cache_from_processed()
+        legacy_paths = [DEFAULT_CLASSIFICATION_CACHE.parent / "classificacoes.jsonl",
+                        input_json.with_suffix(".classificacao.cache.jsonl")]
+        for legacy_path in dict.fromkeys(legacy_paths):
+            cache_db.import_jsonl(legacy_path)
 
     todo = [q for q in data["questoes"] if (not only or q["numero"] in only)]
     if limit:
@@ -262,21 +319,31 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
     result_models: dict[int, str] = {}
     errors: dict[int, str] = {}
     active: dict[int, float] = {}
+    cached_hits = 0
 
     def work(q):
-        k = key_of(q)
-        if k in cache:
-            return q["numero"], cache[k], True, cache_models.get(k, provider.label)
+        if cancel_check and cancel_check():
+            raise InterruptedError("classificação cancelada")
         shared = shared_all.get(q.get("texto_id") or "")
         imgs = load_images(base, q, shared, imagens)
+        k = _cache_key(q, shared, imgs, provider.label, tax_hash, imagens)
+        cached = cache_db.get(k) if cache_db else None
+        if cached:
+            result = dict(cached[0])
+            result["origem"] = "cache"
+            return q["numero"], result, True, cached[1] or provider.label
         numero = q["numero"]
         with lock:
             active[numero] = time.monotonic()
         try:
             res = classify_one(provider, system, q, shared, taxonomy, imgs)
+            usage = getattr(getattr(provider, "_thread_state", None), "usage", None)
+            if usage:
+                res["uso"] = dict(usage)
             used_model = getattr(provider, "last_used_model", provider.label)
-            with lock, cache_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps({"key": k, "resultado": res, "modelo": used_model}, ensure_ascii=False) + "\n")
+            if cache_db:
+                with _CACHE_WRITE_LOCK:
+                    cache_db.put(k, res, used_model)
             return numero, res, False, used_model
         finally:
             with lock:
@@ -299,6 +366,8 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                     _, res, cached, model = fut.result()
                     results[n] = res
                     result_models[n] = model
+                    if cached:
+                        cached_hits += 1
                     message = (f"[{finished}/{len(todo)}] Q{n:02d} -> {res['materia']} ({res['confianca']}) [{model}]"
                                f"{' [cache]' if cached else ''}")
                 except Exception as e:                  # uma questão com erro não derruba o lote
@@ -307,11 +376,23 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                 if show_progress:
                     sys.stderr.write("\r\033[K")
                 log(message)
+                if progress:
+                    progress({"completed": finished, "total": len(todo), "question": n,
+                              "errors": len(errors), "cached": cached_hits,
+                              "cache_misses": finished - cached_hits - len(errors),
+                              "message": message, "active": []})
 
-            if show_progress and pending:
+            if pending:
                 now = time.monotonic()
                 with lock:
                     current = sorted(active.items())
+                if progress:
+                    progress({"completed": finished, "total": len(todo), "active": [
+                        {"question": numero, "seconds": int(now - began)} for numero, began in current
+                    ], "errors": len(errors), "cached": cached_hits,
+                    "cache_misses": max(0, finished - cached_hits - len(errors)),
+                    "message": ("Aguardando início das próximas questões" if not current else
+                                   "A IA está analisando " + ", ".join(f"Q{n:02d}" for n, _ in current))})
                 if current:
                     active_text = ", ".join(
                         f"Q{numero:02d} {int(now - began)}s" for numero, began in current
@@ -343,6 +424,12 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
             q["classificacao_erro"] = errors[q["numero"]]
     data["classificacao"] = {"modelo": provider.label, "taxonomia": list(taxonomy),
                              "imagens": imagens, "erros": errors}
+    data["processamento_cache"] = {"questoes_reutilizadas": cached_hits,
+                                   "cache_misses": max(0, len(todo) - cached_hits - len(errors)),
+                                   "questoes_processadas": len(todo), "erros": len(errors),
+                                   "estimated_saved_calls": cached_hits}
+    if cache_db:
+        cache_db.close()
     return data
 
 

@@ -9,6 +9,9 @@ description = "Processamento de simulados e diagnóstico de estudos"
 requires-python = ">=3.10"
 dependencies = ["pymupdf"]
 
+[project.optional-dependencies]
+benchmark = ["datasets>=3.0"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

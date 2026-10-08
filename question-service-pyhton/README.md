@@ -53,6 +53,10 @@ simulados/
 
 Os PDFs originais permanecem no lugar. A pasta `simulados/processados/` é gerada e ignorada pelo Git.
 
+## Cache de simulados e questões
+
+A classificação usa um cache compartilhado entre CLI e API em `simulados/cache/classificacoes.jsonl`. A chave representa o conteúdo efetivamente enviado à IA (enunciado, alternativas, texto-base e imagens), junto com o modelo, taxonomia e versão do prompt; o número da questão não participa da chave. Assim, provas com as mesmas questões em outra ordem reaproveitam as classificações. Se o PDF e as configurações forem idênticos, a API também reutiliza a extração e o resultado completo do simulado. Para mudar o local do cache, defina `STUDAI_CACHE_DIR`.
+
 Quando não houver uma associação inequívoca pelo nome, o provedor configurado tenta associar usando somente os nomes/identificadores dos arquivos. Se a resposta não passar pela validação de identidade, nada é importado e o lote informa que precisa de revisão. Para uma associação manual de gabarito com várias versões, use `python diagnostico.py importar-gabarito --gabarito docs/gabaritos/arquivo.pdf --questoes simulados/processados/nome/questoes.json --versao V1`.
 
 ## Usar dois computadores Ollama
@@ -123,5 +127,11 @@ python classifier.py simulados/processados/simulado2026/questoes.json
 ## Organização do código
 
 O código principal está em `src/studai/`, como um monólito modular separado em `features/` e `integrations/`. A arquitetura e as regras para contribuir estão em [ARCHITECTURE.md](ARCHITECTURE.md). Os scripts antigos na raiz seguem disponíveis como adaptadores para preservar os comandos atuais. O protótipo Go está isolado em `prototypes/go-pdf-extractor/` e não participa do processamento principal.
+
+## API local e interface web
+
+Inicie `python api.py` e abra <http://127.0.0.1:8787>. A interface permite processar uma prova PDF (com gabarito PDF opcional no mesmo formulário), importar gabaritos em JSON e criar/responder diagnósticos. Selecione **Demonstração offline** para exercitar os fluxos sem Ollama ou chaves externas; para classificação real, selecione Ollama e informe o modelo/URL se necessário. A API e a interface são ferramentas de desenvolvimento local e ainda não incluem login.
+
+Com Ollama selecionado, a tela de processamento aceita vários servidores separados por vírgula e configura `Workers` e `Threads por worker`, equivalentes a `--base-url`, `--workers` e `--ollama-threads` do comando em lote. Os valores iniciais são 2 workers e 12 threads.
 
 Para executar os testes de regressão: `python -m unittest discover -s tests`.

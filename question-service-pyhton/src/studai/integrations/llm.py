@@ -92,6 +92,11 @@ class Provider(ABC):
     def complete(self, system: str, user: str, images: list[bytes] | None = None) -> str:
         """Devolve o texto da resposta do modelo. images = PNGs (bytes) opcionais."""
 
+    def complete_json(self, system: str, user: str, schema: dict,
+                      images: list[bytes] | None = None) -> str:
+        """Saída JSON estruturada quando disponível; provedores legados usam JSON mode."""
+        return self.complete(system, user, images)
+
 class AnthropicProvider(Provider):
     default_key_env = "ANTHROPIC_API_KEY"
     default_base_url = "https://api.anthropic.com/v1"
@@ -220,6 +225,11 @@ class OllamaProvider(Provider):
         self._server_lock = threading.Lock()
         self._server_index = 0
         self._thread_state = threading.local()
+        self.keep_alive = os.environ.get("STUDAI_OLLAMA_KEEP_ALIVE", "10m")
+        try:
+            self.num_ctx = max(0, int(os.environ.get("STUDAI_OLLAMA_NUM_CTX", "0")))
+        except ValueError:
+            self.num_ctx = 0
 
     @property
     def last_used_model(self) -> str:
@@ -237,6 +247,12 @@ class OllamaProvider(Provider):
         return index
 
     def complete(self, system, user, images=None):
+        return self._complete(system, user, images, schema=None)
+
+    def complete_json(self, system, user, schema, images=None):
+        return self._complete(system, user, images, schema=schema)
+
+    def _complete(self, system, user, images=None, schema=None):
         user_message: dict = {"role": "user", "content": user}
         if images:
             user_message["images"] = [base64.b64encode(im).decode() for im in images]
@@ -245,14 +261,17 @@ class OllamaProvider(Provider):
             "messages": [{"role": "system", "content": system}, user_message],
             "stream": False,
             "think": False,
+            "keep_alive": self.keep_alive,
             "options": {"num_predict": self.max_tokens},
         }
+        if self.num_ctx:
+            body["options"]["num_ctx"] = self.num_ctx
         if self.num_threads:
             body["options"]["num_thread"] = self.num_threads
         if self.temperature is not None:
             body["options"]["temperature"] = self.temperature
         if self.json_mode:
-            body["format"] = "json"
+            body["format"] = schema or "json"
         # Cada worker fica associado a um host para que o host mais rápido possa
         # continuar recebendo trabalho enquanto o outro ainda está inferindo.
         first = self._assigned_server_index()
@@ -273,6 +292,9 @@ class OllamaProvider(Provider):
                 raise LLMError(f"resposta inesperada do Ollama: {str(out)[:300]}") from None
             self._thread_state.model = self.model
             self._thread_state.server = server
+            self._thread_state.usage = {"prompt_tokens": int(out.get("prompt_eval_count", 0)),
+                                        "completion_tokens": int(out.get("eval_count", 0)),
+                                        "eval_duration_ns": int(out.get("eval_duration", 0))}
             return answer
         raise LLMError("todos os servidores Ollama falharam: " + " | ".join(failures))
 
@@ -298,6 +320,41 @@ class MockProvider(Provider):
         return json.dumps({"materia": mat, "materias_secundarias": [], "assunto": "(mock)",
                            "confianca": 0.5}, ensure_ascii=False)
 
+
+class DemoProvider(MockProvider):
+    """Provider offline para exercitar o fluxo completo pela interface local."""
+
+    @property
+    def label(self) -> str:
+        return "DemoProvider:offline"
+
+    def complete(self, system, user, images=None):
+        if "planeja cobertura temática" in system:
+            payload = json.loads(user)
+            return json.dumps({"topicos": payload.get("topicos_disponiveis", {})}, ensure_ascii=False)
+        if "interpreta resultados de um diagnóstico" in system:
+            payload = json.loads(user)
+            metrics = payload["metrics_calculated_by_code"]["subjects"]
+            actions = {
+                "unknown_content": "theory",
+                "calc_error": "calculation_practice",
+                "misread": "interpretation_practice",
+                "blank": "review",
+            }
+            steps = []
+            for subject, row in metrics.items():
+                if row["status"] != "assessed":
+                    continue
+                reason = next((name for name in actions if row["error_reasons"].get(name, 0)), None)
+                if reason:
+                    steps.append({"subject": subject, "action": actions[reason], "reason_code": reason,
+                                  "rationale": "Prioridade gerada pelo provedor de demonstração local.",
+                                  "exit_criterion": "Acertar pelo menos 8 de 10 questões inéditas."})
+            return json.dumps({"summary": "Análise de demonstração concluída com métricas calculadas pelo sistema.",
+                               "steps": steps}, ensure_ascii=False)
+        return super().complete(system, user, images)
+
+
 def make_provider(name: str, model: str, *, base_url: str | None, key_env: str | None, **kw) -> Provider:
     key_name = key_env
     if name in OPENAI_COMPAT_PRESETS:
@@ -314,9 +371,9 @@ def make_provider(name: str, model: str, *, base_url: str | None, key_env: str |
         if not base_url:
             sys.exit("--provider openai-compat exige --base-url")
         key_name = key_name or "OPENAI_COMPAT_API_KEY"
-    elif name in ("anthropic", "openai", "gemini", "mock"):
+    elif name in ("anthropic", "openai", "gemini", "mock", "demo"):
         cls = {"anthropic": AnthropicProvider, "openai": OpenAICompatProvider,
-               "gemini": GeminiProvider, "mock": MockProvider}[name]
+               "gemini": GeminiProvider, "mock": MockProvider, "demo": DemoProvider}[name]
         key_name = key_name or cls.default_key_env
     elif ":" in name:                      # "pacote.modulo:Classe"
         mod, _, attr = name.partition(":")

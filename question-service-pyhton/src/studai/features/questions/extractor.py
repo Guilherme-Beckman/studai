@@ -448,13 +448,17 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool):
         q["resposta"] = None  # o caderno não traz gabarito; preencher depois
 
 
-def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bool = True) -> Path:
+def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bool = True, progress=None) -> Path:
     """Extrai um PDF e grava questoes.json e imagens dentro de outdir."""
     input_pdf = input_pdf.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
     doc = pymupdf.open(input_pdf)
     try:
+        if progress:
+            progress({"stage": "extracting", "message": f"Lendo PDF · {len(doc)} páginas", "pages": len(doc)})
         questions, shared = parse(doc)
+        if progress:
+            progress({"stage": "rendering", "message": f"Extraindo imagens de {len(questions)} questões", "questions": len(questions)})
         finalize(doc, questions, shared, outdir, dpi, full_crops)
         data = {
             "prova": input_pdf.stem,
@@ -465,6 +469,8 @@ def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bo
         }
         output = outdir / "questoes.json"
         output.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        if progress:
+            progress({"stage": "extracted", "message": f"Extração concluída · {len(questions)} questões", "questions": len(questions)})
         return output
     finally:
         doc.close()
@@ -486,4 +492,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

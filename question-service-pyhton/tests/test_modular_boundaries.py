@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 import pymupdf
 
@@ -13,6 +14,9 @@ from studai.features.answer_keys.service import import_answer_key, parse_answer_
 from studai.features.classification.service import DEFAULT_TAXONOMY, MockProvider, classificar
 from studai.features.diagnostics.service import connect_db
 from studai.features.questions.extractor import extract_pdf
+from studai.features.diagnostics import service as diagnostics
+from studai.integrations.llm import make_provider
+from studai.api import server as api
 
 
 class ModularFeatureTests(unittest.TestCase):
@@ -68,6 +72,49 @@ class ModularFeatureTests(unittest.TestCase):
             db.close()
         self.assertEqual(summary["imported"], 2)
         self.assertEqual([tuple(row) for row in stored], [(1, "A"), (2, "B")])
+
+    def test_api_processes_pdf_offline_without_external_model(self):
+        source = self.root / "prova.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page()
+        for index, line in enumerate(("1", "Quanto é 1 + 1?", "(A) 1", "(B) 2", "(C) 3", "(D) 4", "(E) 5")):
+            page.insert_text((72, 72 + index * 20), line)
+        doc.save(source)
+        doc.close()
+        processed = self.root / "processed"
+        with patch.object(api, "UPLOADS_ROOT", self.root / "uploads"), \
+             patch.object(api, "PROCESSED_ROOT", processed), \
+             patch.object(api, "SERVICE_ROOT", self.root), \
+             patch.object(api.classification, "classificar", wraps=api.classification.classificar) as classify:
+            result = api._process_exam("prova.pdf", source.read_bytes(), {
+                "provider": "demo", "dpi": 72, "workers": "2", "ollamaThreads": "12"})
+            exams = api._exam_files()
+        self.assertTrue(result["classified"])
+        self.assertEqual(result["questions"], 1)
+        self.assertTrue(exams[0][0]["classified"])
+        self.assertEqual(classify.call_args.kwargs["workers"], 2)
+        self.assertEqual(classify.call_args.args[1].num_threads, 12)
+
+    def test_api_provider_accepts_multiple_ollama_servers(self):
+        provider = api._provider({"provider": "ollama", "model": "qwen3.5:4b",
+                                  "baseUrl": "http://localhost:11434,http://192.168.100.167:11434",
+                                  "ollamaThreads": "12"})
+        self.assertEqual(provider.base_urls, ["http://localhost:11434", "http://192.168.100.167:11434"])
+        self.assertEqual(provider.num_threads, 12)
+
+    def test_demo_provider_supports_diagnostic_planning_and_analysis(self):
+        provider = make_provider("demo", "", base_url=None, key_env=None)
+        profile = {"nome": "Curso de teste", "pesos": {"Matemática": 1}}
+        plan, plan_info = diagnostics.plan_topics(provider, profile, {"Matemática": ["Funções"]})
+        self.assertEqual(plan, {"Matemática": ["Funções"]})
+        self.assertEqual(plan_info["status"], "llm")
+
+        metrics = {"subjects": {"Matemática": {"attempts": 3, "correct": 1, "accuracy": 1 / 3,
+                    "error_reasons": {"unknown_content": 1, "calc_error": 1, "misread": 0, "blank": 0},
+                    "status": "assessed"}}}
+        analysis, error = diagnostics.analyze(provider, metrics, profile)
+        self.assertIsNone(error)
+        self.assertEqual(analysis["steps"][0]["subject"], "Matemática")
 
 
 if __name__ == "__main__":
