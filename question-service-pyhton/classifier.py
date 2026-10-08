@@ -87,6 +87,7 @@ DEFAULT_TAXONOMY: dict[str, str] = {
     "Filosofia": "ética, epistemologia, filosofia política, história da filosofia",
     "Sociologia": "teoria sociológica, desigualdades, território, trabalho, cultura, movimentos sociais",
     "Artes": "história da arte, linguagens artísticas, arte contemporânea, cinema, patrimônio, acessibilidade em museus",
+    "Educação Física": "corpo, movimento, práticas corporais, esporte, saúde e cultura corporal",
 }
 
 SYSTEM_TEMPLATE = """Você classifica questões de vestibular (FUVEST) por matéria escolar.
@@ -366,6 +367,7 @@ class MockProvider(Provider):
         "Geografia": ["bioma", "domínio", "clima", "cartografia", "ferrovia", "território"],
         "História": ["regime", "revolução", "império", "nazis", "feudalismo", "século"],
         "Literatura": ["romance", "poema", "narrativa", "autora", "lispector", "balada"],
+        "Educação Física": ["atividade física", "prática corporal", "esporte", "exercício físico"],
     }
 
     def complete(self, system, user, images=None):

@@ -4,3 +4,6 @@ simulados/processados/
 .env
 .env.*
 !.env.example
+simulados/*
+diagnostico/*.sqlite3
+diagnostico/*.sqlite3-*

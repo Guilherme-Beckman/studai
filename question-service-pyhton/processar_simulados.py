@@ -14,6 +14,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import classifier as clf
+import diagnostico_core as diag
+
 
 def main() -> int:
     here = Path(__file__).resolve().parent
@@ -21,9 +24,13 @@ def main() -> int:
     ap.add_argument("pasta", nargs="?", type=Path, default=here / "simulados",
                     help="pasta com os PDFs (default: ./simulados)")
     ap.add_argument("--output-dir", type=Path, help="pasta das saídas (default: <pasta>/processados)")
+    ap.add_argument("--gabaritos-dir", type=Path, default=here / "docs" / "gabaritos",
+                    help="pasta monitorada para PDFs de gabarito")
+    ap.add_argument("--diagnostico-db", type=Path, default=here / "diagnostico" / "historico.sqlite3")
     ap.add_argument("--provider", default="ollama")
     ap.add_argument("--model", help="modelo usado pelo provedor")
     ap.add_argument("--base-url", help="URL da API; Ollama aceita vários hosts separados por vírgula")
+    ap.add_argument("--api-key-env", help="variável de ambiente da chave, para provedores que exigem chave")
     ap.add_argument("--workers", type=int, help="questões processadas ao mesmo tempo")
     ap.add_argument("--ollama-threads", type=int, default=0)
     ap.add_argument("--imagens", choices=["nunca", "figuras", "sempre"], default="nunca")
@@ -43,6 +50,18 @@ def main() -> int:
 
     extract_script = here / "extract.py"
     classifier_script = here / "classifier.py"
+    key_pdfs = sorted(p for p in args.gabaritos_dir.resolve().glob("*.pdf") if p.is_file())
+    db = diag.connect_db(args.diagnostico_db.resolve())
+    provider = None
+    def get_provider():
+        nonlocal provider
+        if provider is None:
+            clf.load_dotenv(here / ".env")
+            model = args.model or ("qwen3.5:4b" if args.provider == "ollama" else
+                                   "gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash" if args.provider == "gemini" else "")
+            provider = clf.make_provider(args.provider, model, base_url=args.base_url, key_env=args.api_key_env,
+                                         temperature=0, max_tokens=1600, json_mode=True)
+        return provider
     outcomes: list[tuple[Path, bool]] = []
     print(f"Encontrados {len(pdfs)} PDFs. Saídas em: {output_root}")
     for index, pdf in enumerate(pdfs, 1):
@@ -59,12 +78,38 @@ def main() -> int:
             outcomes.append((pdf, False))
             continue
 
+        # Associa/importa o gabarito já na extração, antes da classificação.
+        questions_json = destination / "questoes.json"
+        selected_key, method = diag.associate_answer_key(pdf, key_pdfs)
+        if selected_key is None and key_pdfs:
+            try:
+                selected_key, method = diag.associate_answer_key(pdf, key_pdfs, get_provider())
+            except (Exception, SystemExit) as exc:
+                print(f"Não foi possível iniciar LLM para associação: {exc}")
+        if selected_key:
+            try:
+                variant = diag.exam_variant(pdf) or diag.exam_variant(selected_key)
+                summary = diag.import_answer_key(db, selected_key, questions_json, replace=True,
+                                                 variant=variant, association_method=method)
+                # Imported count includes anuladas; report separately from persisted records.
+                annulled = sum(1 for (answer,) in db.execute(
+                    "SELECT answer FROM answer_keys WHERE source_id=? AND is_annulled=1",
+                    (summary["source_id"],)))
+                print(f"Gabarito associado ({method}): {selected_key.name} · versão {variant or 'única'} · "
+                      f"{summary['imported']-annulled} respostas · {annulled} anulada(s).")
+            except Exception as exc:
+                print(f"Gabarito encontrado ({selected_key.name}), mas não foi importado: {exc}")
+        else:
+            print("Gabarito não associado com segurança; questões deste simulado não serão pontuáveis até revisão.")
+
         classify_cmd = [sys.executable, str(classifier_script), str(destination / "questoes.json"),
                         "--provider", args.provider, "--imagens", args.imagens]
         if args.model:
             classify_cmd.extend(["--model", args.model])
         if args.base_url:
             classify_cmd.extend(["--base-url", args.base_url])
+        if args.api_key_env:
+            classify_cmd.extend(["--api-key-env", args.api_key_env])
         if args.workers is not None:
             classify_cmd.extend(["--workers", str(args.workers)])
         if args.ollama_threads:
@@ -76,7 +121,9 @@ def main() -> int:
     print(f"\nLote finalizado: {len(outcomes) - len(failed)}/{len(outcomes)} simulados concluídos.")
     if failed:
         print("Com falha: " + ", ".join(pdf.name for pdf in failed))
+        db.close()
         return 1
+    db.close()
     return 0
 
 

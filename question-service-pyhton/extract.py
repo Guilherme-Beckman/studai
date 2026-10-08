@@ -262,6 +262,11 @@ def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
 
     for r in rows:
         center = pymupdf.Point((r.bbox.x0 + r.bbox.x1) / 2, (r.bbox.y0 + r.bbox.y1) / 2)
+        # Em alguns PDFs oficiais o marcador numérico fica dentro da caixa de
+        # uma imagem; ele continua sendo texto estrutural e não pode sumir.
+        if MARKER_RE.match(r.text):
+            items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
+            continue
         if ALT_RE.match(r.text) and not any(nr.contains(center) for nr in note_rects):
             # linha de alternativa nunca é "texto da figura" (cobre tabelas de alternativas)
             items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
@@ -481,5 +486,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

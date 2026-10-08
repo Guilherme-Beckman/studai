@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "cursos": {
+    "eng-comp-sao-carlos": {
+      "nome": "Engenharia de Computação — EESC/ICMC, São Carlos (curso 17)",
+      "instituicao": "USP",
+      "edital": "FUVEST 2027",
+      "pesos": {
+        "Língua Portuguesa": 1,
+        "Literatura": 1,
+        "Inglês": 1,
+        "Matemática": 3,
+        "Física": 3,
+        "Química": 1,
+        "Biologia": 1,
+        "História": 1,
+        "Geografia": 1,
+        "Filosofia": 1,
+        "Sociologia": 1,
+        "Artes": 1,
+        "Educação Física": 1
+      },
+      "disciplinas_especificas": ["Física", "Matemática"]
+    }
+  }
+}
