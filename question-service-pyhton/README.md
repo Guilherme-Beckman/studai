@@ -119,3 +119,9 @@ Classificar um JSON já extraído:
 ```bash
 python classifier.py simulados/processados/simulado2026/questoes.json
 ```
+
+## Organização do código
+
+O código principal está em `src/studai/`, como um monólito modular separado em `features/` e `integrations/`. A arquitetura e as regras para contribuir estão em [ARCHITECTURE.md](ARCHITECTURE.md). Os scripts antigos na raiz seguem disponíveis como adaptadores para preservar os comandos atuais. O protótipo Go está isolado em `prototypes/go-pdf-extractor/` e não participa do processamento principal.
+
+Para executar os testes de regressão: `python -m unittest discover -s tests`.

@@ -1,0 +1,242 @@
+"""Associação, leitura e importação de gabaritos de simulados."""
+from __future__ import annotations
+
+import json
+import re
+import sqlite3
+import unicodedata
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pymupdf
+
+
+def _normalize(value: str) -> str:
+    value = unicodedata.normalize("NFD", value)
+    value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", value).strip().casefold()
+
+def source_id_for(data: dict, path: Path) -> str:
+    return str(data.get("prova") or f"{path.parent.name}/{path.stem}")
+
+def exam_variant(path: Path) -> str | None:
+    match = re.search(r"(?:prova|simulado)[-_ ]*([VS][1-4])\b", path.stem, re.I)
+    return match.group(1).upper() if match else None
+
+def exam_key(path: Path) -> str:
+    value = path.stem.casefold().replace("_", "-")
+    value = re.sub(r"(?:[- ]+)(?:gabarito|prova|respostas?)(?:[- ]+retificado)?(?:[- ]+[vs][1-4])?$", "", value)
+    value = re.sub(r"[- ]+[vs][1-4]$", "", value)
+    return _normalize(value)
+
+def associate_answer_key(exam_pdf: Path, key_pdfs: list[Path], provider=None) -> tuple[Path | None, str]:
+    """Match by normalized exam identity; consults configured LLM only if ambiguous."""
+    key = exam_key(exam_pdf)
+    exact = [p for p in key_pdfs if exam_key(p) == key]
+    if len(exact) == 1:
+        return exact[0], "filename"
+    candidates = exact or key_pdfs
+    if provider is None or not candidates:
+        return None, "ambiguous"
+    candidates = sorted(candidates)
+    payload = {"prova": {"arquivo": exam_pdf.name, "identificador": key,
+                           "versao": exam_variant(exam_pdf)},
+               "gabaritos": [{"arquivo": p.name, "identificador": exam_key(p),
+                               "versao": exam_variant(p)} for p in candidates]}
+    prompt = ("Associe um PDF de prova ao gabarito correspondente usando somente identidade da prova, ano, edição, fase e versão. "
+              "Não infira respostas. Responda somente JSON {\"arquivo\": nome_exato_ou_null, \"confianca\": 0..1}.\n"+
+              json.dumps(payload, ensure_ascii=False))
+    for correction in (None, "A resposta anterior não passou na validação. Escolha apenas um nome da lista ou null; JSON estrito."):
+        try:
+            raw = provider.complete("Você associa arquivos de provas e gabaritos com cautela.",
+                                    prompt if correction is None else correction+"\n"+prompt)
+            obj = json.loads(raw)
+            filename = obj.get("arquivo") if isinstance(obj, dict) else None
+            confidence = float(obj.get("confianca", 0)) if isinstance(obj, dict) else 0
+            found = next((p for p in candidates if p.name == filename), None)
+            if found and confidence >= 0.8:
+                years_exam = set(re.findall(r"20\d{2}", exam_pdf.stem))
+                years_key = set(re.findall(r"20\d{2}", found.stem))
+                key_variant = exam_variant(found)
+                exam_version = exam_variant(exam_pdf)
+                generic = {"fuvest", "simulado", "prova", "gabarito", "retificado"}
+                exam_tokens = set(re.findall(r"[a-z]+|\d+", exam_key(exam_pdf))) - generic
+                key_tokens = set(re.findall(r"[a-z]+|\d+", exam_key(found))) - generic
+                identity_overlap = len(exam_tokens & key_tokens)
+                if (years_exam and years_exam == years_key and identity_overlap >= 2
+                        and not (key_variant and exam_version and key_variant != exam_version)):
+                    return found, "llm"
+        except Exception:
+            continue
+    return None, "ambiguous"
+
+def parse_answer_key_pdf(path: Path, variant: str | None = None) -> dict[int, str]:
+    """Lê apenas linhas estritamente compostas por pares questão-alternativa.
+
+    Linhas que não seguem esse padrão são ignoradas; números duplicados com
+    alternativas conflitantes invalidam o gabarito em vez de escolher uma delas.
+    """
+    doc = pymupdf.open(path)
+    # Gabaritos FUVEST recentes usam tabela por versão: cada coluna tem
+    # questão/resposta e itens anulados são marcados com '*'.
+    variant = variant.upper() if variant else None
+    variant_header = re.compile(r"(?:PROVA|GRUPO)\s+([VS][1-4])", re.I)
+    try:
+        page = doc[0]
+        words = page.get_text("words")
+        headers: dict[str, float] = {}
+        for word in words:
+            if word[4].upper() in {"V1", "V2", "V3", "V4", "S1", "S2", "S3", "S4"}:
+                headers[word[4].upper()] = (word[0] + word[2]) / 2
+        # Aceita também cabeçalhos quebrados em tokens PROVA + V1.
+        for i, word in enumerate(words[:-1]):
+            if word[4].upper() in {"PROVA", "GRUPO"} and words[i+1][4].upper() in {"V1","V2","V3","V4","S1","S2","S3","S4"}:
+                headers[words[i+1][4].upper()] = (words[i+1][0] + words[i+1][2]) / 2
+        if headers:
+            if not variant:
+                if len(headers) != 1:
+                    raise ValueError("gabarito contém várias versões; informe a versão (ex.: V1 ou S1)")
+                variant = next(iter(headers))
+            if variant not in headers:
+                raise ValueError(f"versão {variant} não encontrada no gabarito; disponíveis: {', '.join(sorted(headers))}")
+            x = headers[variant]
+            xs = sorted(headers.values())
+            left = (xs[xs.index(x)-1] + x)/2 if xs.index(x) else -1
+            right = (x + xs[xs.index(x)+1])/2 if xs.index(x)+1 < len(xs) else page.rect.width+1
+            selected = [w for w in words if left <= (w[0]+w[2])/2 < right]
+            rows: dict[float, list[tuple[float,str]]] = defaultdict(list)
+            for w in selected:
+                rows[round(w[1], 1)].append(((w[0]+w[2])/2, w[4]))
+            result: dict[int,str] = {}
+            for row in rows.values():
+                tokens = [t for _,t in sorted(row)]
+                for i in range(0, len(tokens)-1, 2):
+                    if tokens[i].isdigit() and (tokens[i+1].upper() in "ABCDE" or tokens[i+1] == "*"):
+                        result[int(tokens[i])] = tokens[i+1].upper()
+            if result:
+                nums = sorted(result)
+                if nums != list(range(nums[0], nums[-1]+1)):
+                    raise ValueError(f"gabarito {variant} possui numeração incompleta ou ambígua")
+                doc.close()
+                return result
+    except Exception:
+        doc.close()
+        raise
+    # Compatível com linhas "1-A", "Questão 1: A" e tabelas "1 A 2 C ...".
+    pair = re.compile(r"(?:Q(?:UEST[AÃ]O)?\s*)?(\d{1,3})\s*[-:.)]?\s*[\[(]?([A-E*])[\])]??", re.I)
+    answers: dict[int, str] = {}
+    prefix = re.compile(r"^\s*(?:(?:GABARITO|RESPOSTAS?)\s*[:\-]?\s*)?", re.I)
+    allowed_between = re.compile(r"^[\s,;|/\\.\-:()\[\]]*$")
+    try:
+        for page in doc:
+            for raw in page.get_text("text").splitlines():
+                line = prefix.sub("", raw).strip()
+                if not line:
+                    continue
+                matches = list(pair.finditer(line))
+                if not matches:
+                    continue
+                cursor = 0
+                parsed: list[tuple[int, str]] = []
+                for match in matches:
+                    if not allowed_between.fullmatch(line[cursor:match.start()]):
+                        parsed = []
+                        break
+                    parsed.append((int(match.group(1)), match.group(2).upper()))
+                    cursor = match.end()
+                if not parsed or not allowed_between.fullmatch(line[cursor:]):
+                    continue
+                # Evita interpretar páginas, datas ou títulos como sequência de respostas.
+                if any(n < 1 or n > 90 for n, _ in parsed):
+                    continue
+                for number, letter in parsed:
+                    if number in answers and answers[number] != letter:
+                        raise ValueError(f"gabarito ambíguo: questão {number} aparece com respostas diferentes")
+                    answers[number] = letter
+    finally:
+        doc.close()
+    if not answers:
+        raise ValueError("nenhum par questão/alternativa reconhecido; revise o PDF e prepare um gabarito JSON")
+    return answers
+
+def import_answer_key(db: sqlite3.Connection, pdf_path: Path, questions_path: Path,
+                      *, replace: bool = False, variant: str | None = None,
+                      association_method: str = "manual") -> dict:
+    data = json.loads(questions_path.read_text(encoding="utf-8"))
+    source_id = source_id_for(data, questions_path)
+    questions = {int(q["numero"]): q for q in data.get("questoes", []) if "numero" in q}
+    parsed = parse_answer_key_pdf(pdf_path, variant)
+    invalid = []
+    for number, letter in parsed.items():
+        question = questions.get(number)
+        if question is None or letter not in "ABCDE*":
+            invalid.append((number, letter))
+    if invalid:
+        raise ValueError("gabarito não corresponde ao simulado para: " + ", ".join(f"Q{n:02d}={a}" for n, a in invalid))
+    existing = {int(row[0]): row[1] for row in db.execute(
+        "SELECT question_number,answer FROM answer_keys WHERE source_id=?", (source_id,))}
+    conflicts = [(n, a, existing[n]) for n, a in parsed.items() if n in existing and existing[n] != a]
+    if conflicts and not replace:
+        raise ValueError("há respostas diferentes já importadas; confira o PDF ou use --replace: " +
+                         ", ".join(f"Q{n:02d} novo={a} salvo={old}" for n, a, old in conflicts))
+    now = datetime.now(timezone.utc).isoformat()
+    with db:
+        if replace:
+            db.execute("DELETE FROM answer_keys WHERE source_id=?", (source_id,))
+        for number, letter in parsed.items():
+            db.execute("""INSERT INTO answer_keys(source_id,question_number,answer,source_pdf,imported_at,is_annulled,variant,association_method)
+                VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(source_id,question_number) DO UPDATE SET
+                answer=excluded.answer,source_pdf=excluded.source_pdf,imported_at=excluded.imported_at,
+                is_annulled=excluded.is_annulled,variant=excluded.variant,association_method=excluded.association_method""",
+                       (source_id, number, letter, str(pdf_path.resolve()), now, int(letter == "*"), variant, association_method))
+    return {"source_id": source_id, "imported": len(parsed), "existing": len(existing),
+            "unkeyed_questions": sorted(set(questions) - set(parsed))}
+
+
+def parse_answer_key(path: Path, variant: str | None = None) -> dict[int, str]:
+    """Lê gabarito PDF ou JSON no formato {número: alternativa}."""
+    if path.suffix.lower() == ".pdf":
+        return parse_answer_key_pdf(path, variant)
+    if path.suffix.lower() != ".json":
+        raise ValueError("gabarito deve ser PDF com texto selecionável ou JSON estruturado")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    values = data.get("gabarito", data) if isinstance(data, dict) else None
+    if not isinstance(values, dict):
+        raise ValueError("JSON de gabarito deve ser um objeto {numero: alternativa} ou {gabarito: {...}}")
+    output = {}
+    for raw_num, raw_answer in values.items():
+        answer = str(raw_answer).strip().upper()
+        if not str(raw_num).isdigit() or len(answer) != 1 or answer not in "ABCDE*":
+            raise ValueError(f"entrada inválida no gabarito: {raw_num!r}: {raw_answer!r}")
+        output[int(raw_num)] = answer
+    if not output:
+        raise ValueError("gabarito JSON vazio")
+    return output
+
+def import_key_file(db, pdf_path: Path, questions_path: Path, replace: bool, variant: str | None = None):
+    parsed = parse_answer_key(pdf_path, variant)
+    data = json.loads(questions_path.read_text(encoding="utf-8"))
+    source_id = source_id_for(data, questions_path)
+    questions = {int(q["numero"]): q for q in data.get("questoes", []) if "numero" in q}
+    invalid = [(n, a) for n, a in parsed.items() if n not in questions or a not in "ABCDE*"]
+    if invalid:
+        raise ValueError("gabarito não corresponde ao simulado: " + ", ".join(f"Q{n:02d}={a}" for n, a in invalid))
+    existing = {int(r[0]): r[1] for r in db.execute(
+        "SELECT question_number,answer FROM answer_keys WHERE source_id=?", (source_id,))}
+    conflicts = [(n, a, existing[n]) for n, a in parsed.items() if n in existing and a != existing[n]]
+    if conflicts and not replace:
+        raise ValueError("respostas conflitantes já importadas; confira a fonte ou use --replace")
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    with db:
+        if replace:
+            db.execute("DELETE FROM answer_keys WHERE source_id=?", (source_id,))
+        for number, letter in parsed.items():
+            db.execute("""INSERT INTO answer_keys(source_id,question_number,answer,source_pdf,imported_at,is_annulled,variant,association_method)
+                VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(source_id,question_number) DO UPDATE SET
+                answer=excluded.answer,source_pdf=excluded.source_pdf,imported_at=excluded.imported_at,
+                is_annulled=excluded.is_annulled,variant=excluded.variant,association_method=excluded.association_method""",
+                       (source_id, number, letter, str(pdf_path.resolve()), now, int(letter == "*"), variant, "manual"))
+    return {"source_id": source_id, "imported": len(parsed), "previously_present": len(existing),
+            "questions_without_key": sorted(set(questions) - set(parsed))}

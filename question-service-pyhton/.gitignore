@@ -7,3 +7,5 @@ simulados/processados/
 simulados/*
 diagnostico/*.sqlite3
 diagnostico/*.sqlite3-*
+__pycache__/
+*.py[cod]
