@@ -21,7 +21,8 @@ def source_id_for(data: dict, path: Path) -> str:
     return str(data.get("prova") or f"{path.parent.name}/{path.stem}")
 
 def exam_variant(path: Path) -> str | None:
-    match = re.search(r"(?:prova|simulado)[-_ ]*([VS][1-4])\b", path.stem, re.I)
+    # Formas usadas no acervo FUVEST: prova_V, tipo_V, V1 e prova-V1.
+    match = re.search(r"(?:prova|simulado|tipo)[-_ ]*([VKQXZ][1-4]?)\b", path.stem, re.I)
     return match.group(1).upper() if match else None
 
 def exam_key(path: Path) -> str:
@@ -78,25 +79,32 @@ def parse_answer_key_pdf(path: Path, variant: str | None = None) -> dict[int, st
     alternativas conflitantes invalidam o gabarito em vez de escolher uma delas.
     """
     doc = pymupdf.open(path)
-    # Gabaritos FUVEST recentes usam tabela por versão: cada coluna tem
-    # questão/resposta e itens anulados são marcados com '*'.
+    # Gabaritos FUVEST recentes usam colunas por versão. Em versões antigas,
+    # cada grupo contém dois pares questão/resposta por linha e repete a sigla.
     variant = variant.upper() if variant else None
-    variant_header = re.compile(r"(?:PROVA|GRUPO)\s+([VS][1-4])", re.I)
     try:
         page = doc[0]
         words = page.get_text("words")
+        accepted = {"V", "K", "Q", "X", "Z", *(f"{prefix}{n}" for prefix in "VSKQXZ" for n in range(1, 5))}
         headers: dict[str, float] = {}
-        for word in words:
-            if word[4].upper() in {"V1", "V2", "V3", "V4", "S1", "S2", "S3", "S4"}:
-                headers[word[4].upper()] = (word[0] + word[2]) / 2
-        # Aceita também cabeçalhos quebrados em tokens PROVA + V1.
-        for i, word in enumerate(words[:-1]):
-            if word[4].upper() in {"PROVA", "GRUPO"} and words[i+1][4].upper() in {"V1","V2","V3","V4","S1","S2","S3","S4"}:
-                headers[words[i+1][4].upper()] = (words[i+1][0] + words[i+1][2]) / 2
+        for i, word in enumerate(words):
+            token = word[4].upper()
+            if token not in accepted:
+                continue
+            previous = words[i-1][4].upper() if i else ""
+            if previous in {"PROVA", "GRUPO"}:
+                headers[token] = (word[0] + word[2]) / 2
+        # Alguns PDFs extraem o título PROVA V como um único token ou deslocam
+        # a posição de PROVA; títulos em cabeçalho ainda identificam a versão.
+        if len(headers) < 2:
+            for word in words:
+                token = word[4].upper()
+                if token in accepted and word[1] < 240:
+                    headers.setdefault(token, (word[0] + word[2]) / 2)
         if headers:
             if not variant:
                 if len(headers) != 1:
-                    raise ValueError("gabarito contém várias versões; informe a versão (ex.: V1 ou S1)")
+                    raise ValueError("gabarito contém várias versões; informe a versão (ex.: V ou V1)")
                 variant = next(iter(headers))
             if variant not in headers:
                 raise ValueError(f"versão {variant} não encontrada no gabarito; disponíveis: {', '.join(sorted(headers))}")
@@ -104,16 +112,29 @@ def parse_answer_key_pdf(path: Path, variant: str | None = None) -> dict[int, st
             xs = sorted(headers.values())
             left = (xs[xs.index(x)-1] + x)/2 if xs.index(x) else -1
             right = (x + xs[xs.index(x)+1])/2 if xs.index(x)+1 < len(xs) else page.rect.width+1
-            selected = [w for w in words if left <= (w[0]+w[2])/2 < right]
+            selected = [w for w in words if w[1] > min(word[1] for word in words if word[4].upper() == variant)
+                        and left <= (w[0]+w[2])/2 < right]
             rows: dict[float, list[tuple[float,str]]] = defaultdict(list)
             for w in selected:
-                rows[round(w[1], 1)].append(((w[0]+w[2])/2, w[4]))
+                rows[round(w[1], 1)].append(((w[0]+w[2])/2, w[4].upper().replace("‐", "-").replace("‑", "-")))
             result: dict[int,str] = {}
             for row in rows.values():
                 tokens = [t for _,t in sorted(row)]
-                for i in range(0, len(tokens)-1, 2):
-                    if tokens[i].isdigit() and (tokens[i+1].upper() in "ABCDE" or tokens[i+1] == "*"):
-                        result[int(tokens[i])] = tokens[i+1].upper()
+                i = 0
+                while i < len(tokens):
+                    token = tokens[i]
+                    if token in headers:
+                        i += 1
+                        continue
+                    match = re.fullmatch(r"(\d{1,2})-?", token)
+                    if match and i + 1 < len(tokens) and tokens[i+1] in {*"ABCDE", "*"}:
+                        result[int(match.group(1))] = tokens[i+1]
+                        i += 2
+                        continue
+                    pair = re.fullmatch(r"(\d{1,2})[-:]([A-E*])", token)
+                    if pair:
+                        result[int(pair.group(1))] = pair.group(2)
+                    i += 1
             if result:
                 nums = sorted(result)
                 if nums != list(range(nums[0], nums[-1]+1)):

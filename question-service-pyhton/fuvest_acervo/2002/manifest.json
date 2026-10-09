@@ -1,0 +1,22 @@
+{
+  "ano": 2002,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-2002",
+  "itens": [
+    {
+      "texto": "Prova 1º Dia",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2002_prova_primeira_fase_dia_1.pdf",
+      "arquivo": "fuvest_acervo/2002/1a_fase/provas/fuvest_2002_prova_primeira_fase_dia_1.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova 2º Dia",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2002_prova_primeira_fase_dia_2.pdf",
+      "arquivo": "fuvest_acervo/2002/1a_fase/provas/fuvest_2002_prova_primeira_fase_dia_2.pdf",
+      "status": "baixado"
+    }
+  ]
+}

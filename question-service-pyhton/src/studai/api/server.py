@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import json
 import hashlib
+import csv
 import mimetypes
 import re
 import secrets
+import shutil
 import threading
 import uuid
 import os
@@ -15,17 +17,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from studai.features.answer_keys.service import import_key_file
+from studai.features.answer_keys.service import exam_variant, import_key_file
+from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
+from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
 from studai.features.questions.extractor import extract_pdf
+from studai.features.questions import review as question_review
 from studai.integrations.llm import load_dotenv, make_provider
+from studai.tools.evaluate_classifier import evaluate as evaluate_classifier, score as score_classifier
 from studai.settings import (
     DEFAULT_COURSE_CONFIG,
+    DEFAULT_CLASSIFICATION_CACHE,
     DEFAULT_DIAGNOSTICS_DB,
     DEFAULT_QUESTIONS_DIR,
     SERVICE_ROOT,
 )
+from studai.features.classification.service import DEFAULT_TAXONOMY, DEFAULT_TOPIC_TAXONOMY
 
 WEB_ROOT = SERVICE_ROOT / "frontend"
 UPLOADS_ROOT = SERVICE_ROOT / "simulados" / "uploads"
@@ -34,6 +42,148 @@ ANSWER_IMPORTS_ROOT = SERVICE_ROOT / "diagnostico" / "imports-web"
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 JOB_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="studai-job")
+BENCHMARK_REPORT = SERVICE_ROOT / "simulados" / "cache" / "edubench-baseline-100.json"
+BENCHMARK_DATASET = SERVICE_ROOT / "simulados" / "cache" / "edubench-reviewed-canonical.jsonl"
+BENCHMARK_REVIEW_CSV = SERVICE_ROOT / "simulados" / "cache" / "edubench-review-canonical.csv"
+RAG_STATUS_FILE = SERVICE_ROOT / "simulados" / "cache" / "fuvest-rag-status.json"
+RAG_INDEX_LOCK = threading.Lock()
+
+
+def _read_rag_status() -> dict:
+    try:
+        status = json.loads(RAG_STATUS_FILE.read_text(encoding="utf-8"))
+        return status if isinstance(status, dict) else {"status": "empty"}
+    except (OSError, json.JSONDecodeError):
+        return {"status": "empty", "indexed": 0}
+
+
+def _write_rag_status(status: dict) -> None:
+    RAG_STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = RAG_STATUS_FILE.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(RAG_STATUS_FILE)
+
+
+def _run_review_index(base_urls: str) -> dict:
+    """Rebuild the FUVEST manifest and update only changed local embeddings."""
+    with RAG_INDEX_LOCK:
+        _write_rag_status({"status": "indexing"})
+        try:
+            count = question_review.write_reviewed_dataset(PROCESSED_ROOT, DEFAULT_EXAMPLES)
+            cache = ClassificationCache(DEFAULT_CLASSIFICATION_CACHE)
+            try:
+                source = "rag:" + str(DEFAULT_EXAMPLES.resolve())
+                if not count:
+                    removed = cache.delete_embeddings_by_source(source)
+                    result = {"indexed": 0, "removed": removed, "version": "empty"}
+                else:
+                    result = index_examples(DEFAULT_EXAMPLES, cache, base_url=base_urls,
+                                            model=DEFAULT_EMBEDDING_MODEL)
+            finally:
+                cache.close()
+            status = {"status": "ready" if count else "empty", "indexed": result.get("indexed", 0),
+                      "reused": result.get("reused", 0), "examples": count,
+                      "version": result.get("version")}
+            _write_rag_status(status)
+            return status
+        except Exception as exc:
+            status = {"status": "pending", "error": str(exc)}
+            _write_rag_status(status)
+            return status
+
+
+def _queue_review_index(exam_json: Path) -> str:
+    meta_path = exam_json.parent / "processamento.meta.json"
+    try:
+        metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        metadata = {}
+    base_urls = ",".join(metadata.get("ollama_base_urls") or []) or os.environ.get(
+        "OLLAMA_BASE_URL", "http://localhost:11434")
+    _write_rag_status({"status": "queued"})
+    return _submit_job("Indexar questões revisadas", lambda _cancelled, _job_id: _run_review_index(base_urls))
+
+
+def _read_benchmark_review() -> dict:
+    if not BENCHMARK_REPORT.is_file() or not BENCHMARK_DATASET.is_file():
+        raise FileNotFoundError("Relatório ou conjunto do benchmark não encontrado em simulados/cache")
+    report = json.loads(BENCHMARK_REPORT.read_text(encoding="utf-8"))
+    rows = [json.loads(line) for line in BENCHMARK_DATASET.read_text(encoding="utf-8").splitlines() if line.strip()]
+    items = report.get("items") or []
+    if len(items) != len(rows):
+        raise ValueError("O relatório e o conjunto revisado têm quantidades diferentes; gere novamente o benchmark")
+    questions = []
+    scored_rows = []
+    mismatches = 0
+    reference_changed = 0
+    for index, (gold, result) in enumerate(zip(rows, items)):
+        mismatch = gold.get("subject") != result.get("pred_subject") or gold.get("topic") != result.get("pred_topic")
+        mismatches += int(mismatch)
+        reference_changed += int(gold.get("subject") != result.get("gold_subject") or
+                                 gold.get("topic") != result.get("gold_topic"))
+        scored_rows.append({"gold_subject": gold.get("subject"), "pred_subject": result.get("pred_subject"),
+                            "gold_topic": gold.get("topic"), "pred_topic": result.get("pred_topic")})
+        questions.append({"index": index, "id": gold.get("id", str(index + 1)),
+                          "year": gold.get("year"), "question": gold.get("question", ""),
+                          "supportingTexts": gold.get("supporting_texts", ""),
+                          "subject": gold.get("subject", ""), "topic": gold.get("topic", ""),
+                          "predictedSubject": result.get("pred_subject"),
+                          "predictedTopic": result.get("pred_topic"),
+                          "seconds": result.get("seconds"), "error": result.get("error"),
+                          "mismatch": mismatch, "reviewed": bool(gold.get("reviewed", False))})
+    report_view = {key: report.get(key) for key in (
+        "source", "dataset_version", "provider", "created_at", "image_mode", "count",
+        "invalid_json_or_classification", "attempts", "latency_seconds", "subject", "topic", "usage")}
+    original_metrics = {"subject": report.get("subject"), "topic": report.get("topic")}
+    report_view["subject"] = score_classifier(scored_rows, "gold_subject", "pred_subject")
+    report_view["topic"] = score_classifier(scored_rows, "gold_topic", "pred_topic")
+    return {"report": report_view, "originalMetrics": original_metrics,
+        "questions": questions, "mismatchCount": mismatches,
+        "referenceChangedCount": reference_changed,
+        "subjects": list(DEFAULT_TAXONOMY), "topics": DEFAULT_TOPIC_TAXONOMY}
+
+
+def _save_benchmark_label(body: dict) -> dict:
+    index = int(body.get("index", -1))
+    subject = str(body.get("subject") or "").strip()
+    topic = str(body.get("topic") or "").strip()
+    if subject not in DEFAULT_TAXONOMY:
+        raise ValueError("Selecione uma matéria válida da taxonomia StudAI")
+    if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
+        raise ValueError("Selecione um tópico válido para a matéria escolhida")
+    rows = [json.loads(line) for line in BENCHMARK_DATASET.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not 0 <= index < len(rows):
+        raise ValueError("Questão de revisão não encontrada")
+    row = rows[index]
+    if body.get("id") and body["id"] != row.get("id"):
+        raise ValueError("O conjunto foi alterado desde que a revisão foi aberta; atualize a tela")
+    row.update(subject=subject, topic=topic, reviewed=True)
+    dataset_tmp = BENCHMARK_DATASET.with_suffix(".jsonl.tmp")
+    dataset_tmp.write_text("".join(json.dumps(item, ensure_ascii=False) + "\n" for item in rows), encoding="utf-8")
+    dataset_tmp.replace(BENCHMARK_DATASET)
+
+    # Keep the human-editable source sheet in sync with the benchmark JSONL.
+    if BENCHMARK_REVIEW_CSV.is_file():
+        with BENCHMARK_REVIEW_CSV.open("r", encoding="utf-8-sig", newline="") as source:
+            reader = csv.DictReader(source)
+            fields = reader.fieldnames or []
+            csv_rows = list(reader)
+        if index < len(csv_rows) and csv_rows[index].get("id") == row.get("id"):
+            csv_rows[index]["subject"] = subject
+            csv_rows[index]["topic"] = topic
+            if "reviewed" in fields:
+                csv_rows[index]["reviewed"] = "true"
+            if "topic_canonical" in fields:
+                csv_rows[index]["topic_canonical"] = topic
+            csv_tmp = BENCHMARK_REVIEW_CSV.with_suffix(".csv.tmp")
+            with csv_tmp.open("w", encoding="utf-8-sig", newline="") as destination:
+                writer = csv.DictWriter(destination, fieldnames=fields, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(csv_rows)
+            csv_tmp.replace(BENCHMARK_REVIEW_CSV)
+    return {"ok": True, "subject": subject, "topic": topic,
+            "requiresRerun": True, "reviewed": True,
+            "message": "Revisão registrada. Execute novamente o benchmark para atualizar as métricas."}
 
 
 class JobCancelled(Exception):
@@ -45,9 +195,13 @@ def _set_job(job_id: str, **values) -> None:
         JOBS[job_id].update(values)
 
 
-def _submit_job(label: str, task) -> str:
-    job_id = uuid.uuid4().hex[:12]
+def _submit_job(label: str, task, job_id: str | None = None) -> str:
+    job_id = job_id or uuid.uuid4().hex[:12]
     with JOBS_LOCK:
+        # A browser may retry an upload after a reload while the original request
+        # is still being accepted. Reuse the same job instead of starting twice.
+        if job_id in JOBS:
+            return job_id
         JOBS[job_id] = {"id": job_id, "label": label, "status": "queued", "message": "Na fila",
                         "progress": 0, "stage": "queued", "cancelRequested": False}
 
@@ -132,6 +286,83 @@ def _find_exam(exam_id: str) -> tuple[dict, Path]:
     raise FileNotFoundError(f"simulado não encontrado: {exam_id}")
 
 
+def _delete_exam(exam_id: str) -> dict:
+    root = PROCESSED_ROOT.resolve()
+    matches = []
+    for path in PROCESSED_ROOT.rglob("questoes*.json"):
+        try:
+            resolved = path.resolve()
+            if not resolved.is_relative_to(root):
+                continue
+            data = json.loads(resolved.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict) and diagnostics.source_id_for(data, resolved) == exam_id:
+            matches.append(resolved)
+    if not matches:
+        raise FileNotFoundError(f"simulado não encontrado: {exam_id}")
+
+    db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        answer_rows = db.execute("SELECT source_pdf FROM answer_keys WHERE source_id=?", (exam_id,)).fetchall()
+        answer_count = db.execute("SELECT COUNT(*) FROM answer_keys WHERE source_id=?", (exam_id,)).fetchone()[0]
+        historical_questions = db.execute(
+            "SELECT COUNT(*) FROM attempt_questions WHERE source_id=?", (exam_id,)).fetchone()[0]
+        with db:
+            db.execute("DELETE FROM answer_keys WHERE source_id=?", (exam_id,))
+    finally:
+        db.close()
+
+    removed_answer_files = 0
+    answer_root = ANSWER_IMPORTS_ROOT.resolve()
+    for row in answer_rows:
+        try:
+            source = Path(row["source_pdf"]).resolve()
+            if source.is_relative_to(answer_root) and source.is_file():
+                source.unlink()
+                removed_answer_files += 1
+        except (OSError, ValueError):
+            continue
+
+    removed_files = 0
+    removed_dirs = set()
+    for question_path in matches:
+        exam_dir = question_path.parent
+        for pattern in ("questoes*.json", "revisao.json", "processamento*.json", "*.classificacao.cache.jsonl"):
+            for artifact in exam_dir.glob(pattern):
+                try:
+                    if artifact.is_file() or artifact.is_symlink():
+                        artifact.unlink()
+                        removed_files += 1
+                except OSError:
+                    continue
+        image_dir = exam_dir / "img"
+        if image_dir.is_dir() and not image_dir.is_symlink():
+            shutil.rmtree(image_dir)
+            removed_dirs.add(str(image_dir))
+        try:
+            exam_dir.rmdir()
+            removed_dirs.add(str(exam_dir))
+        except OSError:
+            pass
+
+    upload = (UPLOADS_ROOT / f"{exam_id}.pdf").resolve()
+    try:
+        if upload.is_relative_to(UPLOADS_ROOT.resolve()) and upload.is_file():
+            upload.unlink()
+            removed_files += 1
+    except (OSError, ValueError):
+        pass
+
+    base_urls = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    _write_rag_status({"status": "queued"})
+    rag_job_id = _submit_job("Atualizar índice de questões revisadas",
+                             lambda _cancelled, _job_id: _run_review_index(base_urls))
+    return {"ok": True, "removedQuestionFiles": removed_files, "removedDirectories": len(removed_dirs),
+            "removedAnswerKeys": answer_count, "removedAnswerFiles": removed_answer_files,
+            "preservedHistoricalQuestions": historical_questions, "ragJobId": rag_job_id}
+
+
 def _list_exams() -> list[dict]:
     db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
     try:
@@ -140,8 +371,14 @@ def _list_exams() -> list[dict]:
     finally:
         db.close()
     result = []
-    for summary, _ in _exam_files():
-        result.append({**summary, "importedAnswers": keys.get(summary["id"], 0)})
+    for summary, path in _exam_files():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {"questoes": []}
+        progress = question_review.review_stats(data, question_review.read_reviews(path))
+        result.append({**summary, **progress, "importedAnswers": keys.get(summary["id"], 0),
+                       "ragStatus": _read_rag_status().get("status", "empty")})
     return result
 
 
@@ -200,6 +437,11 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
     source = UPLOADS_ROOT / f"{stable_exam_id}.pdf"
     output_dir = PROCESSED_ROOT / "web" / extraction_key
     output_dir.mkdir(parents=True, exist_ok=True)
+    meta_path = output_dir / "processamento.meta.json"
+    embedding_urls = provider.base_urls if isinstance(provider, classification.OllamaProvider) else []
+    meta_path.write_text(json.dumps({"exam_id": stable_exam_id,
+                                     "ollama_base_urls": embedding_urls}, ensure_ascii=False, indent=2) + "\n",
+                         encoding="utf-8")
     if not source.exists():
         source.write_bytes(content)
     def extraction_progress(event):
@@ -219,6 +461,7 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         extracted_data["arquivo_origem"] = clean_name
         extracted_data["arquivo_sha256"] = pdf_hash
         extracted_path.write_text(json.dumps(extracted_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    question_review.preserve_reviews(PROCESSED_ROOT, stable_exam_id, extracted_path)
     classified_path = output_dir / "questoes.classificado.json"
     cache_meta_path = output_dir / "processamento.cache.json"
     try:
@@ -352,6 +595,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, _list_exams())
             if path == "/api/courses":
                 return self._json(200, _list_courses())
+            if path == "/api/benchmark/review":
+                return self._json(200, _read_benchmark_review())
             if path == "/api/diagnostics":
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
@@ -378,7 +623,46 @@ class Handler(BaseHTTPRequestHandler):
             if match:
                 summary, file_path = _find_exam(match.group(1))
                 data = json.loads(file_path.read_text(encoding="utf-8"))
-                return self._json(200, {"exam": summary, "questions": data["questoes"]})
+                human_reviews = question_review.read_reviews(file_path).get("questions") or {}
+                questions = []
+                for question in data["questoes"]:
+                    number = str(question.get("numero"))
+                    questions.append({**question, "review": human_reviews.get(number),
+                                      "reviewReasons": question_review.review_reasons(question),
+                                      "needsReview": bool(question_review.review_reasons(question))})
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    answer_keys = {str(row[0]): {"answer": row[1], "annulled": bool(row[2])}
+                                   for row in db.execute(
+                                       "SELECT question_number,answer,is_annulled FROM answer_keys WHERE source_id=?",
+                                       (summary["id"],))}
+                finally:
+                    db.close()
+                return self._json(200, {"exam": {**summary, "importedAnswers": len(answer_keys)}, "questions": questions,
+                                        "sharedTexts": data.get("textos_compartilhados") or {},
+                                        "answerKeys": answer_keys,
+                                        "reviewProgress": question_review.review_stats(
+                                            data, {"questions": human_reviews}),
+                                        "subjects": list(DEFAULT_TAXONOMY),
+                                        "topics": DEFAULT_TOPIC_TAXONOMY,
+                                        "ragStatus": _read_rag_status()})
+            match = re.fullmatch(r"/api/exams/([^/]+)/assets/(.+)", path)
+            if match:
+                _, file_path = _find_exam(match.group(1))
+                asset_path = (file_path.parent / match.group(2)).resolve()
+                asset_root = file_path.parent.resolve()
+                if (not asset_path.is_relative_to(asset_root) or not asset_path.is_file()
+                        or asset_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}):
+                    self.send_error(404)
+                    return
+                body = asset_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", mimetypes.guess_type(asset_path.name)[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             self._json(404, {"error": "rota não encontrada"})
         except FileNotFoundError as exc:
             self._json(404, {"error": str(exc)})
@@ -387,10 +671,121 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._json(500, {"error": str(exc)})
 
+    def do_DELETE(self):
+        path = unquote(urlsplit(self.path).path)
+        try:
+            match = re.fullmatch(r"/api/exams/([^/]+)", path)
+            if not match:
+                return self._json(404, {"error": "rota não encontrada"})
+            return self._json(200, _delete_exam(match.group(1)))
+        except FileNotFoundError as exc:
+            self._json(404, {"error": str(exc)})
+        except Exception as exc:
+            self._json(500, {"error": str(exc)})
+
+    def do_PATCH(self):
+        path = unquote(urlsplit(self.path).path)
+        try:
+            match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/review", path)
+            if not match:
+                return self._json(404, {"error": "rota não encontrada"})
+            exam_id, number = match.group(1), int(match.group(2))
+            _, exam_json = _find_exam(exam_id)
+            body = self._read_json()
+            status = str(body.get("status") or "")
+            if status not in {"reviewed", "unusable"}:
+                raise ValueError("status deve ser reviewed ou unusable")
+            data = json.loads(exam_json.read_text(encoding="utf-8"))
+            question = next((q for q in data.get("questoes", [])
+                             if int(q.get("numero", -1)) == number), None)
+            if question is None:
+                raise FileNotFoundError(f"questão {number} não encontrada nesta prova")
+            if not question_review.review_reasons(question):
+                raise ValueError("esta questão não está marcada para revisão pela IA")
+            values = {"status": status, "note": str(body.get("note") or "")}
+            if len(values["note"]) > 2000:
+                raise ValueError("a observação deve ter no máximo 2000 caracteres")
+            if status == "reviewed":
+                subject = str(body.get("subject") or "").strip()
+                topic = str(body.get("topic") or "").strip()
+                if subject not in DEFAULT_TAXONOMY:
+                    raise ValueError("selecione uma matéria válida")
+                if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
+                    raise ValueError("selecione um tópico válido para a matéria")
+                values.update(subject=subject, topic=topic)
+            else:
+                values.update(subject=None, topic=None)
+            saved = question_review.save_review(exam_json, number, values)
+            job_id = _queue_review_index(exam_json)
+            return self._json(200, {**saved, "ragStatus": "queued", "ragJobId": job_id})
+        except FileNotFoundError as exc:
+            self._json(404, {"error": str(exc)})
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._json(400, {"error": str(exc)})
+        except Exception as exc:
+            self._json(500, {"error": str(exc)})
+
     def do_POST(self):
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
         try:
+            if path == "/api/benchmark/run":
+                body = self._read_json()
+                provider_name = str(body.get("provider") or "ollama")
+                model = str(body.get("model") or "qwen3.5:4b")
+                base_url = str(body.get("baseUrl") or "http://localhost:11434")
+                timeout = float(body.get("timeout") or 60)
+                attempts = int(body.get("httpAttempts") or 1)
+                image_mode = str(body.get("images") or "nunca")
+                workers = int(body.get("workers") or 2)
+                ollama_threads = int(body.get("ollamaThreads") or 0)
+                if not 1 <= workers <= 64 or not 0 <= ollama_threads <= 64:
+                    raise ValueError("workers deve estar entre 1 e 64 e threads entre 0 e 64")
+                if timeout <= 0 or attempts < 1:
+                    raise ValueError("timeout e tentativas HTTP devem ser positivos")
+                if image_mode not in ("nunca", "figuras", "sempre"):
+                    raise ValueError("modo de imagem inválido")
+                if not BENCHMARK_DATASET.is_file():
+                    raise FileNotFoundError("Conjunto revisado não encontrado em simulados/cache")
+
+                def run_benchmark(cancelled, job_id):
+                    load_dotenv(SERVICE_ROOT / ".env")
+                    provider = make_provider(provider_name, model, base_url=base_url, key_env=None,
+                                             temperature=0, max_tokens=1024, json_mode=True,
+                                             timeout=timeout, request_attempts=attempts, num_threads=ollama_threads)
+                    def progress(event):
+                        if cancelled():
+                            raise JobCancelled()
+                        current, total = event["completed"], event["total"]
+                        _set_job(job_id, stage="benchmark", stageLabel="Classificando conjunto revisado",
+                                 message=f"Questão {current} de {total}", progress=10 + int(84 * current / max(total, 1)),
+                                 completed=current, total=total, activeQuestions=[],
+                                 lastQuestion={"question": event["question"], "seconds": round(event["seconds"], 1)})
+                    try:
+                        result = evaluate_classifier(
+                            BENCHMARK_DATASET, provider, output=BENCHMARK_REPORT,
+                            source="EduBench USP revisado e tópicos canônicos",
+                            version="review-ui", image_mode=image_mode,
+                            request_attempts=attempts, workers=workers,
+                            progress=progress, cancelled=cancelled)
+                    except InterruptedError:
+                        raise JobCancelled() from None
+                    return {"count": result["count"], "subject": result["subject"],
+                            "topic": result["topic"], "invalid": result["invalid_json_or_classification"],
+                            "output": str(BENCHMARK_REPORT.relative_to(SERVICE_ROOT))}
+
+                job_id = _submit_job("Executar benchmark", run_benchmark)
+                return self._json(202, {"jobId": job_id})
+            if path == "/api/benchmark/review":
+                return self._json(200, _save_benchmark_label(self._read_json()))
+            if path == "/api/rag/reindex":
+                body = self._read_json()
+                exam_id = str(body.get("examId") or "")
+                if not exam_id:
+                    raise ValueError("informe examId")
+                _, exam_json = _find_exam(exam_id)
+                job_id = _queue_review_index(exam_json)
+                return self._json(202, {"jobId": job_id})
             cancel_match = re.fullmatch(r"/api/jobs/([a-f0-9]+)/cancel", path)
             if cancel_match:
                 with JOBS_LOCK:
@@ -405,11 +800,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202, {"status": "cancelling"})
             if path == "/api/exams/process":
                 query = parse_qs(parsed.query)
+                client_job_id = (query.get("clientJobId") or [None])[0]
+                if client_job_id and not re.fullmatch(r"[a-f0-9]{32}", client_job_id):
+                    return self._json(400, {"error": "clientJobId inválido"})
                 filename = (query.get("filename") or [self.headers.get("X-Filename", "prova.pdf")])[0]
                 payload = {key: values[0] for key, values in query.items()}
                 length = int(self.headers.get("Content-Length", "0"))
                 content = self.rfile.read(length)
-                job_id = _submit_job("Processar prova", lambda cancelled, current_job: _process_exam(filename, content, payload, current_job, cancelled))
+                job_id = _submit_job("Processar prova", lambda cancelled, current_job: _process_exam(filename, content, payload, current_job, cancelled), client_job_id)
                 return self._json(202, {"jobId": job_id})
             key_match = re.fullmatch(r"/api/exams/([^/]+)/answer-key", path)
             if key_match:
@@ -419,13 +817,14 @@ class Handler(BaseHTTPRequestHandler):
                 content = self.rfile.read(length)
                 if not Path(filename).name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
                     raise ValueError("envie um PDF de gabarito válido")
-                _, questions_path = _find_exam(exam_id)
+                summary, questions_path = _find_exam(exam_id)
+                variant = exam_variant(Path(summary["name"]))
                 ANSWER_IMPORTS_ROOT.mkdir(parents=True, exist_ok=True)
                 answer_file = ANSWER_IMPORTS_ROOT / f"{uuid.uuid4().hex}.pdf"
                 answer_file.write_bytes(content)
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
-                    result = import_key_file(db, answer_file, questions_path, replace=True)
+                    result = import_key_file(db, answer_file, questions_path, replace=True, variant=variant)
                 finally:
                     db.close()
                 return self._json(201, result)

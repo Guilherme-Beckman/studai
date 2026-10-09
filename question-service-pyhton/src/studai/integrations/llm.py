@@ -74,7 +74,7 @@ class Provider(ABC):
 
     def __init__(self, model: str = "", api_key: str | None = None, base_url: str | None = None,
                  timeout: float = 120, temperature: float | None = None, max_tokens: int = 1024,
-                 json_mode: bool = True, num_threads: int = 0):
+                 json_mode: bool = True, num_threads: int = 0, request_attempts: int = 4):
         self.model = model
         self.api_key = api_key
         self.base_url = (base_url or self.default_base_url or "").rstrip("/")
@@ -83,6 +83,7 @@ class Provider(ABC):
         self.max_tokens = max_tokens
         self.json_mode = json_mode
         self.num_threads = max(0, num_threads)
+        self.request_attempts = max(1, int(request_attempts))
 
     @property
     def label(self) -> str:
@@ -227,7 +228,9 @@ class OllamaProvider(Provider):
         self._thread_state = threading.local()
         self.keep_alive = os.environ.get("STUDAI_OLLAMA_KEEP_ALIVE", "10m")
         try:
-            self.num_ctx = max(0, int(os.environ.get("STUDAI_OLLAMA_NUM_CTX", "0")))
+            # The default Ollama context (often 4096) is too small for the
+            # full classification taxonomy and long exam questions.
+            self.num_ctx = max(0, int(os.environ.get("STUDAI_OLLAMA_NUM_CTX", "16384")))
         except ValueError:
             self.num_ctx = 0
 
@@ -280,7 +283,7 @@ class OllamaProvider(Provider):
             server = self.base_urls[(first + offset) % len(self.base_urls)]
             try:
                 out = http_post(f"{server}/api/chat", {}, body, self.timeout,
-                                attempts=1 if len(self.base_urls) > 1 else 4)
+                                attempts=1 if len(self.base_urls) > 1 else self.request_attempts)
             except LLMError as e:
                 if e.status_code not in (None, 404, 429, 500, 502, 503, 504, 529):
                     raise
@@ -294,7 +297,8 @@ class OllamaProvider(Provider):
             self._thread_state.server = server
             self._thread_state.usage = {"prompt_tokens": int(out.get("prompt_eval_count", 0)),
                                         "completion_tokens": int(out.get("eval_count", 0)),
-                                        "eval_duration_ns": int(out.get("eval_duration", 0))}
+                                        "eval_duration_ns": int(out.get("eval_duration", 0)),
+                                        "host": server}
             return answer
         raise LLMError("todos os servidores Ollama falharam: " + " | ".join(failures))
 
@@ -317,7 +321,16 @@ class MockProvider(Provider):
         scores = {m: sum(low.count(k) for k in ks) for m, ks in self.KW.items()}
         best = max(scores, key=scores.get)
         mat = best if scores[best] else "Língua Portuguesa"
-        return json.dumps({"materia": mat, "materias_secundarias": [], "assunto": "(mock)",
+        topic_map = {}
+        for line in system.splitlines():
+            if line.startswith("TAXONOMIA_TOPICOS_JSON:"):
+                try:
+                    topic_map = json.loads(line.split(":", 1)[1].strip())
+                except json.JSONDecodeError:
+                    pass
+                break
+        topic = (topic_map.get(mat) or ["REVISAR"])[0]
+        return json.dumps({"materia": mat, "materias_secundarias": [], "assunto": topic,
                            "confianca": 0.5}, ensure_ascii=False)
 
 

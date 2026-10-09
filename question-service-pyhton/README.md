@@ -59,17 +59,75 @@ A classificação usa um cache compartilhado entre CLI e API em `simulados/cache
 
 Quando não houver uma associação inequívoca pelo nome, o provedor configurado tenta associar usando somente os nomes/identificadores dos arquivos. Se a resposta não passar pela validação de identidade, nada é importado e o lote informa que precisa de revisão. Para uma associação manual de gabarito com várias versões, use `python diagnostico.py importar-gabarito --gabarito docs/gabaritos/arquivo.pdf --questoes simulados/processados/nome/questoes.json --versao V1`.
 
+## Exemplos revisados e classificação local (RAG)
+
+O classificador pode usar exemplos revisados de matéria/tópico como contexto, sem treinar os pesos do modelo. A indexação e a recuperação são locais, via Ollama e SQLite. O padrão usa `simulados/cache/edubench-reviewed-canonical.jsonl` e o modelo de embeddings `qwen3-embedding:0.6b`:
+
+```bash
+ollama pull qwen3-embedding:0.6b
+PYTHONPATH=src python -m studai.tools.index_classification_examples \
+  --base-url http://localhost:11434
+```
+
+Para escolher outro conjunto revisado, passe o JSONL como argumento. Linhas sem rótulo válido são ignoradas; matérias e tópicos fora da taxonomia são recusados. Ao indexar novamente o mesmo arquivo, o sistema substitui aquele índice. Depois da indexação, o processamento normal usa RAG automaticamente quando o provedor é Ollama. `--no-rag` desativa a recuperação, e `--embedding-model` seleciona outro modelo já instalado.
+
+O índice armazena texto da questão, identificador, ano, versão, origem e rótulos revisados; gabaritos e respostas esperadas não são enviados no contexto de classificação. O benchmark exclui exemplos do mesmo ano da questão avaliada para evitar contaminação entre treino e validação.
+
+Para revisar questões das provas que você colocou em `simulados/`, exporte os itens processados. A planilha traz matéria/tópico previstos como sugestões e preserva versões, imagens e gabaritos importados; preencha `subject` e `topic` com os rótulos confirmados:
+
+```bash
+PYTHONPATH=src python -m studai.tools.review_edubench export-processed \
+  --root simulados/processados --output simulados/cache/fuvest-review.csv
+PYTHONPATH=src python -m studai.tools.review_edubench import \
+  simulados/cache/fuvest-review.csv simulados/cache/fuvest-reviewed.jsonl
+PYTHONPATH=src python -m studai.tools.index_classification_examples \
+  simulados/cache/fuvest-reviewed.jsonl --base-url http://localhost:11434
+```
+
+Para comparar classificação sem exemplos e com RAG, latência, qualidade, workers e threads nos dois Ollama:
+
+```bash
+PYTHONPATH=src python -m studai.tools.benchmark_classifier \
+  simulados/cache/edubench-reviewed-canonical.jsonl \
+  --base-url http://localhost:11434,http://192.168.100.167:11434 \
+  --workers 1 --threads 0 --rag both --limit 2 \
+  --output simulados/cache/classifier-sweep.json
+```
+
+Comece com uma amostra pequena e amplie `--workers`, `--threads` e `--limit` conforme a capacidade das máquinas. Cada servidor deve ter o mesmo modelo de classificação e o embedding instalado. Os relatórios medem acurácia/F1 por matéria e tópico, erros, p95 e questões por minuto, com resultados separados por host.
+
 ## Usar dois computadores Ollama
 
 Instale o mesmo modelo nos dois servidores Ollama. Depois passe os dois endereços no comando; use o IP real do segundo computador:
 
 ```bash
 python processar_simulados.py simulados/ \
-  --base-url http://localhost:11434,http://192.168.1.50:11434 \
+  --base-url http://localhost:11434,http://192.168.100.167:11434 \
   --workers 2
 ```
 
 O classificador distribui os pedidos entre os hosts e exibe o host usado em cada questão. Para controlar os threads de CPU de cada inferência, use `--ollama-threads 8` e ajuste conforme o processador.
+
+## Acervo Fuvest 2017–2026
+
+O processador dedicado consulta os manifestos em `fuvest_acervo/`, seleciona a prova V (ou V1) da 1ª fase, extrai questões e imagens, importa o gabarito correspondente e gera uma planilha para rótulos humanos. Ele não chama a IA nem marca rótulos como revisados:
+
+```sh
+PYTHONPATH=src python -m studai.tools.process_fuvest_archive
+```
+
+As saídas ficam em `simulados/processados/fuvest-2017-2026/` e `simulados/cache/fuvest-2017-2026-review.csv`, com relatório JSON. Preencha `subject` e `topic` na planilha e importe para um conjunto revisado:
+
+```sh
+PYTHONPATH=src python -m studai.tools.review_edubench import \
+  simulados/cache/fuvest-2017-2026-review.csv \
+  simulados/cache/fuvest-2017-2026-reviewed.jsonl
+PYTHONPATH=src python -m studai.tools.index_classification_examples \
+  simulados/cache/fuvest-2017-2026-reviewed.jsonl \
+  --base-url http://localhost:11434
+```
+
+Só os rótulos revisados entram no RAG. O relatório recusa associar gabaritos quando a extração está incompleta. Neste acervo, o extrator não detecta todas as questões de 2017 e 2018 e não encontrou a questão 90 de 2021; confira o relatório antes de usar esses dados. A 2ª fase discursiva não faz parte deste fluxo.
 
 ## Interface de benchmark
 

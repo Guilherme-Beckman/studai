@@ -1,0 +1,54 @@
+{
+  "ano": 2022,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-2022",
+  "itens": [
+    {
+      "texto": "Prova V",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2022_primeira_fase_tipo_V.pdf",
+      "arquivo": "fuvest_acervo/2022/1a_fase/provas/fuvest_2022_primeira_fase_tipo_V.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova K",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2022_primeira_fase_tipo_K.pdf",
+      "arquivo": "fuvest_acervo/2022/1a_fase/provas/fuvest_2022_primeira_fase_tipo_K.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova Q",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2022_primeira_fase_tipo_Q.pdf",
+      "arquivo": "fuvest_acervo/2022/1a_fase/provas/fuvest_2022_primeira_fase_tipo_Q.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova X",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2022_primeira_fase_tipo_X.pdf",
+      "arquivo": "fuvest_acervo/2022/1a_fase/provas/fuvest_2022_primeira_fase_tipo_X.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova Z",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2022_primeira_fase_tipo_Z.pdf",
+      "arquivo": "fuvest_acervo/2022/1a_fase/provas/fuvest_2022_primeira_fase_tipo_Z.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Gabarito",
+      "fase": "1a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2022_primeira_fase_gabarito_retificado.pdf",
+      "arquivo": "fuvest_acervo/2022/1a_fase/gabaritos/fuvest_2022_primeira_fase_gabarito_retificado.pdf",
+      "status": "baixado"
+    }
+  ]
+}

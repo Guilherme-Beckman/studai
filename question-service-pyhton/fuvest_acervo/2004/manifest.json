@@ -1,0 +1,14 @@
+{
+  "ano": 2004,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-2004",
+  "itens": [
+    {
+      "texto": "Prova",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2004_prova_primeira_fase.pdf",
+      "arquivo": "fuvest_acervo/2004/1a_fase/provas/fuvest_2004_prova_primeira_fase.pdf",
+      "status": "baixado"
+    }
+  ]
+}

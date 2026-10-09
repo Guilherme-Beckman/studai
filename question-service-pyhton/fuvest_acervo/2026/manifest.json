@@ -1,0 +1,110 @@
+{
+  "ano": 2026,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-2026/",
+  "itens": [
+    {
+      "texto": "Locais de prova da 1ª Fase",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-1fase-locais-prova.pdf",
+      "arquivo": "fuvest_acervo/2026/1a_fase/provas/fuvest2026-1fase-locais-prova.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Prova 2026 V1",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase1-prova-V1.pdf",
+      "arquivo": "fuvest_acervo/2026/1a_fase/provas/fuvest2026-fase1-prova-V1.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Gabaritos de Provas da 1ª fase",
+      "fase": "1a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase1-gabarito.pdf",
+      "arquivo": "fuvest_acervo/2026/1a_fase/gabaritos/fuvest2026-fase1-gabarito.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Prova da 2ª fase – 1º dia – Respostas Esperadas",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia1-respostas-esperadas.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia1-respostas-esperadas.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Prova da 2ª fase – 1º dia – Redação: Abordagem esperada",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia1-abordagem-esperada-redacao.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia1-abordagem-esperada-redacao.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Prova da 2ª fase – 2º dia",
+      "fase": "2a_fase",
+      "tipo": "provas_dia2",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia2-prova.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/provas_dia2/fuvest2026-fase2-dia2-prova.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Respostas esperadas – Matemática",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia2-respostas-esperadas-matematica.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia2-respostas-esperadas-matematica.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Respostas esperadas – Física",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia2-respostas-esperadas-fisica.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia2-respostas-esperadas-fisica.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Respostas esperadas – Química",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia2-respostas-esperadas-quimica.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia2-respostas-esperadas-quimica.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Respostas esperadas – Biologia",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia2-respostas-esperadas-biologia.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia2-respostas-esperadas-biologia.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Respostas esperadas – História",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia2-respostas-esperadas-historia.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia2-respostas-esperadas-historia.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Respostas esperadas – Geografia",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-fase2-dia2-respostas-esperadas-geografia.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-fase2-dia2-respostas-esperadas-geografia.pdf",
+      "status": "ja_existia"
+    },
+    {
+      "texto": "Gabarito",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2026-simulado-fase1-gabarito.pdf",
+      "arquivo": "fuvest_acervo/2026/2a_fase/gabaritos/fuvest2026-simulado-fase1-gabarito.pdf",
+      "status": "ja_existia"
+    }
+  ]
+}

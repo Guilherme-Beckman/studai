@@ -1,0 +1,22 @@
+{
+  "ano": 2005,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-2005",
+  "itens": [
+    {
+      "texto": "Prova",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2005_prova_primeira_fase.pdf",
+      "arquivo": "fuvest_acervo/2005/1a_fase/provas/fuvest_2005_prova_primeira_fase.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Gabarito",
+      "fase": "1a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2005_1fase_gab_1.pdf",
+      "arquivo": "fuvest_acervo/2005/1a_fase/gabaritos/fuvest_2005_1fase_gab_1.pdf",
+      "status": "baixado"
+    }
+  ]
+}

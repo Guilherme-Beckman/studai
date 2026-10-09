@@ -10,7 +10,7 @@ import pymupdf
 APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP / "src"))
 
-from studai.features.answer_keys.service import import_answer_key, parse_answer_key_pdf
+from studai.features.answer_keys.service import exam_variant, import_answer_key, parse_answer_key_pdf
 from studai.features.classification.service import DEFAULT_TAXONOMY, MockProvider, classificar
 from studai.features.diagnostics.service import connect_db
 from studai.features.questions.extractor import extract_pdf
@@ -72,6 +72,24 @@ class ModularFeatureTests(unittest.TestCase):
             db.close()
         self.assertEqual(summary["imported"], 2)
         self.assertEqual([tuple(row) for row in stored], [(1, "A"), (2, "B")])
+
+    def test_fuvest_answer_key_reads_multiple_variant_columns_and_annulled_items(self):
+        source = self.root / "gabarito.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((40, 60), "PROVA V")
+        page.insert_text((250, 60), "PROVA K")
+        page.insert_text((30, 80), "V 01-E V 02-*")
+        page.insert_text((30, 100), "V 03-A V 04-D")
+        page.insert_text((240, 80), "K 01-B K 02-C")
+        page.insert_text((240, 100), "K 03-C K 04-E")
+        doc.save(source)
+        doc.close()
+        self.assertEqual(parse_answer_key_pdf(source, "V"), {1: "E", 2: "*", 3: "A", 4: "D"})
+
+    def test_exam_variant_recognizes_fuvest_type_suffix(self):
+        self.assertEqual(exam_variant(Path("fuvest_2022_primeira_fase_tipo_V.pdf")), "V")
+        self.assertEqual(exam_variant(Path("fuvest2026-fase1-prova-V1.pdf")), "V1")
 
     def test_api_processes_pdf_offline_without_external_model(self):
         source = self.root / "prova.pdf"

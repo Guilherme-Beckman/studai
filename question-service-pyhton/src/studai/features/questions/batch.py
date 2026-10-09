@@ -3,7 +3,7 @@
 
 Uso:
     python processar_simulados.py [pasta_com_pdfs]
-    python processar_simulados.py simulados/ --base-url http://localhost:11434,http://192.168.1.50:11434
+    python processar_simulados.py simulados/ --base-url http://localhost:11434,http://192.168.100.167:11434
 
 As saídas ficam em <pasta_com_pdfs>/processados/<nome-do-pdf>/.
 """

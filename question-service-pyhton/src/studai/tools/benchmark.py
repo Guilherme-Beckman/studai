@@ -116,7 +116,8 @@ def run_benchmark(job_id: str, payload: dict) -> None:
                     msg = response.get("message", {}).get("content", "")
                     valid = True
                     try:
-                        clf.validate(clf.extract_json(msg), clf.DEFAULT_TAXONOMY)
+                        clf.validate(clf.extract_json(msg), clf.DEFAULT_TAXONOMY,
+                                     clf.DEFAULT_TOPIC_TAXONOMY)
                     except ValueError:
                         valid = False
                     tokens = int(response.get("eval_count", 0))

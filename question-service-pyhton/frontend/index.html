@@ -37,13 +37,13 @@
       </section>
 
       <section class="view" id="view-process">
-        <div class="page-heading"><div><p class="eyebrow">INGESTÃO</p><h1>Processar uma prova</h1><p class="muted">Envie um PDF para extrair questões e classificá-las.</p></div></div>
+        <div class="page-heading"><div><p class="eyebrow">INGESTÃO</p><h1>Processar uma prova</h1><p class="muted">Envie a prova e o gabarito para extrair, classificar e revisar as questões.</p></div></div>
         <div class="two-column">
           <form id="process-form" class="panel form-panel">
             <div class="panel-heading"><span class="step-number">01</span><div><h2>Arquivo da prova</h2><p>PDF com texto selecionável funciona melhor.</p></div></div>
             <label class="drop-zone" id="drop-zone"><input id="pdf-file" type="file" accept="application/pdf,.pdf" required><span class="upload-icon">↑</span><strong id="file-label">Escolher PDF</strong><span>ou arraste o arquivo até aqui</span><small>PDF</small></label>
-            <div class="panel-heading" style="margin:16px 0 8px"><span class="step-number step-green">02</span><span><strong>Gabarito da prova</strong><p class="help-copy">Opcional · envie o PDF junto com a prova para importar as respostas automaticamente.</p></span></div>
-            <label class="drop-zone key-drop-zone" id="key-drop-zone"><input id="key-pdf-file" type="file" accept="application/pdf,.pdf"><span class="upload-icon">↑</span><strong id="key-file-label">Escolher PDF do gabarito</strong><span>ou arraste o arquivo até aqui</span><small>OPCIONAL</small></label>
+            <div class="panel-heading" style="margin:16px 0 8px"><span class="step-number step-green">02</span><span><strong>Gabarito da prova</strong><p class="help-copy">Obrigatório · selecione o gabarito correspondente a esta prova.</p></span></div>
+            <label class="drop-zone key-drop-zone" id="key-drop-zone"><input id="key-pdf-file" type="file" accept="application/pdf,.pdf" required><span class="upload-icon">↑</span><strong id="key-file-label">Escolher PDF do gabarito</strong><span>ou arraste o arquivo até aqui</span><small>PDF</small></label>
             <div class="form-row"><label>Provedor de IA<select id="process-provider" class="provider-select"></select></label></div>
             <div class="provider-extra hidden" id="process-provider-extra">
               <div class="provider-row"><label>Modelo<input id="process-model" placeholder="qwen3.5:4b"></label><label>Servidores Ollama <span class="optional">separe por vírgula</span><input id="process-base-url" placeholder="http://localhost:11434,http://192.168.100.167:11434"></label></div>
@@ -51,7 +51,7 @@
               <p class="help-copy">Workers processam questões em paralelo. Threads controla os threads de CPU usados em cada inferência.</p>
             </div>
             <label class="check-row"><input id="process-images" type="checkbox"><span>Enviar imagens das questões quando disponíveis</span></label>
-            <button class="button button-primary full-width" type="submit">Extrair e classificar <span>→</span></button>
+            <button class="button button-primary full-width" type="submit">Processar prova <span>→</span></button>
             <p class="help-copy">A demonstração offline não usa Ollama. A classificação é aproximada e serve para testar a interface.</p>
           </form>
           <div class="panel result-panel process-progress-panel"><div class="panel-heading"><span class="step-number step-muted">03</span><div><h2>Acompanhamento</h2><p id="process-progress-subtitle">O status e as etapas aparecem aqui em tempo real.</p></div></div><div id="process-status" class="empty-state"><div class="empty-icon">▧</div><strong>Nenhuma prova em processamento</strong><p>Envie a prova para acompanhar extração, classificação e importação do gabarito.</p></div><div id="process-progress-detail" class="process-progress-detail hidden"></div><button id="process-cancel" class="button button-danger full-width hidden" type="button">Cancelar processamento</button></div>
@@ -59,10 +59,10 @@
       </section>
 
       <section class="view" id="view-exams">
-        <div class="page-heading"><div><p class="eyebrow">BIBLIOTECA</p><h1>Provas e gabaritos</h1><p class="muted">Acompanhe as provas processadas e prepare questões para diagnóstico.</p></div><button class="button button-primary" data-go="process">Adicionar prova <span>＋</span></button></div>
-        <div class="two-column exam-layout"><div><div class="section-heading compact"><div><p class="eyebrow">SEU ACERVO</p><h2>Provas processadas</h2></div><button class="icon-button" id="refresh-exams" title="Atualizar">↻</button></div><div id="exam-list" class="stack-list"><div class="loading-card">Carregando acervo…</div></div></div>
-          <form id="answer-key-form" class="panel form-panel key-panel"><div class="panel-heading"><span class="step-number step-green">＋</span><div><h2>Importar gabarito</h2><p>Associe respostas à prova selecionada.</p></div></div><label>Prova<select id="key-exam" required><option value="">Selecione uma prova</option></select></label><label>Respostas em JSON<textarea id="key-answers" rows="9" placeholder='{"1":"A","2":"C","3":"*"}' required></textarea></label><label class="check-row"><input id="key-replace" type="checkbox"><span>Substituir gabarito existente</span></label><button class="button button-primary full-width" type="submit">Importar respostas <span>→</span></button><div id="key-result" class="inline-result hidden"></div><p class="help-copy">Use letras A–E; marque questões anuladas com <code>*</code>.</p></form>
-        </div>
+        <div class="page-heading"><div><p class="eyebrow">BIBLIOTECA</p><h1>Provas e gabaritos</h1><p class="muted">Acompanhe classificações, revise questões e responda às provas.</p></div><button class="button button-primary" data-go="process">Adicionar prova <span>＋</span></button></div>
+        <div class="two-column exam-layout"><div><div class="section-heading compact"><div><p class="eyebrow">SEU ACERVO</p><h2>Provas processadas</h2></div><button class="icon-button" id="refresh-exams" title="Atualizar">↻</button></div><div id="exam-list" class="stack-list"><div class="loading-card">Carregando acervo…</div></div></div></div>
+        <div id="exam-question-workspace" class="panel exam-question-workspace hidden"></div>
+        <div id="exam-quiz-workspace" class="panel exam-question-workspace hidden"></div>
       </section>
 
       <section class="view" id="view-diagnostics">

@@ -1,4 +1,7 @@
 import json
+import csv
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +11,8 @@ from studai.features.classification.cache import ClassificationCache
 from studai.features.classification.service import _cache_key
 from studai.features.classification import service as classification
 from studai.tools.prepare_edubench import candidate_rows
+from studai.tools.review_edubench import export_review, import_review, sample_by_year
+from studai.tools.evaluate_classifier import evaluate
 
 
 class ClassificationCacheTests(unittest.TestCase):
@@ -78,6 +83,73 @@ class ClassificationCacheTests(unittest.TestCase):
         self.assertEqual(rows[0]["subject"], "")
         self.assertEqual(rows[0]["topic"], "")
         self.assertEqual(rows[0]["review_status"], "pending")
+
+    def test_topic_taxonomy_restricts_topic_to_selected_subject(self):
+        taxonomy = {"Física": "física", "Química": "química"}
+        topics = {"Física": ["Indução eletromagnética"], "Química": ["Estequiometria"]}
+        result = classification.validate({"materia": "Física", "assunto": "Indução eletromagnética",
+            "materias_secundarias": [], "confianca": 0.9}, taxonomy, topics)
+        self.assertEqual(result["assunto"], "Indução eletromagnética")
+        with self.assertRaisesRegex(ValueError, "tópico fora da taxonomia"):
+            classification.validate({"materia": "Física", "assunto": "Estequiometria",
+                "materias_secundarias": [], "confianca": 0.9}, taxonomy, topics)
+        review = classification.validate({"materia": "Física", "assunto": "REVISAR",
+            "materias_secundarias": [], "confianca": 0.9}, taxonomy, topics)
+        self.assertEqual(review["confianca"], 0.25)
+
+    def test_edubench_review_roundtrip_samples_years_and_requires_labels(self):
+        candidates = self.root / "candidates.jsonl"
+        candidates.write_text("\n".join(json.dumps({"id": f"{year}-{n}", "year": year,
+            "year_version": "fase1", "question": f"questão {year}-{n}", "supporting_texts": "texto",
+            "suggested_subject": "Ciências Exatas", "subject": "", "topic": ""})
+            for year in (2022, 2023, 2024) for n in range(4)), encoding="utf-8")
+        csv_path = self.root / "review.csv"
+        self.assertEqual(export_review(candidates, csv_path, limit=6), 6)
+        reviewed = csv_path.read_text(encoding="utf-8-sig")
+        self.assertIn("suggested_subject", reviewed)
+        with self.assertRaisesRegex(ValueError, "preencha subject e topic"):
+            import_review(csv_path, self.root / "reviewed.jsonl")
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
+            rows_csv = list(csv.DictReader(file))
+            fields = list(rows_csv[0])
+        for row in rows_csv:
+            row["subject"] = "Matemática"
+            row["topic"] = "Probabilidade"
+        with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows_csv)
+        output = self.root / "reviewed.jsonl"
+        self.assertEqual(import_review(csv_path, output), 6)
+        imported = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual(imported["subject"], "Matemática")
+        self.assertEqual(imported["topic"], "Probabilidade")
+        self.assertTrue(imported["reviewed"])
+        self.assertEqual(imported["exam"], "USP")
+        rows = [json.loads(line) for line in candidates.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(sample_by_year(rows, 6)), 6)
+
+    def test_benchmark_limit_prints_question_progress_and_records_http_attempts(self):
+        dataset = self.root / "reviewed.jsonl"
+        row = {"id": "usp-1", "question": "Quanto é um mais um?", "subject": "Matemática",
+               "topic": "Probabilidade", "supporting_texts": ""}
+        dataset.write_text("\n".join(json.dumps({**row, "id": f"usp-{n}"}) for n in range(3)), encoding="utf-8")
+
+        class Provider:
+            label = "test:mock"
+            def complete(self, system, user, images=None):
+                return json.dumps({"materia": "Matemática", "materias_secundarias": [],
+                                   "assunto": "Probabilidade", "confianca": 1})
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            report = evaluate(dataset, Provider(), output=self.root / "report.json", source="test",
+                              version="1", limit=1, request_attempts=1)
+        self.assertEqual(report["count"], 1)
+        self.assertEqual(report["http_attempts_per_request"], 1)
+        self.assertIn("[1/1] usp-0", output.getvalue())
+        self.assertGreaterEqual(report["latency_seconds"]["p95"], 0)
+        self.assertGreater(report["latency_seconds"]["questions_per_minute"], 0)
 
 
 if __name__ == "__main__":

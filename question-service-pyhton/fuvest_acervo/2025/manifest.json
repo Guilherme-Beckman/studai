@@ -1,0 +1,30 @@
+{
+  "ano": 2025,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-2025",
+  "itens": [
+    {
+      "texto": "Prova V1",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2025_primeira_fase_prova_V1.pdf",
+      "arquivo": "fuvest_acervo/2025/1a_fase/provas/fuvest2025_primeira_fase_prova_V1.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Gabarito",
+      "fase": "1a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest2025_gabarito_primeira_fase.pdf",
+      "arquivo": "fuvest_acervo/2025/1a_fase/gabaritos/fuvest2025_gabarito_primeira_fase.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Guia de Respostas esperadas",
+      "fase": "2a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2025_guia_respostas.pdf",
+      "arquivo": "fuvest_acervo/2025/2a_fase/gabaritos/fuvest_2025_guia_respostas.pdf",
+      "status": "baixado"
+    }
+  ]
+}

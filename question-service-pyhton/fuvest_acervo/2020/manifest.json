@@ -1,0 +1,22 @@
+{
+  "ano": 2020,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-2020",
+  "itens": [
+    {
+      "texto": "Prova",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2020_primeira_fase_prova_V.pdf",
+      "arquivo": "fuvest_acervo/2020/1a_fase/provas/fuvest_2020_primeira_fase_prova_V.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Gabarito",
+      "fase": "1a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_2020_primeira_fase_gabaritos.pdf",
+      "arquivo": "fuvest_acervo/2020/1a_fase/gabaritos/fuvest_2020_primeira_fase_gabaritos.pdf",
+      "status": "baixado"
+    }
+  ]
+}

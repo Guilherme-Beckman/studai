@@ -1,0 +1,38 @@
+{
+  "ano": 1999,
+  "pagina": "https://www.fuvest.br/acervo-vestibular-1999",
+  "itens": [
+    {
+      "texto": "Prova 1º Dia",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_1999_prova_primeira_fase_dia_1.pdf",
+      "arquivo": "fuvest_acervo/1999/1a_fase/provas/fuvest_1999_prova_primeira_fase_dia_1.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova 2º Dia",
+      "fase": "1a_fase",
+      "tipo": "provas",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_1999_prova_primeira_fase_dia_2.pdf",
+      "arquivo": "fuvest_acervo/1999/1a_fase/provas/fuvest_1999_prova_primeira_fase_dia_2.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova 1º Dia – Gabarito",
+      "fase": "1a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_1999_1fase_gab_1.pdf",
+      "arquivo": "fuvest_acervo/1999/1a_fase/gabaritos/fuvest_1999_1fase_gab_1.pdf",
+      "status": "baixado"
+    },
+    {
+      "texto": "Prova 2º Dia – Gabarito",
+      "fase": "1a_fase",
+      "tipo": "gabaritos",
+      "url": "https://www.fuvest.br/wp-content/uploads/fuvest_1999_1fase_gab_2.pdf",
+      "arquivo": "fuvest_acervo/1999/1a_fase/gabaritos/fuvest_1999_1fase_gab_2.pdf",
+      "status": "baixado"
+    }
+  ]
+}

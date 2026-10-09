@@ -3,10 +3,15 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 let exams = [];
 let courses = [];
 let currentDiagnostic = null;
+let currentExamQuiz = null;
+let currentExamReview = null;
 let activeProvider = { provider: "demo" };
 let toastTimer;
 let currentProcessJob = null;
 let processUploadController = null;
+const ACTIVE_PROCESS_KEY = "studai-active-process";
+const PROCESS_DB_NAME = "studai-browser-state";
+const PROCESS_DB_STORE = "pending";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -16,8 +21,63 @@ async function api(path, options = {}) {
   const response = await fetch(path, options);
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : await response.text();
-  if (!response.ok) throw new Error(data?.error || data?.message || `Falha HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(data?.error || data?.message || `Falha HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
+}
+
+function openProcessDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(PROCESS_DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(PROCESS_DB_STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function savePendingProcess(record) {
+  const db = await openProcessDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(PROCESS_DB_STORE, "readwrite");
+    transaction.objectStore(PROCESS_DB_STORE).put(record, "active");
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+  localStorage.setItem(ACTIVE_PROCESS_KEY, JSON.stringify({ jobId: record.jobId }));
+}
+
+async function readPendingProcess() {
+  const db = await openProcessDb();
+  const record = await new Promise((resolve, reject) => {
+    const request = db.transaction(PROCESS_DB_STORE).objectStore(PROCESS_DB_STORE).get("active");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return record;
+}
+
+async function clearPendingProcess() {
+  localStorage.removeItem(ACTIVE_PROCESS_KEY);
+  try {
+    const db = await openProcessDb();
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(PROCESS_DB_STORE, "readwrite");
+      transaction.objectStore(PROCESS_DB_STORE).delete("active");
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+  } catch (error) { console.warn("Não foi possível limpar o processamento salvo", error); }
+}
+
+function newClientJobId() {
+  if (crypto.randomUUID) return crypto.randomUUID().replaceAll("-", "");
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), value => value.toString(16).padStart(2, "0")).join("");
 }
 
 function toast(message, error = false) {
@@ -78,20 +138,277 @@ function stageLabel(stage) {
 
 function examCard(exam, compact = false) {
   const state = exam.classified ? `<span class="badge">Classificada</span>` : `<span class="badge pending">Pendente</span>`;
-  const element = `<div class="exam-item"><div class="exam-file-icon">▤</div><div class="exam-item-main"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · ${exam.importedAnswers || 0} respostas importadas${exam.subjects?.length ? ` · ${escapeHtml(exam.subjects.slice(0, 3).join(", "))}` : ""}</span></div>${state}</div>`;
-  return compact ? `<div class="exam-mini"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · ${exam.classified ? "classificada" : "aguardando classificação"}</span></div>` : element;
+  const progress = Number(exam.reviewProgress ?? 100);
+  const element = `<div class="exam-item exam-item-row"><button class="exam-open-button" type="button" data-open-exam="${escapeHtml(exam.id)}"><span class="exam-file-icon">▤</span><span class="exam-item-main"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}% · ${exam.importedAnswers || 0} respostas do gabarito</span></span>${state}<span class="exam-open-arrow" aria-hidden="true">›</span></button><button class="exam-remove-button" type="button" data-delete-exam="${escapeHtml(exam.id)}" aria-label="Remover ${escapeHtml(exam.name)}" title="Remover prova e questões">Remover</button></div>`;
+  return compact ? `<div class="exam-mini"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}%</span></div>` : element;
+}
+
+async function deleteExam(examId) {
+  const exam = exams.find(item => item.id === examId);
+  const name = exam?.name || "esta prova";
+  if (!window.confirm(`Remover “${name}” e as questões processadas, revisões e gabarito associado? Respostas de diagnósticos já realizados serão preservadas no histórico.`)) return;
+  const button = $(`[data-delete-exam="${CSS.escape(examId)}"]`, $("#exam-list"));
+  if (button) { button.disabled = true; button.textContent = "Removendo…"; }
+  try {
+    await api(`/api/exams/${encodeURIComponent(examId)}`, { method: "DELETE" });
+    localStorage.removeItem(`studai-exam-answers:${examId}`);
+    if (currentExamReview?.exam?.id === examId) {
+      currentExamReview = null;
+      $("#exam-question-workspace").classList.add("hidden");
+    }
+    if (currentExamQuiz?.exam?.id === examId) {
+      currentExamQuiz = null;
+      $("#exam-quiz-workspace").classList.add("hidden");
+    }
+    toast(`“${name}” e seus arquivos do acervo foram removidos.`);
+    await refreshExams();
+  } catch (error) {
+    toast(error.message, true);
+    if (button) { button.disabled = false; button.textContent = "Remover"; }
+  }
 }
 
 async function refreshExams() {
   try {
     exams = await api("/api/exams");
     $("#exam-list").innerHTML = exams.length ? exams.map(exam => examCard(exam)).join("") : `<div class="empty-state"><div class="empty-icon">▤</div><strong>Seu acervo está vazio</strong><p>Processe uma prova para começar.</p></div>`;
+    $$("[data-open-exam]", $("#exam-list")).forEach(button => button.addEventListener("click", () => openExamReview(button.dataset.openExam)));
+    $$ ("[data-delete-exam]", $("#exam-list")).forEach(button => button.addEventListener("click", () => deleteExam(button.dataset.deleteExam)));
     $("#overview-exams").innerHTML = exams.length ? exams.slice(0, 4).map(exam => examCard(exam, true)).join("") : `<div class="loading-card">Nenhuma prova processada ainda.</div>`;
-    const options = `<option value="">Selecione uma prova</option>` + exams.map(exam => `<option value="${escapeHtml(exam.id)}">${escapeHtml(exam.name)} · ${exam.totalQuestions} questões</option>`).join("");
-    $("#key-exam").innerHTML = options;
   } catch (error) {
     toast(error.message, true);
   }
+}
+
+function examAssetUrl(examId, relativePath) {
+  const safePath = String(relativePath || "").split("/").filter(Boolean).map(encodeURIComponent).join("/");
+  return `/api/exams/${encodeURIComponent(examId)}/assets/${safePath}`;
+}
+
+function examImageMarkup(examId, paths, className = "") {
+  return (Array.isArray(paths) ? paths : []).map(path => `<span class="exam-image-wrap"><img class="exam-question-image ${className}" src="${examAssetUrl(examId, path)}" alt="Imagem da questão" loading="lazy" onerror="this.closest('.exam-image-wrap').classList.add('image-unavailable')"><span class="image-unavailable-label">Imagem indisponível</span></span>`).join("");
+}
+
+async function openExamReview(examId) {
+  const workspace = $("#exam-question-workspace");
+  const quizWorkspace = $("#exam-quiz-workspace");
+  quizWorkspace.classList.add("hidden");
+  workspace.classList.remove("hidden");
+  workspace.innerHTML = `<div class="loading-card">Carregando questões da prova…</div>`;
+  try {
+    currentExamReview = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+    renderExamReview();
+    workspace.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    workspace.innerHTML = `<div class="exam-quiz-error">Não foi possível abrir a prova: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderExamReview() {
+  const workspace = $("#exam-question-workspace");
+  const data = currentExamReview;
+  if (!data) return;
+  const { exam, questions, sharedTexts = {}, reviewProgress = {}, ragStatus = {} } = data;
+  const progress = Number(reviewProgress.reviewProgress ?? exam.reviewProgress ?? 100);
+  const ragLabel = ragStatus.status === "ready" ? `${ragStatus.examples || 0} exemplo(s) no RAG local` :
+    ragStatus.status === "indexing" || ragStatus.status === "queued" ? "Indexação local em andamento" :
+      ragStatus.status === "pending" ? `Índice pendente: ${ragStatus.error || "Ollama de embeddings indisponível"}` : "Nenhum exemplo revisado no índice";
+  const cards = questions.map(question => renderReviewQuestion(exam.id, question, sharedTexts)).join("");
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA E GABARITO</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} questões sinalizadas revisadas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
+    <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="workspace-meta">${reviewProgress.pendingReview ?? 0} questão(ões) sinalizadas pendentes · ${escapeHtml(ragLabel)}</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
+    <div class="exam-review-list">${cards || `<div class="loading-card">Esta prova não contém questões extraídas.</div>`}</div>`;
+  bindExamReviewActions();
+}
+
+function reviewReasonLabel(reason) {
+  return ({ classificacao_baixa_confianca: "Baixa confiança", topico_revisar: "Tópico sem correspondência", erro_classificacao: "Erro de classificação", classificacao_ausente: "Sem classificação", formula_matematica: "Fórmula pode ter sido extraída incorretamente", glifo_estranho: "Símbolo incomum na extração", alternativas_incompletas: "Alternativas incompletas", enunciado_vazio: "Enunciado vazio", alternativa_vazia: "Alternativa vazia" })[reason] || reason.replaceAll("_", " ");
+}
+
+function renderReviewQuestion(examId, question, sharedTexts) {
+  const number = String(question.numero);
+  const review = question.review || {};
+  const reviewed = review.status === "reviewed";
+  const unusable = review.status === "unusable";
+  const needsReview = Boolean(question.needsReview);
+  const classification = question.classificacao || {};
+  const subject = reviewed ? review.subject : (question.materia || classification.materia || "Não classificada");
+  const topic = reviewed ? review.topic : (classification.assunto || "Tópico não definido");
+  const confidence = Number.isFinite(Number(classification.confianca)) ? `${Math.round(Number(classification.confianca) * 100)}%` : "—";
+  const shared = question.texto_id != null ? sharedTexts[String(question.texto_id)] : null;
+  const sharedText = typeof shared === "string" ? shared : shared?.texto;
+  const sharedImages = shared && typeof shared === "object" ? shared.figuras : [];
+  const options = Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b));
+  const reasons = (question.reviewReasons || []).map(reason => `<span class="review-reason-tag">${escapeHtml(reviewReasonLabel(reason))}</span>`).join("");
+  const state = unusable ? `<span class="badge review-unusable">Inutilizável</span>` : reviewed ? `<span class="badge">Revisada</span>` : needsReview ? `<span class="badge pending">Precisa revisar</span>` : `<span class="badge">Sem pendências</span>`;
+  const panel = needsReview ? `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar classificação</strong><span>Confirme ou corrija os rótulos usados nos exemplos locais.</span></div><div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}" required><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${review.subject === item || (!review.subject && item === classification.materia) ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><label>Tópico<select data-review-topic="${number}" required><option value="">Selecione uma matéria primeiro</option></select></label></div><label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label><div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar revisão</button><button class="button button-danger" type="button" data-mark-unusable="${number}">Marcar como inutilizável</button></div></form>` : "";
+  const imagePaths = question.figuras_enunciado || [];
+  const hasInlineImages = imagePaths.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
+  const fallbackImages = !hasInlineImages ? (question.imagens_completas || []) : [];
+  return `<article class="exam-review-question" data-question-card="${number}"><div class="exam-review-question-top"><div><strong>Questão ${escapeHtml(number)}</strong><span class="exam-review-subject">${escapeHtml(subject)} · ${escapeHtml(topic)}</span></div><div class="exam-review-state">${state}<span class="confidence-chip">Confiança IA: ${confidence}</span></div></div>
+    ${reasons ? `<div class="review-reasons">${reasons}</div>` : ""}
+    ${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(examId, sharedImages, "passage-image")}</div>` : ""}
+    <div class="question-body exam-prompt">${escapeHtml(question.enunciado || "Enunciado não extraído")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(examId, imagePaths)}${fallbackImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(examId, fallbackImages)}</details>` : ""}</div>
+    <div class="exam-review-options">${options.map(([letter, option]) => { const text = typeof option === "string" ? option : (option?.texto || "Alternativa apresentada como imagem"); const figures = typeof option === "object" ? option.figuras : []; return `<div class="exam-review-option"><span class="exam-option-letter">${escapeHtml(letter)}</span><div>${escapeHtml(text)}${examImageMarkup(examId, figures, "option-image")}</div></div>`; }).join("")}</div>
+    ${review.note ? `<p class="review-saved-note"><strong>Observação:</strong> ${escapeHtml(review.note)}</p>` : ""}
+    ${needsReview ? `<div class="exam-review-actions"><button class="text-button" type="button" data-toggle-review="${number}">${reviewed || unusable ? "Editar revisão" : "Revisar questão"}</button></div>${panel}` : ""}</article>`;
+}
+
+function refreshReviewTopic(number, selectedTopic = "") {
+  const subjectSelect = $(`[data-review-subject="${number}"]`);
+  const topicSelect = $(`[data-review-topic="${number}"]`);
+  if (!subjectSelect || !topicSelect) return;
+  const topics = currentExamReview.topics?.[subjectSelect.value] || [];
+  topicSelect.innerHTML = `<option value="">Selecione</option>` + topics.map(topic => `<option value="${escapeHtml(topic)}" ${topic === selectedTopic ? "selected" : ""}>${escapeHtml(topic)}</option>`).join("");
+}
+
+function bindExamReviewActions() {
+  const workspace = $("#exam-question-workspace");
+  $("[data-close-exam-review]", workspace)?.addEventListener("click", () => {
+    workspace.classList.add("hidden"); currentExamReview = null;
+  });
+  $("[data-start-quiz]", workspace)?.addEventListener("click", () => openExamQuiz(currentExamReview.exam.id));
+  $("[data-retry-rag]", workspace)?.addEventListener("click", () => retryReviewIndex(currentExamReview.exam.id));
+  $$('[data-toggle-review]', workspace).forEach(button => button.addEventListener("click", () => {
+    const number = button.dataset.toggleReview;
+    const form = $(`[data-review-form="${number}"]`, workspace);
+    form.classList.toggle("hidden");
+    refreshReviewTopic(number, currentExamReview.questions.find(q => String(q.numero) === number)?.review?.topic || "");
+  }));
+  $$('[data-review-subject]', workspace).forEach(select => select.addEventListener("change", () => refreshReviewTopic(select.dataset.reviewSubject)));
+  $$('[data-review-form]', workspace).forEach(form => form.addEventListener("submit", event => {
+    event.preventDefault();
+    const number = form.dataset.reviewForm;
+    saveQuestionReview(number, { status: "reviewed", subject: $(`[data-review-subject="${number}"]`, form).value,
+      topic: $(`[data-review-topic="${number}"]`, form).value, note: $(`[data-review-note="${number}"]`, form).value });
+  }));
+  $$('[data-mark-unusable]', workspace).forEach(button => button.addEventListener("click", () => {
+    const number = button.dataset.markUnusable;
+    saveQuestionReview(number, { status: "unusable", note: $(`[data-review-note="${number}"]`, workspace).value });
+  }));
+}
+
+async function saveQuestionReview(number, value) {
+  try {
+    const examId = currentExamReview.exam.id;
+    const result = await api(`/api/exams/${encodeURIComponent(examId)}/questions/${encodeURIComponent(number)}/review`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value),
+    });
+    currentExamReview = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+    renderExamReview();
+    await refreshExams();
+    if (result.ragJobId) {
+      toast("Revisão salva; atualizando o índice local…");
+      const indexed = await pollJob(result.ragJobId);
+      currentExamReview = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+      renderExamReview();
+      await refreshExams();
+      toast(indexed.status === "pending" ? "Revisão salva; indexação pendente. Confira o Ollama e tente novamente." : "Revisão salva e acervo local atualizado.", indexed.status === "pending");
+    }
+  } catch (error) { toast(error.message, true); }
+}
+
+async function retryReviewIndex(examId) {
+  try {
+    const { jobId } = await api("/api/rag/reindex", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ examId }) });
+    toast("Indexando exemplos revisados localmente…");
+    const result = await pollJob(jobId);
+    currentExamReview = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+    renderExamReview();
+    await refreshExams();
+    toast(result.status === "pending" ? "Indexação ainda pendente; verifique o modelo de embeddings no Ollama." : "Índice RAG local atualizado.", result.status === "pending");
+  } catch (error) { toast(error.message, true); }
+}
+
+async function openExamQuiz(examId) {
+  const workspace = $("#exam-quiz-workspace");
+  workspace.classList.remove("hidden");
+  $("#exam-question-workspace").classList.add("hidden");
+  workspace.innerHTML = `<div class="loading-card">Carregando prova para responder…</div>`;
+  try {
+    const data = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+    const storageKey = `studai-exam-answers:${examId}`;
+    let answers = {};
+    try { answers = JSON.parse(sessionStorage.getItem(storageKey) || "{}"); } catch { answers = {}; }
+    currentExamQuiz = { ...data, index: 0, selected: null, answers, storageKey };
+    renderExamQuiz();
+    workspace.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    workspace.innerHTML = `<div class="exam-quiz-error">Não foi possível abrir a prova: ${escapeHtml(error.message)}<button class="blank-button" data-exam-close>Voltar à revisão</button></div>`;
+    bindExamQuizActions();
+  }
+}
+
+function renderExamQuiz() {
+  const workspace = $("#exam-quiz-workspace");
+  const quiz = currentExamQuiz;
+  if (!quiz) return;
+  const { exam, questions, sharedTexts = {}, answerKeys = {}, index } = quiz;
+  const question = questions[index];
+  if (!question) {
+    const scored = questions.reduce((totals, item) => {
+      const key = answerKeys[String(item.numero)];
+      const response = quiz.answers[String(item.numero)];
+      if (!response || !key) return totals;
+      if (key.annulled || key.answer === "*") totals.annulled++;
+      else { totals.graded++; if (response === key.answer) totals.correct++; }
+      return totals;
+    }, { graded: 0, correct: 0, annulled: 0 });
+    workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA CONCLUÍDA</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões respondidas nesta sessão</div></div><button class="blank-button" data-exam-close>Fechar</button></div><div class="exam-final-summary"><strong>${scored.graded ? `${scored.correct} de ${scored.graded} acertos` : "Respostas registradas"}</strong><p>${scored.annulled ? `${scored.annulled} questão(ões) anulada(s). ` : ""}${scored.graded < questions.length - scored.annulled ? "Algumas questões ainda não têm gabarito importado." : ""}</p></div><button class="button button-primary" data-exam-restart>Responder novamente</button>`;
+    bindExamQuizActions();
+    return;
+  }
+  const number = String(question.numero);
+  const saved = quiz.answers[number] || null;
+  const submitted = Boolean(saved);
+  const key = answerKeys[number];
+  const selected = submitted ? saved : quiz.selected;
+  const shared = question.texto_id != null ? sharedTexts[String(question.texto_id)] : null;
+  const sharedText = typeof shared === "string" ? shared : shared?.texto;
+  const sharedImages = shared && typeof shared === "object" ? shared.figuras : [];
+  const questionImages = question.figuras_enunciado || [];
+  const options = Object.entries(question.alternativas || {});
+  const hasInlineImages = questionImages.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
+  const fullPageImages = !hasInlineImages ? (question.imagens_completas || []) : [];
+  const outcome = submitted && key ? (key.annulled || key.answer === "*"
+    ? `<div class="exam-answer-feedback annulled">Questão anulada no gabarito.</div>`
+    : `<div class="exam-answer-feedback ${saved === key.answer ? "correct" : "incorrect"}">${saved === key.answer ? "Resposta correta!" : `Resposta incorreta. Gabarito: ${escapeHtml(key.answer)}.`}</div>`) : (submitted ? `<div class="exam-answer-feedback neutral">Resposta registrada. Ainda não há gabarito importado para esta questão.</div>` : "");
+  const progress = Math.round(((index + 1) / questions.length) * 100);
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Responda à prova</h2><div class="workspace-meta">Questão ${index + 1} de ${questions.length}${question.pagina ? ` · página ${question.pagina}` : ""}</div></div><button class="blank-button" data-exam-close>Fechar prova</button></div>
+    <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
+    ${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(exam.id, sharedImages, "passage-image")}</div>` : ""}
+    <div class="question-body exam-prompt">${escapeHtml(question.enunciado || "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(exam.id, questionImages)}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(exam.id, fullPageImages)}</details>` : ""}</div>
+    <div class="exam-options">${options.map(([letter, option]) => { const value = typeof option === "string" ? option : (option?.texto || ""); const images = typeof option === "object" ? option.figuras : []; return `<button type="button" class="exam-option ${selected === letter ? "selected" : ""} ${submitted && key && key.answer === letter ? "answer-correct" : ""} ${submitted && saved === letter && key && key.answer !== letter && !key.annulled ? "answer-wrong" : ""}" data-exam-option="${escapeHtml(letter)}" ${submitted ? "disabled" : ""}><span class="exam-option-letter">${escapeHtml(letter)}</span><span class="exam-option-content">${escapeHtml(value)}${examImageMarkup(exam.id, images, "option-image")}</span></button>`; }).join("")}</div>
+    ${outcome}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 ? "disabled" : ""}>← Anterior</button><div>${submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button class="button button-primary" data-exam-submit ${selected ? "" : "disabled"}>Responder</button>`}</div></div>`;
+  bindExamQuizActions();
+}
+
+function bindExamQuizActions() {
+  const workspace = $("#exam-quiz-workspace");
+  $$('[data-exam-option]', workspace).forEach(button => button.addEventListener("click", () => {
+    if (!currentExamQuiz) return;
+    currentExamQuiz.selected = button.dataset.examOption;
+    renderExamQuiz();
+  }));
+  $("[data-exam-submit]", workspace)?.addEventListener("click", () => {
+    const quiz = currentExamQuiz;
+    if (!quiz?.selected) return;
+    quiz.answers[String(quiz.questions[quiz.index].numero)] = quiz.selected;
+    sessionStorage.setItem(quiz.storageKey, JSON.stringify(quiz.answers));
+    quiz.selected = null;
+    renderExamQuiz();
+  });
+  $("[data-exam-next]", workspace)?.addEventListener("click", () => { currentExamQuiz.index++; currentExamQuiz.selected = null; renderExamQuiz(); });
+  $("[data-exam-prev]", workspace)?.addEventListener("click", () => { currentExamQuiz.index--; currentExamQuiz.selected = null; renderExamQuiz(); });
+  $("[data-exam-close]", workspace)?.addEventListener("click", () => {
+    workspace.classList.add("hidden");
+    $("#exam-question-workspace").classList.remove("hidden");
+  });
+  $("[data-exam-restart]", workspace)?.addEventListener("click", () => {
+    const quiz = currentExamQuiz;
+    sessionStorage.removeItem(quiz.storageKey);
+    quiz.answers = {}; quiz.index = 0; quiz.selected = null;
+    renderExamQuiz();
+  });
 }
 
 async function refreshCourses() {
@@ -136,6 +453,7 @@ async function processPdf(event) {
   const file = $("#pdf-file").files[0];
   const keyFile = $("#key-pdf-file").files[0];
   if (!file) return toast("Selecione um PDF.", true);
+  if (!keyFile) return toast("Selecione o gabarito correspondente.", true);
   const button = $("#process-form button[type=submit]");
   const status = $("#process-status");
   button.disabled = true;
@@ -143,40 +461,12 @@ async function processPdf(event) {
   processUploadController = new AbortController();
   renderProcessProgress({ status: "running", stage: "upload_saved", message: `Enviando ${file.name}`, progress: 1 });
   try {
-    const config = providerConfig("process");
-    const query = new URLSearchParams({ filename: file.name, provider: config.provider });
-    if (config.model) query.set("model", config.model);
-    if (config.baseUrl) query.set("baseUrl", config.baseUrl);
-    if (config.workers) query.set("workers", config.workers);
-    if (config.ollamaThreads) query.set("ollamaThreads", config.ollamaThreads);
-    if ($("#process-images").checked) query.set("images", "sempre");
-    const { jobId } = await api(`/api/exams/process?${query}`, { method: "POST", headers: { "Content-Type": "application/pdf" }, body: file, signal: processUploadController.signal });
-    currentProcessJob = jobId;
-    const result = await pollJob(jobId, job => {
-      renderProcessProgress(job);
-    });
-    let keySummary = "";
-    if (keyFile && result.classified) {
-      renderProcessProgress({ status: "running", stage: "answer_key", progress: 95, message: "Importando respostas do gabarito…" });
-      const keyQuery = new URLSearchParams({ filename: keyFile.name });
-      try {
-        const imported = await api(`/api/exams/${encodeURIComponent(result.examId)}/answer-key?${keyQuery}`, {
-          method: "POST", headers: { "Content-Type": "application/pdf" }, body: keyFile,
-        });
-        keySummary = `<br>${imported.imported} respostas do gabarito importadas.`;
-      } catch (error) { keySummary = `<br>Prova pronta, mas não foi possível importar o gabarito: ${escapeHtml(error.message)}`; }
-    }
-    const cacheSummary = result.examCacheHit ? " · prova reutilizada do cache" : result.cachedQuestions ? ` · ${result.cachedQuestions} questões reaproveitadas do cache` : "";
-    status.innerHTML = `<div class="inline-result ${result.classified ? "" : "error"}"><strong>${result.examCacheHit ? "Prova já processada" : result.classified ? "Prova processada" : "Extração concluída; classificação pendente"}</strong><br>${escapeHtml(result.name)} · ${result.questions} questões${escapeHtml(cacheSummary)}${keySummary}${result.classificationError ? `<br>${escapeHtml(result.classificationError)}` : ""}</div>`;
-    $("#process-cancel").classList.add("hidden");
-    $("#process-progress-subtitle").textContent = "Processamento finalizado.";
-    toast(result.classified ? "Prova pronta no acervo." : "Prova extraída; confira a configuração do provedor.");
-    $("#process-form").reset();
-    $("#file-label").textContent = "Escolher PDF";
-    $("#key-file-label").textContent = "Escolher PDF do gabarito";
-    await refreshExams();
+    const record = { jobId: newClientJobId(), proof: file, keyFile, filename: file.name, keyFilename: keyFile.name, config: providerConfig("process"), images: $("#process-images").checked };
+    await savePendingProcess(record);
+    await runSavedProcess(record, processUploadController.signal);
   } catch (error) {
     const cancelled = error.name === "AbortError" || /cancelado/i.test(error.message);
+    if (cancelled) await clearPendingProcess();
     status.innerHTML = `<div class="inline-result ${cancelled ? "" : "error"}">${escapeHtml(cancelled ? "Processamento cancelado a pedido." : error.message)}</div>`;
     $("#process-cancel").classList.add("hidden");
     $("#process-progress-subtitle").textContent = cancelled ? "A tarefa foi interrompida." : "Ocorreu um erro no processamento.";
@@ -184,6 +474,68 @@ async function processPdf(event) {
   } finally {
     currentProcessJob = null;
     processUploadController = null;
+    button.disabled = false;
+    button.innerHTML = "Extrair e classificar <span>→</span>";
+  }
+}
+
+async function submitSavedProcess(record, signal) {
+  const query = new URLSearchParams({ filename: record.filename, provider: record.config.provider, clientJobId: record.jobId });
+  for (const [key, value] of Object.entries({ model: record.config.model, baseUrl: record.config.baseUrl, workers: record.config.workers, ollamaThreads: record.config.ollamaThreads })) if (value) query.set(key, value);
+  if (record.images) query.set("images", "sempre");
+  return api(`/api/exams/process?${query}`, { method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.proof, signal });
+}
+
+async function runSavedProcess(record, signal) {
+  let job;
+  try { job = await api(`/api/jobs/${encodeURIComponent(record.jobId)}`); }
+  catch (error) {
+    if (error.status !== 404) throw error;
+    renderProcessProgress({ status: "running", stage: "upload_saved", message: `Retomando envio de ${record.filename}`, progress: 1 });
+    await submitSavedProcess(record, signal);
+  }
+  currentProcessJob = record.jobId;
+  const result = await pollJob(record.jobId, renderProcessProgress);
+  let keySummary = "";
+  renderProcessProgress({ status: "running", stage: "answer_key", progress: 95, message: "Importando respostas do gabarito…" });
+  try {
+    const imported = await api(`/api/exams/${encodeURIComponent(result.examId)}/answer-key?${new URLSearchParams({ filename: record.keyFilename })}`, {
+      method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.keyFile,
+    });
+    keySummary = `<br>${imported.imported} respostas do gabarito importadas.`;
+  } catch (error) { keySummary = `<br>Prova pronta, mas não foi possível importar o gabarito: ${escapeHtml(error.message)}`; }
+  await clearPendingProcess();
+  const cacheSummary = result.examCacheHit ? " · prova reutilizada do cache" : result.cachedQuestions ? ` · ${result.cachedQuestions} questões reaproveitadas do cache` : "";
+  $("#process-status").innerHTML = `<div class="inline-result ${result.classified ? "" : "error"}"><strong>${result.examCacheHit ? "Prova já processada" : result.classified ? "Prova processada" : "Extração concluída; classificação pendente"}</strong><br>${escapeHtml(result.name)} · ${result.questions} questões${escapeHtml(cacheSummary)}${keySummary}${result.classificationError ? `<br>${escapeHtml(result.classificationError)}` : ""}</div>`;
+  $("#process-cancel").classList.add("hidden");
+  $("#process-progress-subtitle").textContent = "Processamento finalizado.";
+  toast(result.classified ? "Prova pronta no acervo." : "Prova extraída; confira a configuração do provedor.");
+  $("#process-form").reset();
+  $("#file-label").textContent = "Escolher PDF";
+  $("#key-file-label").textContent = "Escolher PDF do gabarito";
+  await refreshExams();
+  showView("exams");
+  await openExamReview(result.examId);
+}
+
+async function recoverActiveProcess() {
+  if (!localStorage.getItem(ACTIVE_PROCESS_KEY)) return;
+  const button = $("#process-form button[type=submit]");
+  showView("process");
+  button.disabled = true;
+  button.textContent = "Retomando processamento…";
+  try {
+    const record = await readPendingProcess();
+    if (!record?.jobId || !record.proof || !record.keyFile) throw new Error("Os PDFs salvos para retomar não estão disponíveis neste navegador.");
+    currentProcessJob = record.jobId;
+    renderProcessProgress({ status: "running", message: "Reconectando ao processamento…", progress: 2 });
+    await runSavedProcess(record);
+  } catch (error) {
+    $("#process-status").innerHTML = `<div class="inline-result error">Não foi possível retomar o processamento: ${escapeHtml(error.message)}. Os arquivos continuam salvos; recarregue a página para tentar novamente.</div>`;
+    $("#process-progress-subtitle").textContent = "A retomada pode ser tentada novamente.";
+    if (error.message.includes("não estão disponíveis")) await clearPendingProcess();
+  } finally {
+    currentProcessJob = null;
     button.disabled = false;
     button.innerHTML = "Extrair e classificar <span>→</span>";
   }
@@ -206,26 +558,6 @@ async function cancelProcess() {
       button.disabled = false;
       button.textContent = "Cancelar processamento";
     }
-  }
-}
-
-async function importKey(event) {
-  event.preventDefault();
-  const resultEl = $("#key-result");
-  resultEl.classList.remove("hidden", "error");
-  try {
-    const answers = JSON.parse($("#key-answers").value);
-    const result = await api("/api/answer-keys/import", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ examId: $("#key-exam").value, answers, replace: $("#key-replace").checked }),
-    });
-    resultEl.textContent = `${result.imported} respostas importadas. ${result.questions_without_key.length} questões sem resposta.`;
-    await refreshExams();
-    toast("Gabarito importado.");
-  } catch (error) {
-    resultEl.textContent = error.message;
-    resultEl.classList.add("error");
-    toast(error.message, true);
   }
 }
 
@@ -361,7 +693,6 @@ function bindEvents() {
   $$("[data-go]").forEach(button => button.addEventListener("click", () => showView(button.dataset.go)));
   $("#process-form").addEventListener("submit", processPdf);
   $("#process-cancel").addEventListener("click", cancelProcess);
-  $("#answer-key-form").addEventListener("submit", importKey);
   $("#diagnostic-form").addEventListener("submit", createDiagnostic);
   $("#refresh-exams").addEventListener("click", refreshExams);
   $("#refresh-diagnostics").addEventListener("click", refreshDiagnostics);
@@ -393,3 +724,4 @@ setupProviders();
 refreshExams();
 refreshCourses();
 refreshDiagnostics();
+recoverActiveProcess();

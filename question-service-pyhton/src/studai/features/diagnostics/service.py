@@ -26,7 +26,7 @@ ACTIONS = {"theory", "calculation_practice", "interpretation_practice", "review"
 ACTION_BY_REASON = {"unknown_content": "theory", "calc_error": "calculation_practice",
                     "misread": "interpretation_practice", "blank": "review"}
 ALIASES = {
-    "arte": "artes", "artes": "artes", "portugues": "lingua portuguesa",
+    "arte": "artes", "artes": "arte", "portugues": "lingua portuguesa",
     "lingua portuguesa": "lingua portuguesa", "educacao fisica": "educacao fisica",
 }
 
@@ -39,7 +39,9 @@ def canonical_subject(value: str, subjects: list[str]) -> str | None:
     n = norm(value)
     aliases = {norm(k): norm(v) for k, v in ALIASES.items()}
     wanted = aliases.get(n, n)
-    return next((subject for subject in subjects if norm(subject) == wanted), None)
+    # Accept both the previous display label "Artes" and the current taxonomy label "Arte".
+    return next((subject for subject in subjects if norm(subject) == wanted), None) or \
+        next((subject for subject in subjects if norm(subject) == n), None)
 
 
 def load_course_config(path: Path) -> dict:
