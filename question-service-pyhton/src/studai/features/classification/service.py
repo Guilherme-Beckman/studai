@@ -383,6 +383,7 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
     result_models: dict[int, str] = {}
     errors: dict[int, str] = {}
     active: dict[int, float] = {}
+    active_routes: dict[int, str] = {}
     cached_hits = 0
 
     def work(q):
@@ -399,6 +400,7 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
         numero = q["numero"]
         with lock:
             active[numero] = time.monotonic()
+            active_routes[numero] = "Atribuindo modelo"
         try:
             examples = []
             retrieval_error = None
@@ -415,8 +417,17 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                                 if examples else None)
             question_system = (build_system(taxonomy, topics_by_subject, candidate_topics)
                                if candidate_topics is not None else system)
-            res = classify_one(provider, question_system, q, shared, taxonomy, imgs,
-                               topics_by_subject, examples, candidate_topics)
+            request_context = getattr(provider, "request_context", None)
+            if request_context:
+                def on_route(label):
+                    with lock:
+                        active_routes[numero] = label
+                with request_context(numero, on_route):
+                    res = classify_one(provider, question_system, q, shared, taxonomy, imgs,
+                                       topics_by_subject, examples, candidate_topics)
+            else:
+                res = classify_one(provider, question_system, q, shared, taxonomy, imgs,
+                                   topics_by_subject, examples, candidate_topics)
             if retriever:
                 res["exemplos_referencia"] = [
                     {"id": item["identity"], "similaridade": round(item["score"], 4),
@@ -436,6 +447,7 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
         finally:
             with lock:
                 active.pop(numero, None)
+                active_routes.pop(numero, None)
 
     with cf.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futs = {ex.submit(work, q): q["numero"] for q in todo}
@@ -476,7 +488,9 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                     current = sorted(active.items())
                 if progress:
                     progress({"completed": finished, "total": len(todo), "active": [
-                        {"question": numero, "seconds": int(now - began)} for numero, began in current
+                        {"question": numero, "seconds": int(now - began),
+                         "provider": active_routes.get(numero, "Atribuindo modelo")}
+                        for numero, began in current
                     ], "errors": len(errors), "cached": cached_hits,
                     "cache_misses": max(0, finished - cached_hits - len(errors)),
                     "message": ("Aguardando início das próximas questões" if not current else

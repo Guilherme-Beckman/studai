@@ -121,7 +121,7 @@ async function pollJob(jobId, onUpdate = () => {}) {
 function renderProcessProgress(job) {
   const status = $("#process-status");
   status.classList.remove("empty-state");
-  const active = (job.activeQuestions || []).map(item => `Q${String(item.question).padStart(2, "0")} · ${item.seconds}s`).join(" · ");
+  const active = (job.activeQuestions || []).map(item => `Q${String(item.question).padStart(2, "0")} · ${item.provider || "IA"} · ${item.seconds}s`).join(" · ");
   const count = job.total ? `${job.completed || 0} de ${job.total} questões processadas${job.cachedQuestions ? ` · ${job.cachedQuestions} do cache` : ""}${job.cacheMisses ? ` · ${job.cacheMisses} chamadas novas` : ""}${job.errors ? ` · ${job.errors} falha(s)` : ""}` : "";
   const progress = Math.max(0, Math.min(100, job.progress || 0));
   status.innerHTML = `<div class="progress-summary"><div class="progress-summary-top"><strong>${escapeHtml(job.message || "Preparando processamento…")}</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="progress-meta"><span>${escapeHtml(job.stageLabel || stageLabel(job.stage))}</span><span>${escapeHtml(count)}</span></div>${active ? `<div class="active-work"><span class="pulse-dot"></span>Agora: ${escapeHtml(active)}</div>` : ""}</div>`;
@@ -189,6 +189,31 @@ function examImageMarkup(examId, paths, className = "") {
   return (Array.isArray(paths) ? paths : []).map(path => `<span class="exam-image-wrap"><img class="exam-question-image ${className}" src="${examAssetUrl(examId, path)}" alt="Imagem da questão" loading="lazy" onerror="this.closest('.exam-image-wrap').classList.add('image-unavailable')"><span class="image-unavailable-label">Imagem indisponível</span></span>`).join("");
 }
 
+function questionDisplayState(question) {
+  const reasons = new Set([...(question.revisar || []), ...(question.reviewReasons || [])]);
+  const alternatives = Object.values(question.alternativas || {}).map(option =>
+    typeof option === "string" ? option : option?.texto || "");
+  const text = [question.enunciado || "", ...alternatives].join(" ");
+  // Bloqueia sequências claramente corrompidas que aparecem quando o PDF tem
+  // mapeamento incorreto de glifos matemáticos para Unicode.
+  const unreadable = reasons.has("glifo_estranho") || /[\ufffd\ue000-\uf8ff\u0b80-\u0bff\u0d00-\u0d7f\u1200-\u137f¬]/u.test(text);
+  const hasStem = Boolean(String(question.enunciado || "").trim());
+  const showSource = reasons.has("formula_matematica") || reasons.has("enunciado_vazio") || !hasStem || unreadable;
+  const sourceImages = showSource ? (question.imagens_completas || []) : [];
+  return {
+    showSource: sourceImages.length > 0,
+    sourceImages,
+    showStem: hasStem && !unreadable,
+    showAlternativeText: !unreadable,
+  };
+}
+
+function renderSourceQuestionImage(examId, paths) {
+  return paths?.length
+    ? `<div class="source-question-image-panel"><strong>Enunciado original da prova</strong>${examImageMarkup(examId, paths, "source-question-image")}</div>`
+    : "";
+}
+
 async function openExamReview(examId) {
   const workspace = $("#exam-question-workspace");
   const quizWorkspace = $("#exam-quiz-workspace");
@@ -242,13 +267,14 @@ function renderReviewQuestion(examId, question, sharedTexts) {
   const state = unusable ? `<span class="badge review-unusable">Inutilizável</span>` : reviewed ? `<span class="badge">Revisada</span>` : needsReview ? `<span class="badge pending">Precisa revisar</span>` : `<span class="badge">Sem pendências</span>`;
   const panel = needsReview ? `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar classificação</strong><span>Confirme ou corrija os rótulos usados nos exemplos locais.</span></div><div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}" required><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${review.subject === item || (!review.subject && item === classification.materia) ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><label>Tópico<select data-review-topic="${number}" required><option value="">Selecione uma matéria primeiro</option></select></label></div><label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label><div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar revisão</button><button class="button button-danger" type="button" data-mark-unusable="${number}">Marcar como inutilizável</button></div></form>` : "";
   const imagePaths = question.figuras_enunciado || [];
+  const display = questionDisplayState(question);
   const hasInlineImages = imagePaths.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
-  const fallbackImages = !hasInlineImages ? (question.imagens_completas || []) : [];
+  const fallbackImages = !display.showSource && !hasInlineImages ? (question.imagens_completas || []) : [];
   return `<article class="exam-review-question" data-question-card="${number}"><div class="exam-review-question-top"><div><strong>Questão ${escapeHtml(number)}</strong><span class="exam-review-subject">${escapeHtml(subject)} · ${escapeHtml(topic)}</span></div><div class="exam-review-state">${state}<span class="confidence-chip">Confiança IA: ${confidence}</span></div></div>
     ${reasons ? `<div class="review-reasons">${reasons}</div>` : ""}
     ${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(examId, sharedImages, "passage-image")}</div>` : ""}
-    <div class="question-body exam-prompt">${escapeHtml(question.enunciado || "Enunciado não extraído")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(examId, imagePaths)}${fallbackImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(examId, fallbackImages)}</details>` : ""}</div>
-    <div class="exam-review-options">${options.map(([letter, option]) => { const text = typeof option === "string" ? option : (option?.texto || "Alternativa apresentada como imagem"); const figures = typeof option === "object" ? option.figuras : []; return `<div class="exam-review-option"><span class="exam-option-letter">${escapeHtml(letter)}</span><div>${escapeHtml(text)}${examImageMarkup(examId, figures, "option-image")}</div></div>`; }).join("")}</div>
+    <div class="question-body exam-prompt">${display.showStem ? escapeHtml(question.enunciado) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(examId, imagePaths)}${renderSourceQuestionImage(examId, display.sourceImages)}${fallbackImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(examId, fallbackImages)}</details>` : ""}</div>
+    <div class="exam-review-options">${options.map(([letter, option]) => { const text = display.showAlternativeText ? (typeof option === "string" ? option : (option?.texto || "Alternativa apresentada como imagem")) : "Alternativa apresentada na imagem da questão"; const figures = typeof option === "object" ? option.figuras : []; return `<div class="exam-review-option"><span class="exam-option-letter">${escapeHtml(letter)}</span><div>${escapeHtml(text)}${examImageMarkup(examId, figures, "option-image")}</div></div>`; }).join("")}</div>
     ${review.note ? `<p class="review-saved-note"><strong>Observação:</strong> ${escapeHtml(review.note)}</p>` : ""}
     ${needsReview ? `<div class="exam-review-actions"><button class="text-button" type="button" data-toggle-review="${number}">${reviewed || unusable ? "Editar revisão" : "Revisar questão"}</button></div>${panel}` : ""}</article>`;
 }
@@ -366,9 +392,10 @@ function renderExamQuiz() {
   const sharedText = typeof shared === "string" ? shared : shared?.texto;
   const sharedImages = shared && typeof shared === "object" ? shared.figuras : [];
   const questionImages = question.figuras_enunciado || [];
+  const display = questionDisplayState(question);
   const options = Object.entries(question.alternativas || {});
   const hasInlineImages = questionImages.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
-  const fullPageImages = !hasInlineImages ? (question.imagens_completas || []) : [];
+  const fullPageImages = !display.showSource && !hasInlineImages ? (question.imagens_completas || []) : [];
   const outcome = submitted && key ? (key.annulled || key.answer === "*"
     ? `<div class="exam-answer-feedback annulled">Questão anulada no gabarito.</div>`
     : `<div class="exam-answer-feedback ${saved === key.answer ? "correct" : "incorrect"}">${saved === key.answer ? "Resposta correta!" : `Resposta incorreta. Gabarito: ${escapeHtml(key.answer)}.`}</div>`) : (submitted ? `<div class="exam-answer-feedback neutral">Resposta registrada. Ainda não há gabarito importado para esta questão.</div>` : "");
@@ -376,8 +403,8 @@ function renderExamQuiz() {
   workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Responda à prova</h2><div class="workspace-meta">Questão ${index + 1} de ${questions.length}${question.pagina ? ` · página ${question.pagina}` : ""}</div></div><button class="blank-button" data-exam-close>Fechar prova</button></div>
     <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
     ${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(exam.id, sharedImages, "passage-image")}</div>` : ""}
-    <div class="question-body exam-prompt">${escapeHtml(question.enunciado || "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(exam.id, questionImages)}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(exam.id, fullPageImages)}</details>` : ""}</div>
-    <div class="exam-options">${options.map(([letter, option]) => { const value = typeof option === "string" ? option : (option?.texto || ""); const images = typeof option === "object" ? option.figuras : []; return `<button type="button" class="exam-option ${selected === letter ? "selected" : ""} ${submitted && key && key.answer === letter ? "answer-correct" : ""} ${submitted && saved === letter && key && key.answer !== letter && !key.annulled ? "answer-wrong" : ""}" data-exam-option="${escapeHtml(letter)}" ${submitted ? "disabled" : ""}><span class="exam-option-letter">${escapeHtml(letter)}</span><span class="exam-option-content">${escapeHtml(value)}${examImageMarkup(exam.id, images, "option-image")}</span></button>`; }).join("")}</div>
+    <div class="question-body exam-prompt">${display.showStem ? escapeHtml(question.enunciado) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(exam.id, questionImages)}${renderSourceQuestionImage(exam.id, display.sourceImages)}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(exam.id, fullPageImages)}</details>` : ""}</div>
+    <div class="exam-options">${options.map(([letter, option]) => { const value = display.showAlternativeText ? (typeof option === "string" ? option : (option?.texto || "")) : "Alternativa apresentada na imagem da questão"; const images = typeof option === "object" ? option.figuras : []; return `<button type="button" class="exam-option ${selected === letter ? "selected" : ""} ${submitted && key && key.answer === letter ? "answer-correct" : ""} ${submitted && saved === letter && key && key.answer !== letter && !key.annulled ? "answer-wrong" : ""}" data-exam-option="${escapeHtml(letter)}" ${submitted ? "disabled" : ""}><span class="exam-option-letter">${escapeHtml(letter)}</span><span class="exam-option-content">${escapeHtml(value)}${examImageMarkup(exam.id, images, "option-image")}</span></button>`; }).join("")}</div>
     ${outcome}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 ? "disabled" : ""}>← Anterior</button><div>${submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button class="button button-primary" data-exam-submit ${selected ? "" : "disabled"}>Responder</button>`}</div></div>`;
   bindExamQuizActions();
 }
@@ -431,6 +458,45 @@ async function setupProviders() {
   } catch (error) { toast(error.message, true); }
 }
 
+function setMultiSelectOptions(select, values, selectedValues = []) {
+  select.innerHTML = values.length
+    ? values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")
+    : `<option value="" disabled>Nenhum modelo disponível</option>`;
+  const selected = new Set(selectedValues);
+  [...select.options].forEach(option => { option.selected = selected.has(option.value); });
+}
+
+async function setupAIOptions() {
+  const status = $("#ai-options-status");
+  const geminiStatus = $("#gemini-key-status");
+  try {
+    const options = await api("/api/ai/options");
+    const localSelect = $("#process-ollama-models");
+    const geminiSelect = $("#process-gemini-models");
+    const oldLocal = new Set([...localSelect.selectedOptions].map(option => option.value));
+    const oldGemini = new Set([...geminiSelect.selectedOptions].map(option => option.value));
+    const localSelection = options.ollamaModels.filter(model => oldLocal.has(model));
+    if (!localSelection.length && options.ollamaModels.length) localSelection.push(options.ollamaModels[0]);
+    const preferredGemini = options.geminiModels.filter(model => oldGemini.has(model));
+    const geminiSelection = preferredGemini.length ? preferredGemini : options.geminiModels.filter(model =>
+      /^gemini-3\.(?:8|7|6|5)-flash(?:-lite)?$/.test(model));
+    setMultiSelectOptions(localSelect, options.ollamaModels, localSelection.slice(0, 2));
+    setMultiSelectOptions(geminiSelect, options.geminiModels, geminiSelection);
+    geminiSelect.disabled = !options.geminiConfigured || !options.geminiModels.length;
+    localSelect.disabled = !options.ollamaModels.length;
+    status.textContent = `${options.ollamaAvailable ? `${options.ollamaModels.length} modelo(s) Ollama` : "Ollama não encontrado"} · ${options.geminiConfigured ? `${options.geminiKeyCount} chave(s) Gemini configurada(s)` : "Gemini sem chaves configuradas"}`;
+    geminiStatus.textContent = options.geminiConfigured
+      ? `${options.geminiKeyCount} chave(s) no backend · nenhum segredo é exibido aqui.`
+      : "Adicione GEMINI_API_KEYS ao .env local para ativar o Gemini.";
+    if (options.geminiConfigured && !options.geminiModels.length) {
+      geminiStatus.textContent = "Não foi possível listar modelos Gemini disponíveis para as chaves configuradas.";
+    }
+  } catch (error) {
+    status.textContent = `Não foi possível carregar os modelos: ${error.message}`;
+    geminiStatus.textContent = "Verifique se a API local está ativa.";
+  }
+}
+
 function providerConfig(prefix) {
   const provider = $(`#${prefix}-provider`).value;
   return {
@@ -439,6 +505,16 @@ function providerConfig(prefix) {
     baseUrl: $(`#${prefix}-base-url`)?.value.trim() || "",
     workers: $(`#${prefix}-workers`)?.value || "",
     ollamaThreads: $(`#${prefix}-ollama-threads`)?.value || "",
+  };
+}
+
+function processConfig() {
+  const ollamaModels = [...$("#process-ollama-models").selectedOptions].map(option => option.value).filter(Boolean);
+  if (ollamaModels.length > 2) throw new Error("Selecione no máximo dois modelos Ollama.");
+  return {
+    ollamaModels,
+    geminiModels: [...$("#process-gemini-models").selectedOptions].map(option => option.value).filter(Boolean),
+    ollamaThreads: $("#process-ollama-threads").value || "0",
   };
 }
 
@@ -461,7 +537,9 @@ async function processPdf(event) {
   processUploadController = new AbortController();
   renderProcessProgress({ status: "running", stage: "upload_saved", message: `Enviando ${file.name}`, progress: 1 });
   try {
-    const record = { jobId: newClientJobId(), proof: file, keyFile, filename: file.name, keyFilename: keyFile.name, config: providerConfig("process"), images: $("#process-images").checked };
+    const config = processConfig();
+    if (!config.ollamaModels.length && !config.geminiModels.length) throw new Error("Selecione ao menos um modelo de IA disponível.");
+    const record = { jobId: newClientJobId(), proof: file, keyFile, filename: file.name, keyFilename: keyFile.name, config, images: $("#process-images").checked };
     await savePendingProcess(record);
     await runSavedProcess(record, processUploadController.signal);
   } catch (error) {
@@ -480,8 +558,9 @@ async function processPdf(event) {
 }
 
 async function submitSavedProcess(record, signal) {
-  const query = new URLSearchParams({ filename: record.filename, provider: record.config.provider, clientJobId: record.jobId });
-  for (const [key, value] of Object.entries({ model: record.config.model, baseUrl: record.config.baseUrl, workers: record.config.workers, ollamaThreads: record.config.ollamaThreads })) if (value) query.set(key, value);
+  const query = new URLSearchParams({ filename: record.filename, provider: "pool", clientJobId: record.jobId,
+    ollamaModels: (record.config.ollamaModels || []).join(","), geminiModels: (record.config.geminiModels || []).join(","),
+    ollamaThreads: record.config.ollamaThreads || "0" });
   if (record.images) query.set("images", "sempre");
   return api(`/api/exams/process?${query}`, { method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.proof, signal });
 }
@@ -510,7 +589,9 @@ async function runSavedProcess(record, signal) {
   $("#process-cancel").classList.add("hidden");
   $("#process-progress-subtitle").textContent = "Processamento finalizado.";
   toast(result.classified ? "Prova pronta no acervo." : "Prova extraída; confira a configuração do provedor.");
-  $("#process-form").reset();
+  $("#pdf-file").value = "";
+  $("#key-pdf-file").value = "";
+  $("#process-images").checked = false;
   $("#file-label").textContent = "Escolher PDF";
   $("#key-file-label").textContent = "Escolher PDF do gabarito";
   await refreshExams();
@@ -715,12 +796,13 @@ function bindEvents() {
     const file = event.dataTransfer.files[0];
     if (file) { $("#key-pdf-file").files = event.dataTransfer.files; $("#key-file-label").textContent = file.name; }
   });
-  for (const prefix of ["process", "diagnostic"]) $(`#${prefix}-provider`).addEventListener("change", () => toggleProviderFields(prefix));
+  $("#diagnostic-provider").addEventListener("change", () => toggleProviderFields("diagnostic"));
 }
 
 applyTheme(localStorage.getItem("studai-theme") || "light");
 bindEvents();
 setupProviders();
+setupAIOptions();
 refreshExams();
 refreshCourses();
 refreshDiagnostics();

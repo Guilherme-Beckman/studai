@@ -188,8 +188,15 @@ O código principal está em `src/studai/`, como um monólito modular separado e
 
 ## API local e interface web
 
-Inicie `python api.py` e abra <http://127.0.0.1:8787>. A interface permite processar uma prova PDF (com gabarito PDF opcional no mesmo formulário), importar gabaritos em JSON e criar/responder diagnósticos. Selecione **Demonstração offline** para exercitar os fluxos sem Ollama ou chaves externas; para classificação real, selecione Ollama e informe o modelo/URL se necessário. A API e a interface são ferramentas de desenvolvimento local e ainda não incluem login.
+Inicie `python api.py` e abra <http://127.0.0.1:8787>. Na tela **Processar prova**, selecione até dois modelos Ollama instalados e os modelos Gemini disponíveis. Cada modelo Ollama cria uma faixa de processamento; cada chave Gemini configurada cria outra faixa e alterna pelos modelos selecionados. Questões diferentes são processadas em paralelo. Se uma faixa falhar, a questão tenta as faixas restantes. O progresso identifica qual IA está atendendo cada questão.
 
-Com Ollama selecionado, a tela de processamento aceita vários servidores separados por vírgula e configura `Workers` e `Threads por worker`, equivalentes a `--base-url`, `--workers` e `--ollama-threads` do comando em lote. Os valores iniciais são 2 workers e 12 threads.
+Configure as chaves Gemini apenas no `.env` local, que é ignorado pelo Git:
+
+```env
+GEMINI_API_KEYS=CHAVE_GEMINI_1,CHAVE_GEMINI_2
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+As variáveis antigas `GEMINI_API_KEY` e `GOOGLE_API_KEY` continuam aceitas. Reinicie `api.py` depois de alterar o `.env`. A interface mostra somente quantas chaves estão configuradas; não exibe seus valores. O catálogo Gemini e os modelos Ollama são consultados pelo backend. A API e a interface são ferramentas de desenvolvimento local e ainda não incluem login.
 
 Para executar os testes de regressão: `python -m unittest discover -s tests`.

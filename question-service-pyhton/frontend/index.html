@@ -44,17 +44,18 @@
             <label class="drop-zone" id="drop-zone"><input id="pdf-file" type="file" accept="application/pdf,.pdf" required><span class="upload-icon">↑</span><strong id="file-label">Escolher PDF</strong><span>ou arraste o arquivo até aqui</span><small>PDF</small></label>
             <div class="panel-heading" style="margin:16px 0 8px"><span class="step-number step-green">02</span><span><strong>Gabarito da prova</strong><p class="help-copy">Obrigatório · selecione o gabarito correspondente a esta prova.</p></span></div>
             <label class="drop-zone key-drop-zone" id="key-drop-zone"><input id="key-pdf-file" type="file" accept="application/pdf,.pdf" required><span class="upload-icon">↑</span><strong id="key-file-label">Escolher PDF do gabarito</strong><span>ou arraste o arquivo até aqui</span><small>PDF</small></label>
-            <div class="form-row"><label>Provedor de IA<select id="process-provider" class="provider-select"></select></label></div>
-            <div class="provider-extra hidden" id="process-provider-extra">
-              <div class="provider-row"><label>Modelo<input id="process-model" placeholder="qwen3.5:4b"></label><label>Servidores Ollama <span class="optional">separe por vírgula</span><input id="process-base-url" placeholder="http://localhost:11434,http://192.168.100.167:11434"></label></div>
-              <div class="provider-row provider-tuning"><label>Workers<input id="process-workers" type="number" min="1" max="64" value="2"></label><label>Threads por worker<input id="process-ollama-threads" type="number" min="0" max="64" value="12"></label></div>
-              <p class="help-copy">Workers processam questões em paralelo. Threads controla os threads de CPU usados em cada inferência.</p>
+            <div class="panel-heading" style="margin:18px 0 6px"><span class="step-number step-violet">03</span><div><h2>Modelos de IA</h2><p>Questões diferentes são distribuídas entre os modelos selecionados.</p></div></div>
+            <div class="ai-options-status" id="ai-options-status" role="status">Verificando modelos disponíveis…</div>
+            <div class="provider-row ai-model-row">
+              <label>Modelos Ollama <span class="optional">até 2 locais</span><select id="process-ollama-models" multiple size="4" aria-label="Modelos locais Ollama"></select><span class="field-help">Ctrl/Cmd + clique para selecionar mais de um.</span></label>
+              <label>Modelos Gemini <span class="optional">alternados por chamada</span><select id="process-gemini-models" multiple size="4" aria-label="Modelos Gemini"></select><span class="field-help" id="gemini-key-status">Chaves configuradas no backend.</span></label>
             </div>
+            <details class="advanced-settings"><summary>Ajustes avançados</summary><label>Threads de CPU por modelo Ollama<input id="process-ollama-threads" type="number" min="0" max="64" value="12"></label><p class="help-copy">As questões são distribuídas em paralelo, uma por faixa de IA disponível. Em caso de falha, a questão tenta outra faixa.</p></details>
             <label class="check-row"><input id="process-images" type="checkbox"><span>Enviar imagens das questões quando disponíveis</span></label>
             <button class="button button-primary full-width" type="submit">Processar prova <span>→</span></button>
-            <p class="help-copy">A demonstração offline não usa Ollama. A classificação é aproximada e serve para testar a interface.</p>
+            <p class="help-copy">Configure as chaves Gemini no arquivo local <code>.env</code>; elas nunca são exibidas nesta tela.</p>
           </form>
-          <div class="panel result-panel process-progress-panel"><div class="panel-heading"><span class="step-number step-muted">03</span><div><h2>Acompanhamento</h2><p id="process-progress-subtitle">O status e as etapas aparecem aqui em tempo real.</p></div></div><div id="process-status" class="empty-state"><div class="empty-icon">▧</div><strong>Nenhuma prova em processamento</strong><p>Envie a prova para acompanhar extração, classificação e importação do gabarito.</p></div><div id="process-progress-detail" class="process-progress-detail hidden"></div><button id="process-cancel" class="button button-danger full-width hidden" type="button">Cancelar processamento</button></div>
+          <div class="panel result-panel process-progress-panel"><div class="panel-heading"><span class="step-number step-muted">04</span><div><h2>Acompanhamento</h2><p id="process-progress-subtitle">O status e as etapas aparecem aqui em tempo real.</p></div></div><div id="process-status" class="empty-state"><div class="empty-icon">▧</div><strong>Nenhuma prova em processamento</strong><p>Envie a prova para acompanhar extração, classificação e importação do gabarito.</p></div><div id="process-progress-detail" class="process-progress-detail hidden"></div><button id="process-cancel" class="button button-danger full-width hidden" type="button">Cancelar processamento</button></div>
         </div>
       </section>
 

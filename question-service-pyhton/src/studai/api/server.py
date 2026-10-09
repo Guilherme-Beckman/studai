@@ -11,11 +11,14 @@ import shutil
 import threading
 import uuid
 import os
+import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
+import urllib.error
+import urllib.request
 
 from studai.features.answer_keys.service import exam_variant, import_key_file
 from studai.features.classification.cache import ClassificationCache
@@ -24,7 +27,9 @@ from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_
 from studai.features.diagnostics import service as diagnostics
 from studai.features.questions.extractor import extract_pdf
 from studai.features.questions import review as question_review
-from studai.integrations.llm import load_dotenv, make_provider
+from studai.integrations.llm import (
+    GeminiProvider, OllamaProvider, RotatingPoolProvider, load_dotenv, make_provider,
+)
 from studai.tools.evaluate_classifier import evaluate as evaluate_classifier, score as score_classifier
 from studai.settings import (
     DEFAULT_COURSE_CONFIG,
@@ -47,6 +52,8 @@ BENCHMARK_DATASET = SERVICE_ROOT / "simulados" / "cache" / "edubench-reviewed-ca
 BENCHMARK_REVIEW_CSV = SERVICE_ROOT / "simulados" / "cache" / "edubench-review-canonical.csv"
 RAG_STATUS_FILE = SERVICE_ROOT / "simulados" / "cache" / "fuvest-rag-status.json"
 RAG_INDEX_LOCK = threading.Lock()
+AI_OPTIONS_LOCK = threading.Lock()
+AI_OPTIONS_CACHE: tuple[float, dict] | None = None
 
 
 def _read_rag_status() -> dict:
@@ -252,6 +259,140 @@ def _provider(payload: dict, *, max_tokens: int = 1600):
         raise ValueError(str(exc)) from None
 
 
+def _gemini_api_keys() -> list[str]:
+    """Return configured Gemini keys without ever exposing them to the browser."""
+    plural = os.environ.get("GEMINI_API_KEYS", "")
+    raw_values = [plural] if plural.strip() else [os.environ.get("GEMINI_API_KEY", ""),
+                                                  os.environ.get("GOOGLE_API_KEY", "")]
+    values = [part.strip() for raw in raw_values for part in re.split(r"[,;\n]", raw) if part.strip()]
+    return list(dict.fromkeys(values))
+
+
+def _gemini_models_for_key(api_key: str) -> set[str]:
+    url = f"{GeminiProvider.default_base_url}/models?pageSize=1000"
+    request = urllib.request.Request(url, headers={"x-goog-api-key": api_key})
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+        return set()
+    models = set()
+    for item in payload.get("models", []):
+        name = str(item.get("name") or "").removeprefix("models/")
+        methods = item.get("supportedGenerationMethods") or []
+        lowered = name.casefold()
+        if (name.startswith("gemini-") and "generateContent" in methods
+                and not any(part in lowered for part in ("embedding", "tts", "live", "image", "veo", "lyria", "robotics", "transcribe"))):
+            models.add(name)
+    return models
+
+
+def _available_gemini_models(keys: list[str]) -> list[str]:
+    if not keys:
+        return []
+    available: set[str] = set()
+    for key in keys:
+        available.update(_gemini_models_for_key(key))
+    return sorted(available)
+
+
+def _ollama_models(base_urls: str | None = None) -> tuple[list[str], bool]:
+    urls = list(dict.fromkeys(url.strip().rstrip("/") for url in
+                              (base_urls or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")).split(",")
+                              if url.strip()))
+    found: set[str] = set()
+    available = False
+    for base_url in urls:
+        request = urllib.request.Request(f"{base_url}/api/tags")
+        try:
+            with urllib.request.urlopen(request, timeout=2) as response:
+                payload = json.loads(response.read())
+            available = True
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+            continue
+        for item in payload.get("models", []):
+            name = str(item.get("name") or item.get("model") or "").strip()
+            capabilities = {str(cap).casefold() for cap in item.get("capabilities", [])}
+            generation_capabilities = {"completion", "generate", "tools", "vision"}
+            embedding_only = "embedding" in capabilities and not (capabilities & generation_capabilities)
+            if name and not embedding_only and "embed" not in name.casefold():
+                found.add(name)
+    return sorted(found), available
+
+
+def _ai_options() -> dict:
+    global AI_OPTIONS_CACHE
+    with AI_OPTIONS_LOCK:
+        now = time.monotonic()
+        if AI_OPTIONS_CACHE and now - AI_OPTIONS_CACHE[0] < 60:
+            return dict(AI_OPTIONS_CACHE[1])
+        load_dotenv(SERVICE_ROOT / ".env")
+        keys = _gemini_api_keys()
+        ollama_models, ollama_available = _ollama_models()
+        options = {
+            "ollamaModels": ollama_models,
+            "ollamaAvailable": ollama_available,
+            "geminiModels": _available_gemini_models(keys),
+            "geminiConfigured": bool(keys),
+            "geminiKeyCount": len(keys),
+        }
+        AI_OPTIONS_CACHE = (now, options)
+        return dict(options)
+
+
+def _pool_provider(payload: dict, *, max_tokens: int = 1600) -> RotatingPoolProvider:
+    load_dotenv(SERVICE_ROOT / ".env")
+    options = _ai_options()
+    split_models = lambda value: list(dict.fromkeys(
+        part.strip() for part in re.split(r"[,;\n]", str(value or "")) if part.strip()))
+    selected_ollama = split_models(payload.get("ollamaModels"))
+    selected_gemini = split_models(payload.get("geminiModels"))
+    if len(selected_ollama) > 2:
+        raise ValueError("selecione no máximo dois modelos Ollama")
+    if any(model not in options["ollamaModels"] for model in selected_ollama):
+        raise ValueError("um dos modelos Ollama selecionados não está instalado ou disponível")
+    if any(model not in options["geminiModels"] for model in selected_gemini):
+        raise ValueError("um dos modelos Gemini selecionados não está disponível para as chaves configuradas")
+    keys = _gemini_api_keys()
+    if selected_gemini and not keys:
+        raise ValueError("configure GEMINI_API_KEYS no arquivo .env para usar Gemini")
+    if not selected_ollama and not selected_gemini:
+        raise ValueError("selecione ao menos um modelo Ollama ou Gemini")
+    try:
+        threads = int(payload.get("ollamaThreads") or 0)
+    except (TypeError, ValueError):
+        raise ValueError("ollamaThreads inválido") from None
+    if not 0 <= threads <= 64:
+        raise ValueError("ollamaThreads deve estar entre 0 e 64")
+    lanes: list[tuple[str, object]] = []
+    base_url = payload.get("baseUrl") or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    base_urls = list(dict.fromkeys(url.strip().rstrip("/") for url in base_url.split(",") if url.strip()))
+    host_models: dict[str, set[str]] = {}
+    if selected_ollama:
+        for url in base_urls:
+            models, available = _ollama_models(url)
+            if available:
+                host_models[url] = set(models)
+        if not host_models:
+            raise ValueError("nenhum servidor Ollama configurado respondeu à consulta de modelos")
+    for model in selected_ollama:
+        matching_hosts = [url for url, models in host_models.items() if model in models]
+        if not matching_hosts:
+            raise ValueError(f"o modelo Ollama {model} não está disponível em nenhum servidor configurado")
+        for url in matching_hosts:
+            local_provider = make_provider("ollama", model, base_url=url, key_env=None,
+                                           temperature=0, max_tokens=max_tokens, json_mode=True,
+                                           num_threads=threads)
+            lanes.append((f"Ollama ({model} @ {url})", local_provider))
+    for index, key in enumerate(keys if selected_gemini else [], 1):
+        gemini_provider = GeminiProvider(model=",".join(selected_gemini), api_key=key,
+                                         temperature=0, max_tokens=max_tokens, json_mode=True)
+        lanes.append((f"Gemini chave {index} ({','.join(selected_gemini)})", gemini_provider))
+    if len(lanes) > 64:
+        raise ValueError("o pool pode ter no máximo 64 faixas; reduza as chaves ou os modelos locais")
+    return RotatingPoolProvider(lanes, temperature=0, max_tokens=max_tokens, json_mode=True)
+
+
 def _exam_files() -> list[tuple[dict, Path]]:
     exams = []
     for path in sorted(PROCESSED_ROOT.rglob("questoes*.json")):
@@ -413,10 +554,11 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
     clean_name = Path(filename).name
     if not clean_name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
         raise ValueError("envie um arquivo PDF válido")
-    workers = int(payload.get("workers") or 2)
+    provider = (_pool_provider(payload) if str(payload.get("provider") or "") == "pool"
+                else _provider(payload))
+    workers = provider.lane_count if isinstance(provider, RotatingPoolProvider) else int(payload.get("workers") or 2)
     if not 1 <= workers <= 64:
         raise ValueError("workers deve estar entre 1 e 64")
-    provider = _provider(payload)
     if isinstance(provider, classification.OllamaProvider):
         parallel_limit = max(1, int(os.environ.get("OLLAMA_NUM_PARALLEL", "1")))
         per_host = (workers + len(provider.base_urls) - 1) // len(provider.base_urls)
@@ -438,7 +580,14 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
     output_dir = PROCESSED_ROOT / "web" / extraction_key
     output_dir.mkdir(parents=True, exist_ok=True)
     meta_path = output_dir / "processamento.meta.json"
-    embedding_urls = provider.base_urls if isinstance(provider, classification.OllamaProvider) else []
+    if isinstance(provider, classification.OllamaProvider):
+        embedding_urls = provider.base_urls
+    elif isinstance(provider, RotatingPoolProvider):
+        embedding_urls = list(dict.fromkeys(
+            url for _, lane in provider.lanes if isinstance(lane, classification.OllamaProvider)
+            for url in lane.base_urls))
+    else:
+        embedding_urls = []
     meta_path.write_text(json.dumps({"exam_id": stable_exam_id,
                                      "ollama_base_urls": embedding_urls}, ensure_ascii=False, indent=2) + "\n",
                          encoding="utf-8")
@@ -510,6 +659,7 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
             imagens=images_mode,
             progress=classification_progress,
             cancel_check=cancelled,
+            use_rag=not isinstance(provider, RotatingPoolProvider),
         )
         if cancelled():
             raise JobCancelled()
@@ -587,6 +737,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})
+            if path == "/api/ai/options":
+                return self._json(200, _ai_options())
             if path == "/api/providers":
                 return self._json(200, [{"id": "demo", "name": "Demonstração offline"},
                                         {"id": "ollama", "name": "Ollama local"},

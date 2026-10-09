@@ -44,6 +44,9 @@ ALT_RE = re.compile(r"^\(([A-E])\)\s*(.*)$", re.S)
 NOTE_RE = re.compile(r"^Note e adote", re.I)
 
 MATH_FONTS = ("cambria", "math", "symbol", "mt-extra")
+# Alguns PDFs FUVEST mapeiam glifos de Cambria Math para blocos Unicode
+# sem relação com o texto visível (p. ex. numerais Oriya em índices).
+CORRUPT_GLYPH_RE = re.compile(r"[\ufffd\ue000-\uf8ff\u0b80-\u0bff\u0d00-\u0d7f\u1200-\u137f]")
 
 
 # ------------------------------------------------------------------- modelos
@@ -97,6 +100,10 @@ def _raw_lines(page: pymupdf.Page):
             for sp in ln["spans"]:
                 fonts.add(sp["font"])
                 chars.extend({"c": c["c"], "bbox": pymupdf.Rect(c["bbox"])} for c in sp["chars"])
+            # Em linhas com texto e fórmula, o PDF pode devolver cada fonte como
+            # um span separado e concatená-los por fonte. Ordenar pela posição
+            # horizontal recompõe a leitura e evita intercalar partes da equação.
+            chars.sort(key=lambda ch: (round(ch["bbox"].x0, 2), round(ch["bbox"].y0, 2)))
             out.append({"chars": chars, "bbox": pymupdf.Rect(ln["bbox"]), "fonts": fonts})
     return out
 
@@ -140,6 +147,7 @@ def _patch_missing_glyphs(lines, page: pymupdf.Page):
 
 def _clean(s: str) -> str:
     s = re.sub(r"#{3,}", " ", s)          # "#####" escondido na camada de texto, marca fim de questão
+    s = s.replace("\u00ac", " ")          # glifo usado pelo PDF no lugar de espaços
     s = s.replace("\u2011", "-").replace("\u00ad", "").replace("\u00a0", " ")
     s = re.sub(r"[ \t]+", " ", s).strip()
     s = re.sub(r"ℓ \)", "ℓ)", s)
@@ -434,7 +442,7 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool):
         if any(any(m in f.lower() for m in MATH_FONTS) for f in q["_fonts"]):
             q["revisar"].append("formula_matematica")
         blob = q["enunciado"] + "".join(a["texto"] for a in q["alternativas"].values())
-        if re.search(r"[\ufffd\ue000-\uf8ff]", blob):
+        if CORRUPT_GLYPH_RE.search(blob):
             q["revisar"].append("glifo_estranho")
         if sorted(q["alternativas"]) != list("ABCDE"):
             q["revisar"].append("alternativas_incompletas")

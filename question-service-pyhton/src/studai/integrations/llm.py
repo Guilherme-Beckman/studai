@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import importlib
 import json
 import os
@@ -190,7 +191,7 @@ class GeminiProvider(Provider):
                 "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": gen}
         first = self._next_model_index()
-        failures = []
+        failures: list[tuple[str, LLMError]] = []
         for offset in range(len(self.models)):
             model = self.models[(first + offset) % len(self.models)]
             try:
@@ -204,10 +205,105 @@ class GeminiProvider(Provider):
                 self._thread_state.model = model
                 return answer
             except LLMError as e:
-                if e.status_code not in (404, 429, 500, 502, 503, 504, 529):
+                if e.status_code not in (None, 408, 409, 404, 429, 500, 502, 503, 504, 529):
                     raise
-                failures.append(f"{model}: {e}")
-        raise LLMError("todos os modelos Gemini da rotação falharam: " + " | ".join(failures))
+                failures.append((model, e))
+        codes = {error.status_code for _, error in failures}
+        status_code = next(iter(codes)) if len(codes) == 1 else None
+        detail = " | ".join(f"{model}: {error}" for model, error in failures)
+        raise LLMError("todos os modelos Gemini da rotação falharam: " + detail,
+                       status_code=status_code)
+
+
+class RotatingPoolProvider(Provider):
+    """Distributes each request to one free provider lane and retries on another lane."""
+
+    def __init__(self, lanes: list[tuple[str, Provider]], **kwargs):
+        if not lanes:
+            raise ValueError("selecione ao menos um modelo local ou Gemini configurado")
+        super().__init__(model="pool", **kwargs)
+        self.lanes = [(str(name), provider) for name, provider in lanes]
+        self._condition = threading.Condition()
+        self._busy: set[int] = set()
+        self._disabled: set[int] = set()
+        self._next_lane = 0
+        self._thread_state = threading.local()
+
+    @property
+    def lane_count(self) -> int:
+        return len(self.lanes)
+
+    @property
+    def label(self) -> str:
+        return "RotatingPool:" + ",".join(name for name, _ in self.lanes)
+
+    @property
+    def last_used_model(self) -> str:
+        return getattr(self._thread_state, "model", self.label)
+
+    @contextlib.contextmanager
+    def request_context(self, question: int, on_route=None):
+        previous = getattr(self._thread_state, "context", None)
+        self._thread_state.context = (question, on_route)
+        try:
+            yield
+        finally:
+            self._thread_state.context = previous
+
+    def _acquire_lane(self, excluded: set[int]) -> int | None:
+        with self._condition:
+            while True:
+                candidates = [i for i in range(len(self.lanes))
+                              if i not in self._disabled and i not in excluded]
+                if not candidates:
+                    return None
+                available = [i for i in candidates if i not in self._busy]
+                if available:
+                    index = next((i for i in available if i >= self._next_lane), available[0])
+                    self._next_lane = (index + 1) % len(self.lanes)
+                    self._busy.add(index)
+                    return index
+                self._condition.wait()
+
+    def complete(self, system, user, images=None):
+        excluded: set[int] = set()
+        failures: list[str] = []
+        while len(excluded | self._disabled) < len(self.lanes):
+            index = self._acquire_lane(excluded)
+            if index is None:
+                break
+            name, provider = self.lanes[index]
+            context = getattr(self._thread_state, "context", None)
+            try:
+                if context and context[1]:
+                    context[1](name)
+                answer = provider.complete(system, user, images)
+                model = getattr(provider, "last_used_model", provider.label)
+                self._thread_state.model = f"{name} · {model}"
+                return answer
+            except LLMError as error:
+                failures.append(f"{name}: {error}")
+                excluded.add(index)
+                if context and context[1]:
+                    context[1](f"Falha em {name}; buscando faixa alternativa")
+                if error.status_code in (401, 403, 404):
+                    with self._condition:
+                        self._disabled.add(index)
+                if (error.status_code is not None
+                        and error.status_code not in (401, 403, 404, 408, 409, 429)
+                        and not 500 <= error.status_code < 600):
+                    raise
+            except Exception as error:
+                failures.append(f"{name}: {error}")
+                excluded.add(index)
+            finally:
+                with self._condition:
+                    self._busy.discard(index)
+                    self._condition.notify_all()
+        raise LLMError("todas as faixas de IA falharam: " + " | ".join(failures))
+
+    def complete_json(self, system, user, schema, images=None):
+        return self.complete(system, user, images)
 
 class OllamaProvider(Provider):
     """API do Ollama; aceita vários hosts e desativa pensamento para respostas mais rápidas."""
