@@ -12,7 +12,7 @@ from studai.features.classification.service import _cache_key
 from studai.features.classification import service as classification
 from studai.tools.prepare_edubench import candidate_rows
 from studai.tools.review_edubench import export_review, import_review, sample_by_year
-from studai.tools.evaluate_classifier import evaluate
+from studai.tools.evaluate_classifier import evaluate, load_jsonl
 
 
 class ClassificationCacheTests(unittest.TestCase):
@@ -150,6 +150,36 @@ class ClassificationCacheTests(unittest.TestCase):
         self.assertIn("[1/1] usp-0", output.getvalue())
         self.assertGreaterEqual(report["latency_seconds"]["p95"], 0)
         self.assertGreater(report["latency_seconds"]["questions_per_minute"], 0)
+
+    def test_benchmark_can_measure_unlabeled_questions_and_score_labeled_subset(self):
+        dataset = self.root / "mixed.jsonl"
+        rows = [
+            {"id": "gold-1", "question": "questão rotulada", "subject": "Matemática",
+             "topic": "Probabilidade"},
+            {"id": "raw-2", "question": "questão sem rótulo"},
+        ]
+        dataset.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            load_jsonl(dataset)
+        self.assertEqual(len(load_jsonl(dataset, require_labels=False)), 2)
+
+        class Provider:
+            label = "test:mock"
+            def complete(self, system, user, images=None):
+                topic = "REVISAR" if "sem rótulo" in user else "Probabilidade"
+                return json.dumps({"materia": "Matemática", "materias_secundarias": [],
+                                   "assunto": topic, "confianca": 1})
+            def complete_json(self, system, user, schema, images=None):
+                return self.complete(system, user, images)
+
+        result = evaluate(dataset, Provider(), output=self.root / "mixed-report.json",
+                          source="test", version="1", allow_unlabeled=True)
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(result["labeled_count"], 1)
+        self.assertEqual(result["subject"]["accuracy"], 1)
+        self.assertEqual(result["topic"]["accuracy"], 1)
+        self.assertEqual(result["review_count"], 1)
+        self.assertEqual(result["review_rate"], 0.5)
 
 
 if __name__ == "__main__":

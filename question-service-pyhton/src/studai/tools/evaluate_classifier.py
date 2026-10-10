@@ -39,13 +39,15 @@ def score(rows: list[dict], gold_key: str, pred_key: str) -> dict:
             "per_label": per_label}
 
 
-def load_jsonl(path: Path) -> list[dict]:
+def load_jsonl(path: Path, *, require_labels: bool = True) -> list[dict]:
     rows = []
     for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
         row = json.loads(line)
-        if not row.get("question") or not row.get("subject") or not row.get("topic"):
+        if "question" not in row:
+            raise ValueError(f"linha {line_no}: question obrigatória")
+        if require_labels and (not row.get("subject") or not row.get("topic")):
             raise ValueError(f"linha {line_no}: esperado question, subject e topic revisados")
         rows.append(row)
     return rows
@@ -55,8 +57,8 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
              image_mode: str = "nunca", limit: int | None = None,
              request_attempts: int = 1, workers: int = 1, progress=None, cancelled=None,
              rag: bool = False, embedding_model: str = DEFAULT_EMBEDDING_MODEL,
-             rag_examples: int = 3) -> dict:
-    data = load_jsonl(dataset)
+             rag_examples: int = 3, allow_unlabeled: bool = False) -> dict:
+    data = load_jsonl(dataset, require_labels=not allow_unlabeled)
     if limit is not None:
         data = data[:max(1, limit)]
     workers = max(1, min(int(workers), len(data) or 1))
@@ -72,6 +74,8 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                     "alternativas": {str(k): {"texto": v} for k, v in (row.get("alternatives") or {}).items()},
                     "revisar": []}
         started = time.monotonic()
+        usage_history = getattr(getattr(provider, "_thread_state", None), "usage_history", [])
+        usage_history_start = len(usage_history)
         images = []
         if image_mode != "nunca" and row.get("images"):
             for image_path in row["images"][:4]:
@@ -97,9 +101,28 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
         except Exception as exc:
             result, error = {}, str(exc)
         elapsed = time.monotonic() - started
-        usage = getattr(getattr(provider, "_thread_state", None), "usage", {})
-        outcome = {"gold_subject": row["subject"], "pred_subject": result.get("materia"),
-                   "gold_topic": row["topic"], "pred_topic": result.get("assunto"),
+        thread_state = getattr(provider, "_thread_state", None)
+        usage_history = getattr(thread_state, "usage_history", [])
+        request_usages = usage_history[usage_history_start:]
+        if request_usages:
+            usage = {key: sum(int(request.get(key, 0)) for request in request_usages)
+                     for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns")}
+            usage["calls"] = len(request_usages)
+            usage["by_host"] = {}
+            for request in request_usages:
+                host = request.get("host")
+                if host:
+                    host_row = usage["by_host"].setdefault(host, {"calls": 0, "prompt_tokens": 0,
+                                                                   "completion_tokens": 0,
+                                                                   "eval_duration_ns": 0})
+                    host_row["calls"] += 1
+                    for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns"):
+                        host_row[key] += int(request.get(key, 0))
+        else:
+            usage = dict(getattr(thread_state, "usage", {}) or {})
+            usage["calls"] = int(bool(usage))
+        outcome = {"gold_subject": row.get("subject"), "pred_subject": result.get("materia"),
+                   "gold_topic": row.get("topic"), "pred_topic": result.get("assunto"),
                    "seconds": elapsed, "usage": usage, "error": error,
                    "retrieved_examples": result.get("exemplos_referencia", [])}
         return index, row, result, elapsed, error, outcome
@@ -126,20 +149,24 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                 progress({"completed": completed, "total": len(data), "question": row.get("id", index),
                           "seconds": elapsed, "error": error})
     usage_totals = {key: sum(int(item.get("usage", {}).get(key, 0)) for item in outcomes)
-                    for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns")}
+                    for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns", "calls")}
     hosts = {}
     for item in outcomes:
-        host = item.get("usage", {}).get("host")
-        if host:
-            entry = hosts.setdefault(host, {"questions": 0, "prompt_tokens": 0, "completion_tokens": 0,
+        per_host = item.get("usage", {}).get("by_host") or {}
+        if not per_host and item.get("usage", {}).get("host"):
+            host = item["usage"]["host"]
+            per_host = {host: {**item["usage"], "calls": item["usage"].get("calls", 1)}}
+        for host, host_usage in per_host.items():
+            entry = hosts.setdefault(host, {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0,
                                             "eval_duration_ns": 0})
-            entry["questions"] += 1
-            for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns"):
-                entry[key] += int(item.get("usage", {}).get(key, 0))
+            for key in ("calls", "prompt_tokens", "completion_tokens", "eval_duration_ns"):
+                entry[key] += int(host_usage.get(key, 0))
     wall_seconds = max(0.000001, time.monotonic() - wall_started)
     ordered_latencies = sorted(latencies)
     p95 = ordered_latencies[max(0, min(len(ordered_latencies) - 1,
                                       int(0.95 * len(ordered_latencies) + 0.999999) - 1))] if ordered_latencies else 0
+    labeled = [item for item in outcomes if item.get("gold_subject") and item.get("gold_topic")]
+    review_count = sum(item.get("pred_topic") == "REVISAR" for item in outcomes)
     result = {"dataset": str(dataset), "source": source, "dataset_version": version,
               "provider": provider.label, "created_at": datetime.now(timezone.utc).isoformat(),
               "image_mode": image_mode,
@@ -152,9 +179,14 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                                                             "p95": p95, "wall": wall_seconds,
                                                             "questions_per_minute": len(data) * 60 / wall_seconds,
                                                             "total": sum(latencies)},
-              "subject": score(outcomes, "gold_subject", "pred_subject"),
-              "topic": score(outcomes, "gold_topic", "pred_topic"), "items": outcomes,
-              "usage": usage_totals, "hosts": hosts}
+              "labeled_count": len(labeled),
+              "subject": score(labeled, "gold_subject", "pred_subject"),
+              "topic": score(labeled, "gold_topic", "pred_topic"),
+              "review_rate": review_count / len(outcomes) if outcomes else 0.0,
+              "review_count": review_count,
+              "prompt_tokens_per_call": (usage_totals["prompt_tokens"] / usage_totals["calls"]
+                                          if usage_totals["calls"] else 0),
+              "items": outcomes, "usage": usage_totals, "hosts": hosts}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     if cache:
@@ -164,7 +196,7 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("dataset", type=Path, help="JSONL com question, subject e topic revisados por humano")
+    parser.add_argument("dataset", type=Path, help="JSONL de questões; labels opcionais somente para medir desempenho")
     parser.add_argument("--provider", default="ollama")
     parser.add_argument("--model", default="qwen3.5:4b")
     parser.add_argument("--base-url", default="http://localhost:11434")
@@ -183,6 +215,8 @@ def main() -> None:
     parser.add_argument("--rag", action="store_true", help="inclui exemplos indexados; exclui o mesmo ano no teste")
     parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
     parser.add_argument("--rag-examples", type=int, default=3)
+    parser.add_argument("--allow-unlabeled", action="store_true",
+                        help="permite linhas sem subject/topic e calcula acurácia apenas nas rotuladas")
     parser.add_argument("--ollama-threads", type=int, default=0)
     args = parser.parse_args()
     if args.timeout <= 0 or args.http_attempts < 1 or args.max_tokens < 1 or args.ollama_threads < 0:
@@ -193,7 +227,7 @@ def main() -> None:
     result = evaluate(args.dataset, provider, output=args.output, source=args.source, version=args.version,
                       image_mode=args.images, limit=args.limit, request_attempts=args.http_attempts,
                       workers=args.workers, rag=args.rag, embedding_model=args.embedding_model,
-                      rag_examples=args.rag_examples)
+                      rag_examples=args.rag_examples, allow_unlabeled=args.allow_unlabeled)
     print(json.dumps({key: result[key] for key in ("count", "subject", "topic", "latency_seconds",
                                                    "invalid_json_or_classification", "attempts", "hosts")},
                      ensure_ascii=False, indent=2))

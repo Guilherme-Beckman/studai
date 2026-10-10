@@ -391,10 +391,15 @@ class OllamaProvider(Provider):
                 raise LLMError(f"resposta inesperada do Ollama: {str(out)[:300]}") from None
             self._thread_state.model = self.model
             self._thread_state.server = server
-            self._thread_state.usage = {"prompt_tokens": int(out.get("prompt_eval_count", 0)),
-                                        "completion_tokens": int(out.get("eval_count", 0)),
-                                        "eval_duration_ns": int(out.get("eval_duration", 0)),
-                                        "host": server}
+            usage = {"prompt_tokens": int(out.get("prompt_eval_count", 0)),
+                     "completion_tokens": int(out.get("eval_count", 0)),
+                     "eval_duration_ns": int(out.get("eval_duration", 0)),
+                     "host": server}
+            self._thread_state.usage = usage
+            history = getattr(self._thread_state, "usage_history", None)
+            if history is None:
+                history = self._thread_state.usage_history = []
+            history.append(dict(usage))
             return answer
         raise LLMError("todos os servidores Ollama falharam: " + " | ".join(failures))
 
