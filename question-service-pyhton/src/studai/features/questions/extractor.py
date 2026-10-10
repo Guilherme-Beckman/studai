@@ -169,7 +169,11 @@ def _build_rows(page: pymupdf.Page) -> tuple[list[Row], list[tuple[int, float]]]
             ends.append((_col_of(b, pw), b.y1))
         if not txt or b.y0 < HEADER_Y or b.y0 > FOOTER_Y:
             continue
-        cands.append(Row(txt, b, _col_of(b, pw), set(ln["fonts"])))
+        # Linhas longas atravessam a fronteira visual da página ao redor de
+        # imagens laterais; classificá-las pelo centro alterna de coluna e
+        # desordena enunciados e alternativas que continuam na linha seguinte.
+        row_col = 0 if b.width >= pw * 0.55 else _col_of(b, pw)
+        cands.append(Row(txt, b, row_col, set(ln["fonts"])))
 
     # funde linhas na mesma altura e mesma coluna (linhas de tabela, "(A)" + célula etc.)
     cands.sort(key=lambda r: (r.col, (r.bbox.y0 + r.bbox.y1) / 2, r.bbox.x0))
@@ -226,6 +230,8 @@ def _figure_rects(page: pymupdf.Page) -> list[pymupdf.Rect]:
         r = pymupdf.Rect(r)
         if r.width < 4 or r.height < 4:
             continue                                  # linha divisória de coluna / filete
+        if r.width >= page.rect.width * 0.9 and r.height >= page.rect.height * 0.85:
+            continue                                  # moldura/contorno de página, não uma figura da questão
         if r.height < SEP_MAX_H and r.width > 40:
             continue                                  # bolinhas do separador
         rects.append(r)
@@ -398,7 +404,8 @@ def crop(doc, pno: int, rect: pymupdf.Rect, path: Path, dpi: int):
     doc[pno].get_pixmap(dpi=dpi, clip=r).save(str(path))
 
 
-def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool):
+def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
+             detailed_crops: bool = False):
     imgdir = outdir / "img"
     imgdir.mkdir(parents=True, exist_ok=True)
     pw = doc[0].rect.width
@@ -427,11 +434,25 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool):
                 q["figuras_enunciado"].append(f"img/{name}")
 
         if full_crops:
-            for k, ((p, col), (y0, y1)) in enumerate(sorted(q["_segs"].items()), 1):
-                x0, x1 = colx[col]
-                name = f"q{n}_completa{k}.png"
-                crop(doc, p, pymupdf.Rect(x0, y0 - 3, x1, y1 + 3), imgdir / name, dpi)
-                q["imagens_completas"].append(f"img/{name}")
+            if detailed_crops:
+                # A revisão detalhada preserva toda a geometria da questão em
+                # cada página, inclusive imagem, legenda e alternativas largas.
+                by_page: dict[int, list[tuple[float, float]]] = {}
+                for (p, _col), (y0, y1) in q["_segs"].items():
+                    by_page.setdefault(p, []).append((y0, y1))
+                segments = [(p, (min(y0 for y0, _ in bounds), max(y1 for _, y1 in bounds)))
+                            for p, bounds in sorted(by_page.items())]
+                for k, (p, (y0, y1)) in enumerate(segments, 1):
+                    name = f"q{n}_completa_detalhada{k}.png"
+                    crop(doc, p, pymupdf.Rect(22, y0 - 3, doc[p].rect.width - 22, y1 + 3),
+                         imgdir / name, dpi)
+                    q["imagens_completas"].append(f"img/{name}")
+            else:
+                for k, ((p, col), (y0, y1)) in enumerate(sorted(q["_segs"].items()), 1):
+                    x0, x1 = colx[col]
+                    name = f"q{n}_completa{k}.png"
+                    crop(doc, p, pymupdf.Rect(x0, y0 - 3, x1, y1 + 3), imgdir / name, dpi)
+                    q["imagens_completas"].append(f"img/{name}")
 
         q["enunciado"] = _join(q["enunciado"])
         q["nota"] = _join(q["nota"])
@@ -456,7 +477,8 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool):
         q["resposta"] = None  # o caderno não traz gabarito; preencher depois
 
 
-def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bool = True, progress=None) -> Path:
+def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bool = True,
+                detailed_crops: bool = False, progress=None) -> Path:
     """Extrai um PDF e grava questoes.json e imagens dentro de outdir."""
     input_pdf = input_pdf.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
@@ -467,7 +489,7 @@ def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bo
         questions, shared = parse(doc)
         if progress:
             progress({"stage": "rendering", "message": f"Extraindo imagens de {len(questions)} questões", "questions": len(questions)})
-        finalize(doc, questions, shared, outdir, dpi, full_crops)
+        finalize(doc, questions, shared, outdir, dpi, full_crops, detailed_crops)
         data = {
             "prova": input_pdf.stem,
             "arquivo_origem": input_pdf.name,

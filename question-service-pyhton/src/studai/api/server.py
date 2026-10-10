@@ -44,6 +44,7 @@ WEB_ROOT = SERVICE_ROOT / "frontend"
 UPLOADS_ROOT = SERVICE_ROOT / "simulados" / "uploads"
 PROCESSED_ROOT = DEFAULT_QUESTIONS_DIR
 ANSWER_IMPORTS_ROOT = SERVICE_ROOT / "diagnostico" / "imports-web"
+QUESTION_REPROCESS_ROOT = SERVICE_ROOT / "simulados" / "cache" / "question-reprocess"
 JOBS: dict[str, dict] = {}
 JOBS_LOCK = threading.Lock()
 JOB_POOL = ThreadPoolExecutor(max_workers=3, thread_name_prefix="studai-job")
@@ -425,6 +426,229 @@ def _find_exam(exam_id: str) -> tuple[dict, Path]:
         if summary["id"] == exam_id:
             return summary, path
     raise FileNotFoundError(f"simulado não encontrado: {exam_id}")
+
+
+def _source_pdf(exam_id: str, exam_json: Path, uploaded: bytes | None = None,
+                filename: str | None = None) -> Path:
+    """Resolve the stored source PDF, or saves a user-provided replacement in an isolated workspace."""
+    if uploaded is not None:
+        if not uploaded.startswith(b"%PDF"):
+            raise ValueError("envie um arquivo PDF válido para reprocessar a questão")
+        if filename and not Path(filename).name.lower().endswith(".pdf"):
+            raise ValueError("o arquivo enviado precisa ter extensão PDF")
+        expected = Path(str(json.loads(exam_json.read_text(encoding="utf-8")).get("arquivo_origem") or "")).stem
+        if expected and filename:
+            normalize = lambda value: re.sub(r"[^a-z0-9]", "", Path(value).stem.casefold())
+            if normalize(filename) != normalize(expected):
+                raise ValueError(f"o arquivo enviado não corresponde à prova {expected}.pdf")
+        QUESTION_REPROCESS_ROOT.mkdir(parents=True, exist_ok=True)
+        replacement = QUESTION_REPROCESS_ROOT / f"source-{uuid.uuid4().hex}.pdf"
+        replacement.write_bytes(uploaded)
+        return replacement
+
+    candidates = [UPLOADS_ROOT / f"{exam_id}.pdf"]
+    try:
+        data = json.loads(exam_json.read_text(encoding="utf-8"))
+        digest = str(data.get("arquivo_sha256") or "")
+    except (OSError, json.JSONDecodeError):
+        digest = ""
+    if digest and UPLOADS_ROOT.is_dir():
+        candidates.extend(path for path in UPLOADS_ROOT.glob("*.pdf")
+                          if path.name != f"{exam_id}.pdf" and digest in path.name)
+    for candidate in candidates:
+        if candidate.is_file():
+            content = candidate.read_bytes()
+            if content.startswith(b"%PDF") and (not digest or hashlib.sha256(content).hexdigest() == digest):
+                return candidate.resolve()
+    raise FileNotFoundError("PDF original não encontrado. Envie o PDF associado à prova para reprocessar.")
+
+
+def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
+                        filename: str | None, cancelled, job_id: str) -> dict:
+    _, exam_json = _find_exam(exam_id)
+    original = json.loads(exam_json.read_text(encoding="utf-8"))
+    old_question = next((q for q in original.get("questoes", [])
+                         if int(q.get("numero", -1)) == number), None)
+    if old_question is None:
+        raise FileNotFoundError(f"questão {number} não encontrada nesta prova")
+    review = question_review.read_reviews(exam_json).get("questions", {}).get(str(number), {})
+    extraction_issues = {"alternativas_incompletas", "alternativa_vazia", "enunciado_vazio",
+                         "glifo_estranho", "formula_matematica"}
+    eligible = review.get("status") == "unusable" or bool(
+        extraction_issues.intersection(question_review.review_reasons(old_question)))
+    if review.get("status") not in (None, "unusable") or not eligible:
+        raise ValueError("esta questão não tem uma falha de extração elegível para reprocessamento")
+
+    workdir = QUESTION_REPROCESS_ROOT / uuid.uuid4().hex
+    workdir.mkdir(parents=True, exist_ok=False)
+    try:
+        source = _source_pdf(exam_id, exam_json, uploaded, filename)
+    except Exception:
+        shutil.rmtree(workdir, ignore_errors=True)
+        raise
+    if not source.is_relative_to(workdir.resolve()):
+        # Copiar evita que o fluxo de prévia dependa de um upload temporário externo.
+        stable_source = workdir / "source.pdf"
+        shutil.copyfile(source, stable_source)
+        if source.parent.resolve() == QUESTION_REPROCESS_ROOT.resolve() and source.name.startswith("source-"):
+            source.unlink(missing_ok=True)
+        source = stable_source
+
+    def progress(event):
+        if cancelled():
+            raise JobCancelled()
+        _set_job(job_id, stage=event["stage"], message=event["message"],
+                 progress=15 if event["stage"] == "extracting" else 65)
+
+    try:
+        extracted_path = extract_pdf(source, workdir / "extracted", dpi=200, full_crops=True,
+                                     detailed_crops=True, progress=progress)
+    except Exception:
+        shutil.rmtree(workdir, ignore_errors=True)
+        raise
+    if cancelled():
+        shutil.rmtree(workdir, ignore_errors=True)
+        raise JobCancelled()
+    extracted = json.loads(extracted_path.read_text(encoding="utf-8"))
+    replacement = next((q for q in extracted.get("questoes", [])
+                        if int(q.get("numero", -1)) == number), None)
+    if replacement is None:
+        shutil.rmtree(workdir, ignore_errors=True)
+        raise ValueError(f"a questão {number} não foi localizada no PDF enviado")
+    if not replacement.get("enunciado", "").strip() and not replacement.get("imagens_completas"):
+        shutil.rmtree(workdir, ignore_errors=True)
+        raise ValueError(f"a questão {number} foi localizada, mas não gerou texto nem recorte legível")
+    replacement["nota"] = old_question.get("nota", "")
+    shared_id = replacement.get("texto_id")
+    shared_text = (extracted.get("textos_compartilhados") or {}).get(str(shared_id)) if shared_id is not None else None
+
+    preview_id = workdir.name
+    question_hash = hashlib.sha256(json.dumps(old_question, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    metadata = {"previewId": preview_id, "examId": exam_id, "number": number,
+                "examJson": str(exam_json.resolve()), "sourceSha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                "originalQuestionSha256": question_hash, "originalReviewStatus": review.get("status"),
+                "question": replacement, "sharedText": shared_text}
+    (workdir / "preview.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    _set_job(job_id, stage="preview_ready", message=f"Prévia da questão {number} pronta", progress=100)
+    return {"previewId": preview_id, "examId": exam_id, "number": number,
+            "question": replacement, "sharedText": shared_text,
+            "assetPrefix": f"/api/exams/{exam_id}/reprocess-previews/{preview_id}/assets"}
+
+
+def _confirm_question_reprocess(exam_id: str, number: int, preview_id: str) -> dict:
+    if not re.fullmatch(r"[a-f0-9]{32}", preview_id):
+        raise ValueError("prévia inválida ou expirada")
+    workdir = (QUESTION_REPROCESS_ROOT / preview_id).resolve()
+    if not workdir.is_relative_to(QUESTION_REPROCESS_ROOT.resolve()):
+        raise ValueError("prévia inválida")
+    try:
+        preview = json.loads((workdir / "preview.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise FileNotFoundError("prévia não encontrada ou expirada") from None
+    if preview.get("examId") != exam_id or int(preview.get("number", -1)) != number:
+        raise ValueError("a prévia não corresponde a esta questão")
+    _, selected_path = _find_exam(exam_id)
+    if str(selected_path.resolve()) != preview.get("examJson"):
+        raise ValueError("a prova mudou desde a criação da prévia; gere uma nova prévia")
+    data = json.loads(selected_path.read_text(encoding="utf-8"))
+    question = next((q for q in data.get("questoes", []) if int(q.get("numero", -1)) == number), None)
+    if question is None:
+        raise FileNotFoundError(f"questão {number} não encontrada nesta prova")
+    current_question_hash = hashlib.sha256(json.dumps(question, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    if current_question_hash != preview.get("originalQuestionSha256"):
+        raise ValueError("a questão mudou desde a criação da prévia; gere uma nova prévia")
+    reviews = question_review.read_reviews(selected_path)
+    review = reviews.get("questions", {}).get(str(number), {})
+    if review.get("status") != preview.get("originalReviewStatus"):
+        raise ValueError("o estado da questão mudou desde a criação da prévia")
+
+    image_root = selected_path.parent / "img"
+    image_root.mkdir(parents=True, exist_ok=True)
+    new_question = json.loads(json.dumps(preview["question"], ensure_ascii=False))
+    path_map = {}
+    for old in (new_question.get("figuras_enunciado", []) + new_question.get("imagens_completas", [])):
+        path_map[old] = None
+    for option in (new_question.get("alternativas") or {}).values():
+        for old in option.get("figuras", []):
+            path_map[old] = None
+    new_shared = json.loads(json.dumps(preview.get("sharedText"), ensure_ascii=False)) if preview.get("sharedText") else None
+    if new_shared:
+        for old in new_shared.get("figuras", []):
+            path_map[old] = None
+    for old in path_map:
+        rel = Path(old)
+        source_image = (workdir / "extracted" / rel).resolve()
+        if not source_image.is_relative_to((workdir / "extracted").resolve()) or not source_image.is_file():
+            raise ValueError("uma imagem da prévia não está disponível; gere uma nova prévia")
+        destination = image_root / f"reproc_{preview_id[:8]}_{rel.name}"
+        shutil.copyfile(source_image, destination)
+        path_map[old] = f"img/{destination.name}"
+    def remap(paths):
+        return [path_map.get(path, path) for path in paths or []]
+    new_question["figuras_enunciado"] = remap(new_question.get("figuras_enunciado"))
+    new_question["imagens_completas"] = remap(new_question.get("imagens_completas"))
+    for option in (new_question.get("alternativas") or {}).values():
+        option["figuras"] = remap(option.get("figuras"))
+    if new_shared:
+        new_shared["figuras"] = remap(new_shared.get("figuras"))
+
+    for field in ("pagina", "texto_id", "enunciado", "alternativas", "figuras_enunciado",
+                  "imagens_completas", "revisar"):
+        question[field] = new_question.get(field)
+    data["arquivo_sha256"] = preview["sourceSha256"]
+    # Sincroniza a extração base, se a prova também mantém esse JSON.
+    siblings = [selected_path]
+    base_path = selected_path.parent / "questoes.json"
+    if selected_path.name != "questoes.json" and base_path.is_file():
+        siblings.append(base_path)
+    temp_paths = []
+    for path in siblings:
+        current = json.loads(path.read_text(encoding="utf-8"))
+        current["arquivo_sha256"] = preview["sourceSha256"]
+        if new_shared:
+            current.setdefault("textos_compartilhados", {})[str(new_shared["id"])] = new_shared
+            for linked_number in new_shared.get("questoes", []):
+                linked = next((item for item in current.get("questoes", [])
+                               if int(item.get("numero", -1)) == int(linked_number)), None)
+                if linked is not None:
+                    linked["texto_id"] = str(new_shared["id"])
+        target = next((q for q in current.get("questoes", []) if int(q.get("numero", -1)) == number), None)
+        if target is None:
+            raise ValueError("a extração base não contém a questão para sincronização")
+        for field in ("pagina", "texto_id", "enunciado", "alternativas", "figuras_enunciado",
+                      "imagens_completas", "revisar"):
+            target[field] = new_question.get(field)
+        temporary = path.with_name(path.name + f".{preview_id}.tmp")
+        temporary.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp_paths.append((temporary, path))
+
+    # A revisão volta a ficar pendente se o classificador ou a nova extração ainda sinalizarem algo.
+    record = dict(review)
+    if record.get("status") == "unusable":
+        record.pop("status", None)
+    reviews.setdefault("questions", {})[str(number)] = record
+    review_path = question_review.review_file(selected_path)
+    review_temp = review_path.with_name(review_path.name + f".{preview_id}.tmp")
+    review_temp.write_text(json.dumps(reviews, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        UPLOADS_ROOT.mkdir(parents=True, exist_ok=True)
+        associated_pdf = UPLOADS_ROOT / f"{exam_id}.pdf"
+        staged_pdf = UPLOADS_ROOT / f"{exam_id}.{preview_id}.pdf.tmp"
+        shutil.copyfile(workdir / "source.pdf", staged_pdf)
+        os.replace(staged_pdf, associated_pdf)
+        for temporary, destination in temp_paths:
+            os.replace(temporary, destination)
+        os.replace(review_temp, review_path)
+    except Exception:
+        for temporary, _ in temp_paths:
+            temporary.unlink(missing_ok=True)
+        review_temp.unlink(missing_ok=True)
+        if "staged_pdf" in locals():
+            staged_pdf.unlink(missing_ok=True)
+        raise
+    shutil.rmtree(workdir, ignore_errors=True)
+    return {"ok": True, "question": number,
+            **question_review.review_stats(data, reviews)}
 
 
 def _delete_exam(exam_id: str) -> dict:
@@ -815,6 +1039,32 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            match = re.fullmatch(r"/api/exams/([^/]+)/reprocess-previews/([a-f0-9]{32})/assets/(.+)", path)
+            if match:
+                exam_id, preview_id, relative = match.groups()
+                workdir = (QUESTION_REPROCESS_ROOT / preview_id).resolve()
+                if not workdir.is_relative_to(QUESTION_REPROCESS_ROOT.resolve()):
+                    self.send_error(404)
+                    return
+                try:
+                    preview = json.loads((workdir / "preview.json").read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    self.send_error(404)
+                    return
+                asset_path = (workdir / "extracted" / relative).resolve()
+                asset_root = (workdir / "extracted").resolve()
+                if (preview.get("examId") != exam_id or not asset_path.is_relative_to(asset_root)
+                        or not asset_path.is_file() or asset_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}):
+                    self.send_error(404)
+                    return
+                body = asset_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", mimetypes.guess_type(asset_path.name)[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             self._json(404, {"error": "rota não encontrada"})
         except FileNotFoundError as exc:
             self._json(404, {"error": str(exc)})
@@ -881,6 +1131,34 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
         try:
+            reprocess_match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/reprocess", path)
+            if reprocess_match:
+                exam_id, number = reprocess_match.group(1), int(reprocess_match.group(2))
+                query = parse_qs(parsed.query)
+                filename = (query.get("filename") or [self.headers.get("X-Filename")])[0]
+                length = int(self.headers.get("Content-Length", "0"))
+                uploaded = self.rfile.read(length) if length else None
+                job_id = _submit_job("Reprocessar questão", lambda cancelled, current_job:
+                                      _reprocess_question(exam_id, number, uploaded, filename, cancelled, current_job))
+                return self._json(202, {"jobId": job_id})
+            confirm_match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/reprocess/([a-f0-9]{32})/confirm", path)
+            if confirm_match:
+                exam_id, number, preview_id = confirm_match.groups()
+                return self._json(200, _confirm_question_reprocess(exam_id, int(number), preview_id))
+            cancel_preview_match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/reprocess/([a-f0-9]{32})", path)
+            if cancel_preview_match:
+                exam_id, number, preview_id = cancel_preview_match.groups()
+                workdir = (QUESTION_REPROCESS_ROOT / preview_id).resolve()
+                if not workdir.is_relative_to(QUESTION_REPROCESS_ROOT.resolve()):
+                    raise ValueError("prévia inválida")
+                try:
+                    preview = json.loads((workdir / "preview.json").read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    raise FileNotFoundError("prévia não encontrada ou expirada") from None
+                if preview.get("examId") != exam_id or int(preview.get("number", -1)) != int(number):
+                    raise ValueError("a prévia não corresponde a esta questão")
+                shutil.rmtree(workdir, ignore_errors=True)
+                return self._json(200, {"ok": True})
             if path == "/api/benchmark/run":
                 body = self._read_json()
                 provider_name = str(body.get("provider") or "ollama")

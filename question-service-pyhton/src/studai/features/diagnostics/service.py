@@ -19,6 +19,7 @@ from studai.features.answer_keys.service import (
     associate_answer_key, exam_key, exam_variant, import_answer_key,
     parse_answer_key_pdf, source_id_for,
 )
+from studai.features.questions import review as question_review
 
 SCHEMA_VERSION = 2
 REASONS = {"unknown_content", "calc_error", "misread", "blank"}
@@ -130,6 +131,7 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
             excluded["json_invalid"] += 1
             continue
         source_id = source_id_for(data, path)
+        reviewed_states = question_review.read_reviews(path).get("questions") or {}
         shared_texts = data.get("textos_compartilhados", {})
         keys = {int(r[0]): r[1] for r in db.execute(
             "SELECT question_number,answer FROM answer_keys WHERE source_id=? AND is_annulled=0", (source_id,))}
@@ -140,6 +142,9 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
                 excluded["invalid_number"] += 1
                 continue
             identity = (source_id, number)
+            if (reviewed_states.get(str(number)) or {}).get("status") == "unusable":
+                excluded["unusable"] += 1
+                continue
             if identity in seen_questions:
                 excluded["duplicate_question"] += 1
                 continue

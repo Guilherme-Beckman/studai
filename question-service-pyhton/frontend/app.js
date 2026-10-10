@@ -5,6 +5,7 @@ let courses = [];
 let currentDiagnostic = null;
 let currentExamQuiz = null;
 let currentExamReview = null;
+let currentReprocessPreview = null;
 let activeProvider = { provider: "demo" };
 let toastTimer;
 let currentProcessJob = null;
@@ -189,6 +190,13 @@ function examImageMarkup(examId, paths, className = "") {
   return (Array.isArray(paths) ? paths : []).map(path => `<span class="exam-image-wrap"><img class="exam-question-image ${className}" src="${examAssetUrl(examId, path)}" alt="Imagem da questão" loading="lazy" onerror="this.closest('.exam-image-wrap').classList.add('image-unavailable')"><span class="image-unavailable-label">Imagem indisponível</span></span>`).join("");
 }
 
+function reprocessImageMarkup(assetPrefix, paths, className = "") {
+  return (Array.isArray(paths) ? paths : []).map(path => {
+    const safePath = String(path || "").split("/").filter(Boolean).map(encodeURIComponent).join("/");
+    return `<span class="exam-image-wrap"><img class="exam-question-image ${className}" src="${assetPrefix}/${safePath}" alt="Prévia da imagem reprocessada" loading="lazy"></span>`;
+  }).join("");
+}
+
 function questionDisplayState(question) {
   const reasons = new Set([...(question.revisar || []), ...(question.reviewReasons || [])]);
   const alternatives = Object.values(question.alternativas || {}).map(option =>
@@ -255,6 +263,8 @@ function renderReviewQuestion(examId, question, sharedTexts) {
   const reviewed = review.status === "reviewed";
   const unusable = review.status === "unusable";
   const needsReview = Boolean(question.needsReview);
+  const reprocessReasons = new Set([...(question.revisar || []), ...(question.reviewReasons || [])]);
+  const canReprocess = unusable || (!reviewed && ["alternativas_incompletas", "alternativa_vazia", "enunciado_vazio", "glifo_estranho", "formula_matematica"].some(reason => reprocessReasons.has(reason)));
   const classification = question.classificacao || {};
   const subject = reviewed ? review.subject : (question.materia || classification.materia || "Não classificada");
   const topic = reviewed ? review.topic : (classification.assunto || "Tópico não definido");
@@ -276,7 +286,8 @@ function renderReviewQuestion(examId, question, sharedTexts) {
     <div class="question-body exam-prompt">${display.showStem ? escapeHtml(question.enunciado) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(examId, imagePaths)}${renderSourceQuestionImage(examId, display.sourceImages)}${fallbackImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(examId, fallbackImages)}</details>` : ""}</div>
     <div class="exam-review-options">${options.map(([letter, option]) => { const text = display.showAlternativeText ? (typeof option === "string" ? option : (option?.texto || "Alternativa apresentada como imagem")) : "Alternativa apresentada na imagem da questão"; const figures = typeof option === "object" ? option.figuras : []; return `<div class="exam-review-option"><span class="exam-option-letter">${escapeHtml(letter)}</span><div>${escapeHtml(text)}${examImageMarkup(examId, figures, "option-image")}</div></div>`; }).join("")}</div>
     ${review.note ? `<p class="review-saved-note"><strong>Observação:</strong> ${escapeHtml(review.note)}</p>` : ""}
-    ${needsReview ? `<div class="exam-review-actions"><button class="text-button" type="button" data-toggle-review="${number}">${reviewed || unusable ? "Editar revisão" : "Revisar questão"}</button></div>${panel}` : ""}</article>`;
+    ${needsReview ? `<div class="exam-review-actions"><button class="text-button" type="button" data-toggle-review="${number}">${reviewed || unusable ? "Editar revisão" : "Revisar questão"}</button></div>${panel}` : ""}
+    ${canReprocess ? `<div class="reprocess-actions"><button class="button button-primary" type="button" data-reprocess="${number}">Reprocessar detalhadamente pelo PDF</button><label class="reprocess-upload">PDF ausente ou diferente? Enviar PDF<input type="file" accept="application/pdf,.pdf" data-reprocess-file="${number}"></label></div><div data-reprocess-preview="${number}"></div>` : ""}</article>`;
 }
 
 function refreshReviewTopic(number, selectedTopic = "") {
@@ -311,6 +322,63 @@ function bindExamReviewActions() {
     const number = button.dataset.markUnusable;
     saveQuestionReview(number, { status: "unusable", note: $(`[data-review-note="${number}"]`, workspace).value });
   }));
+  $$('[data-reprocess]', workspace).forEach(button => button.addEventListener("click", () =>
+    reprocessUnusableQuestion(button.dataset.reprocess)));
+  $$('[data-reprocess-file]', workspace).forEach(input => input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (file) reprocessUnusableQuestion(input.dataset.reprocessFile, file);
+  }));
+}
+
+async function reprocessUnusableQuestion(number, file = null) {
+  const examId = currentExamReview?.exam?.id;
+  const slot = $(`[data-reprocess-preview="${number}"]`, $("#exam-question-workspace"));
+  if (!examId || !slot) return;
+  slot.innerHTML = `<div class="loading-card">Reprocessando a questão ${escapeHtml(number)} a partir do PDF…</div>`;
+  try {
+    const url = `/api/exams/${encodeURIComponent(examId)}/questions/${encodeURIComponent(number)}/reprocess${file ? `?filename=${encodeURIComponent(file.name)}` : ""}`;
+    const response = await fetch(url, file ? { method: "POST", headers: { "Content-Type": "application/pdf" }, body: file } : { method: "POST" });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result?.error || `Falha HTTP ${response.status}`);
+    const preview = await pollJob(result.jobId, job => {
+      const progress = Math.max(0, Math.min(100, job.progress || 0));
+      slot.innerHTML = `<div class="loading-card">${escapeHtml(job.message || "Reprocessando a questão…")}<div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div></div>`;
+    });
+    currentReprocessPreview = preview;
+    renderReprocessPreview(slot, preview);
+  } catch (error) {
+    slot.innerHTML = `<div class="reprocess-error">${escapeHtml(error.message)}<p>Você pode enviar o PDF correto pelo campo acima.</p></div>`;
+    toast(error.message, true);
+  }
+}
+
+function renderReprocessPreview(slot, preview) {
+  const question = preview.question || {};
+  const alternatives = Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b));
+  const shared = preview.sharedText;
+  slot.innerHTML = `<section class="reprocess-preview"><div class="reprocess-preview-heading"><strong>Prévia detalhada · Questão ${escapeHtml(preview.number)}</strong><span>Texto recomposto e recorte completo da região da questão. Os dados atuais continuam preservados até você confirmar.</span></div>${shared ? `<div class="question-body exam-passage"><strong>Texto compartilhado · questões ${escapeHtml((shared.questoes || []).join(" e "))}</strong><div>${escapeHtml(shared.texto || "")}</div>${reprocessImageMarkup(preview.assetPrefix, shared.figuras, "passage-image")}</div>` : ""}<div class="question-body exam-prompt">${escapeHtml(question.enunciado || "Enunciado não extraído")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${reprocessImageMarkup(preview.assetPrefix, question.figuras_enunciado)}${reprocessImageMarkup(preview.assetPrefix, question.imagens_completas, "source-question-image")}</div><div class="exam-review-options">${alternatives.map(([letter, option]) => `<div class="exam-review-option"><span class="exam-option-letter">${escapeHtml(letter)}</span><div>${escapeHtml(typeof option === "string" ? option : option?.texto || "Alternativa como imagem")}${reprocessImageMarkup(preview.assetPrefix, option?.figuras || [], "option-image")}</div></div>`).join("")}</div><div class="review-editor-actions"><button type="button" class="button button-primary" data-confirm-reprocess="${preview.previewId}">Confirmar e reativar</button><button type="button" class="blank-button" data-cancel-reprocess="${preview.previewId}">Cancelar</button></div></section>`;
+  $("[data-confirm-reprocess]", slot)?.addEventListener("click", () => confirmQuestionReprocess(preview, slot));
+  $("[data-cancel-reprocess]", slot)?.addEventListener("click", () => cancelQuestionReprocess(preview, slot));
+}
+
+async function confirmQuestionReprocess(preview, slot) {
+  try {
+    const path = `/api/exams/${encodeURIComponent(preview.examId)}/questions/${encodeURIComponent(preview.number)}/reprocess/${encodeURIComponent(preview.previewId)}/confirm`;
+    await api(path, { method: "POST" });
+    currentReprocessPreview = null;
+    currentExamReview = await api(`/api/exams/${encodeURIComponent(preview.examId)}/questions`);
+    renderExamReview();
+    await refreshExams();
+    toast("Questão reprocessada e devolvida à revisão.");
+  } catch (error) { slot.insertAdjacentHTML("afterbegin", `<div class="reprocess-error">${escapeHtml(error.message)}</div>`); }
+}
+
+async function cancelQuestionReprocess(preview, slot) {
+  try {
+    await api(`/api/exams/${encodeURIComponent(preview.examId)}/questions/${encodeURIComponent(preview.number)}/reprocess/${encodeURIComponent(preview.previewId)}`, { method: "POST" });
+    currentReprocessPreview = null;
+    slot.innerHTML = "";
+  } catch (error) { toast(error.message, true); }
 }
 
 async function saveQuestionReview(number, value) {
@@ -355,7 +423,7 @@ async function openExamQuiz(examId) {
     const storageKey = `studai-exam-answers:${examId}`;
     let answers = {};
     try { answers = JSON.parse(sessionStorage.getItem(storageKey) || "{}"); } catch { answers = {}; }
-    currentExamQuiz = { ...data, index: 0, selected: null, answers, storageKey };
+    currentExamQuiz = { ...data, questions: data.questions.filter(question => question.review?.status !== "unusable"), index: 0, selected: null, answers, storageKey };
     renderExamQuiz();
     workspace.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
@@ -370,6 +438,11 @@ function renderExamQuiz() {
   if (!quiz) return;
   const { exam, questions, sharedTexts = {}, answerKeys = {}, index } = quiz;
   const question = questions[index];
+  if (!questions.length) {
+    workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Nenhuma questão disponível</h2><div class="workspace-meta">Todas as questões estão marcadas como inutilizáveis. Reprocesse e revalide-as na revisão da prova.</div></div><button class="blank-button" data-exam-close>Voltar à revisão</button></div>`;
+    bindExamQuizActions();
+    return;
+  }
   if (!question) {
     const scored = questions.reduce((totals, item) => {
       const key = answerKeys[String(item.numero)];

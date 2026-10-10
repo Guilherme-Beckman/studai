@@ -22,7 +22,7 @@ class MathQuestionExtractionTests(unittest.TestCase):
             questions, _ = parse(doc)
             q3, q4 = questions[3], questions[4]
 
-            self.assertEqual(q3["enunciado"], [])
+            self.assertIn("eleição para um conselho", " ".join(q3["enunciado"]))
             self.assertIn("CambriaMath", q4["_fonts"])
             self.assertNotIn("¬", " ".join(q4["enunciado"]))
 
