@@ -18,6 +18,8 @@
 | Frontend | `frontend/` | Interface web estática |
 | Scripts raiz | `*.py` na raiz | Compatibilidade retroativa; delegam para `src/` |
 
+**Roadmap:** [`TODO.md`](TODO.md) é o roadmap do produto (atualize ao concluir tarefas); [`WORK_STATUS.md`](WORK_STATUS.md) é a coordenação do trabalho em andamento.
+
 **Ponto de entrada:** `python api.py` → `http://127.0.0.1:8787`  
 **Testes:** `python -m unittest discover -s tests`
 
@@ -122,6 +124,7 @@ Qualquer agente deve confirmar todos os itens antes de considerar a tarefa concl
 - [ ] Nenhum arquivo `.env`, PDF ou cache foi commitado
 - [ ] Contratos JSON existentes preservados ou migração documentada
 - [ ] Branch criada com o padrão `feature/<domínio>/<descricao>`
+- [ ] `TODO.md` atualizado (status dos itens, resumo e linha no Histórico)
 
 ---
 

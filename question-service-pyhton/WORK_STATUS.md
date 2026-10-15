@@ -1,6 +1,7 @@
 # WORK_STATUS.md — Estado da taxonomia hierárquica Fuvest
 
 > Atualize este arquivo ao iniciar e concluir as tarefas em branches separadas.
+> Roadmap geral do produto e progresso por fase: [`TODO.md`](TODO.md).
 
 ## Agente A — Antigravity (Gemini)
 
