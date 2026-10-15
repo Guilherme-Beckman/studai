@@ -265,6 +265,8 @@ def _provider(payload: dict, *, max_tokens: int = 1600):
         model = "qwen3.5:4b"
     if not model and name == "gemini":
         model = "gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash"
+    if not model and name in CLOUD_LANE_PRESETS:
+        model = CLOUD_LANE_PRESETS[name]["default_models"]
     try:
         threads = int(payload.get("ollamaThreads") or 0)
         if not 0 <= threads <= 64:
@@ -365,13 +367,22 @@ def _ai_options() -> dict:
         return dict(options)
 
 
-# Faixas grátis de nuvem compatíveis com a API da OpenAI, ativadas só quando a chave
-# e os modelos estão no .env (os catálogos gratuitos mudam com frequência).
+# Faixas grátis de nuvem compatíveis com a API da OpenAI, ativadas quando a chave está
+# no .env. Cada chave vira uma faixa que alterna entre os modelos, como no Gemini; sem
+# modelos no .env valem os padrões abaixo (catálogos grátis de 2026-10, mudam com frequência).
 CLOUD_LANE_PRESETS = {
     "groq": {"label": "Groq", "models_env": "STUDAI_GROQ_MODELS", "rpm_env": "STUDAI_GROQ_RPM",
-             "rpm_default": 30, "parallel_env": "STUDAI_GROQ_PARALLEL"},
+             "rpm_default": 30, "parallel_env": "STUDAI_GROQ_PARALLEL",
+             "default_models": "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b"},
     "huggingface": {"label": "Hugging Face", "models_env": "STUDAI_HF_MODELS", "rpm_env": "STUDAI_HF_RPM",
-                    "rpm_default": 0, "parallel_env": "STUDAI_HF_PARALLEL"},
+                    "rpm_default": 0, "parallel_env": "STUDAI_HF_PARALLEL",
+                    # A cota grátis do roteador é mínima: só entra com modelos explícitos.
+                    "default_models": ""},
+    "openrouter": {"label": "OpenRouter", "models_env": "STUDAI_OPENROUTER_MODELS",
+                   "rpm_env": "STUDAI_OPENROUTER_RPM", "rpm_default": 20,
+                   "parallel_env": "STUDAI_OPENROUTER_PARALLEL",
+                   "default_models": ("nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free,"
+                                      "google/gemma-4-26b-a4b-it:free")},
 }
 
 
@@ -392,15 +403,16 @@ def _cloud_lanes(*, max_tokens: int) -> list[tuple]:
     for preset, config in CLOUD_LANE_PRESETS.items():
         base_url, key_env = classification.OPENAI_COMPAT_PRESETS[preset]
         key = os.environ.get(key_env, "").strip()
-        models = [m.strip() for m in os.environ.get(config["models_env"], "").split(",") if m.strip()]
+        raw = os.environ.get(config["models_env"], "").strip() or config["default_models"]
+        models = list(dict.fromkeys(m.strip() for m in raw.split(",") if m.strip()))
         if not key or not models:
             continue
         rpm = _env_int(config["rpm_env"], config["rpm_default"], 0, 10_000)
         parallel = _env_int(config["parallel_env"], 2, 1, 16)
-        for model in models:
-            provider = make_provider(preset, model, base_url=base_url, key_env=key_env, temperature=0,
-                                     max_tokens=max_tokens, json_mode=True, request_attempts=1)
-            lanes.append((f"{config['label']} ({model})", provider, parallel, rpm))
+        provider = make_provider(preset, ",".join(models), base_url=base_url, key_env=key_env,
+                                 temperature=0, max_tokens=max_tokens, json_mode=True,
+                                 request_attempts=1)
+        lanes.append((f"{config['label']} ({','.join(models)})", provider, parallel, rpm))
     return lanes
 
 

@@ -200,15 +200,24 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 Cada chave Gemini aceita até quatro chamadas simultâneas por padrão, inclusive quando só há uma chave. Ajuste `STUDAI_GEMINI_PARALLEL_REQUESTS` para um valor de 1 a 16 conforme os limites de taxa da API. O paralelismo não aumenta a cota do projeto; erros de limite de taxa acionam novas tentativas. As variáveis antigas `GEMINI_API_KEY` e `GOOGLE_API_KEY` continuam aceitas. Reinicie `api.py` depois de alterar o `.env`. A interface mostra somente quantas chaves estão configuradas; não exibe seus valores. O catálogo Gemini e os modelos Ollama são consultados pelo backend. A API e a interface são ferramentas de desenvolvimento local e ainda não incluem login.
 
-### Faixas grátis de nuvem (Groq e Hugging Face)
+### Faixas grátis de nuvem (Groq, OpenRouter e Hugging Face)
 
-Além de Ollama e Gemini, o pool aceita faixas compatíveis com a API da OpenAI. Elas só entram quando a chave **e** os modelos estão no `.env`. Os catálogos gratuitos mudam com frequência, por isso não há modelo padrão: confira os disponíveis no console de cada serviço.
+Além de Ollama e Gemini, o pool aceita faixas compatíveis com a API da OpenAI. Cada chave configurada vira **uma faixa que alterna entre vários modelos**, como no Gemini: cada pedido começa no próximo modelo da lista e, se receber 429, 404 ou erro do servidor, tenta o seguinte. Sem `STUDAI_*_MODELS` no `.env`, Groq e OpenRouter usam os modelos padrão abaixo (catálogos grátis de outubro de 2026; eles mudam com frequência, então sobrescreva no `.env` quando algum sair do ar). O Hugging Face só entra com modelos explícitos, porque a cota grátis do roteador é muito pequena.
+
+| Serviço | Modelos padrão |
+|---|---|
+| Groq | `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, `openai/gpt-oss-20b` |
+| OpenRouter | `nvidia/nemotron-3-super-120b-a12b:free`, `google/gemma-4-31b-it:free`, `google/gemma-4-26b-a4b-it:free` |
 
 ```env
 GROQ_API_KEY=CHAVE_GROQ
-STUDAI_GROQ_MODELS=modelo-1,modelo-2   # um modelo por faixa
-STUDAI_GROQ_RPM=30                     # limite por minuto de cada faixa (0 = sem limite)
+STUDAI_GROQ_MODELS=modelo-1,modelo-2   # opcional; alternados na mesma faixa
+STUDAI_GROQ_RPM=30                     # limite por minuto da faixa (0 = sem limite)
 STUDAI_GROQ_PARALLEL=2
+OPENROUTER_API_KEY=CHAVE_OPENROUTER
+STUDAI_OPENROUTER_MODELS=org/modelo:free   # opcional; sufixo :free não consome créditos
+STUDAI_OPENROUTER_RPM=20
+STUDAI_OPENROUTER_PARALLEL=2
 HF_TOKEN=TOKEN_HUGGING_FACE
 STUDAI_HF_MODELS=org/modelo:fastest    # roteador https://router.huggingface.co/v1
 STUDAI_HF_RPM=0

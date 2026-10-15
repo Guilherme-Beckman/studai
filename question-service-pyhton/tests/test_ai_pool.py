@@ -14,7 +14,8 @@ APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP / "src"))
 
 from studai.api import server
-from studai.integrations.llm import GeminiProvider, LLMError, Provider, RotatingPoolProvider
+from studai.integrations.llm import (GeminiProvider, LLMError, OpenAICompatProvider, Provider,
+                                     RotatingPoolProvider)
 
 
 class StubProvider(Provider):
@@ -44,6 +45,12 @@ class StubProvider(Provider):
 
 
 class AIPoolTests(unittest.TestCase):
+    def setUp(self):
+        # Chaves reais do .env local ativariam as faixas grátis com os modelos padrão.
+        isolate = patch.dict(os.environ, {"GROQ_API_KEY": "", "OPENROUTER_API_KEY": "", "HF_TOKEN": ""})
+        isolate.start()
+        self.addCleanup(isolate.stop)
+
     def test_gemini_rotates_models_after_model_not_found(self):
         responses = [LLMError("not found", status_code=404),
                      {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}]
@@ -249,10 +256,12 @@ class AIPoolTests(unittest.TestCase):
                      patch.object(server, "_available_gemini_models", return_value=[]), \
                      patch.object(server, "make_provider", side_effect=make_stub):
                     pool = server._pool_provider({"useOllama": "false"})
-                self.assertEqual(pool.lane_count, 2)
-                self.assertEqual([name for name, _ in pool.lanes], ["Groq (model-a)", "Groq (model-b)"])
-                self.assertEqual(pool._lane_rpm, [25, 25])
-                self.assertEqual(pool.worker_count, 4)
+                # Uma faixa por chave, alternando entre os modelos como no Gemini.
+                self.assertEqual(pool.lane_count, 1)
+                self.assertEqual([name for name, _ in pool.lanes], ["Groq (model-a,model-b)"])
+                self.assertEqual([model for _, model, _ in created], ["model-a,model-b"])
+                self.assertEqual(pool._lane_rpm, [25])
+                self.assertEqual(pool.worker_count, 2)
                 self.assertTrue(all(kwargs["request_attempts"] == 1 for _, _, kwargs in created))
                 self.assertNotIn("groq-secret", pool.label)
                 with patch.dict(os.environ, env), \
@@ -263,6 +272,42 @@ class AIPoolTests(unittest.TestCase):
                         server._pool_provider({"useOllama": "false", "useFreeCloud": "false"})
             finally:
                 server.SERVICE_ROOT = original_root
+
+    def test_free_cloud_lanes_use_default_models_when_env_lists_none(self):
+        created = []
+        def make_stub(name, model, **kwargs):
+            created.append((name, model))
+            return StubProvider(model)
+        env = {"GROQ_API_KEY": "", "OPENROUTER_API_KEY": "or-secret", "STUDAI_OPENROUTER_MODELS": "",
+               "HF_TOKEN": "hf-secret", "STUDAI_HF_MODELS": ""}
+        with patch.dict(os.environ, env), patch.object(server, "make_provider", side_effect=make_stub):
+            lanes = server._cloud_lanes(max_tokens=10)
+        self.assertEqual(created, [("openrouter", server.CLOUD_LANE_PRESETS["openrouter"]["default_models"])])
+        self.assertEqual(len(lanes), 1)
+        self.assertEqual(lanes[0][3], 20)
+
+    def test_openai_compatible_provider_rotates_models_like_gemini(self):
+        responses = [LLMError("HTTP 429: rate limit", status_code=429),
+                     {"choices": [{"message": {"content": "ok"}}]},
+                     {"choices": [{"message": {"content": "next"}}]}]
+        with patch("studai.integrations.llm.http_post", side_effect=responses) as request:
+            provider = OpenAICompatProvider(model="model-a, model-b", api_key="k",
+                                            base_url="https://example.test/v1")
+            self.assertEqual(provider.complete("system", "user"), "ok")
+            self.assertEqual(provider.last_used_model, "model-b")
+            self.assertEqual(provider.complete("system", "user"), "next")
+        models = [call.args[2]["model"] for call in request.call_args_list]
+        self.assertEqual(models, ["model-a", "model-b", "model-b"])
+        self.assertTrue(all(call.kwargs["attempts"] == 1 for call in request.call_args_list))
+
+    def test_openai_compatible_rotation_stops_on_non_retryable_error(self):
+        with patch("studai.integrations.llm.http_post",
+                   side_effect=LLMError("HTTP 401: bad key", status_code=401)) as request:
+            provider = OpenAICompatProvider(model="model-a,model-b", api_key="k",
+                                            base_url="https://example.test/v1")
+            with self.assertRaises(LLMError):
+                provider.complete("system", "user")
+        self.assertEqual(request.call_count, 1)
 
     def test_simultaneous_jobs_with_same_config_share_one_pool(self):
         built = []

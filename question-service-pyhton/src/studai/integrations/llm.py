@@ -71,8 +71,10 @@ class LLMError(Exception):
 def http_post(url: str, headers: dict, body: dict, timeout: float, attempts: int = 4) -> dict:
     data = json.dumps(body).encode("utf-8")
     for i in range(attempts):
+        # User-Agent próprio: o Cloudflare de alguns provedores (ex.: Groq) bloqueia o do urllib.
         req = urllib.request.Request(url, data=data, method="POST",
-                                     headers={"Content-Type": "application/json", **headers})
+                                     headers={"Content-Type": "application/json",
+                                              "User-Agent": "studai/1.0", **headers})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read())
@@ -143,46 +145,19 @@ class AnthropicProvider(Provider):
                         body, self.timeout)
         return "".join(b.get("text", "") for b in out.get("content", []) if b.get("type") == "text")
 
-class OpenAICompatProvider(Provider):
-    """OpenAI e qualquer servidor que fale /chat/completions."""
-    default_key_env = "OPENAI_API_KEY"
-    default_base_url = "https://api.openai.com/v1"
+_ROTATION_RETRYABLE = (None, 404, 408, 409, 429, 500, 502, 503, 504, 529)
 
-    def complete(self, system, user, images=None):
-        if images:
-            content: str | list = [{"type": "text", "text": user}] + [
-                {"type": "image_url",
-                 "image_url": {"url": "data:image/png;base64," + base64.b64encode(im).decode()}}
-                for im in images
-            ]
-        else:
-            content = user
-        body: dict = {"model": self.model,
-                      "messages": [{"role": "system", "content": system},
-                                   {"role": "user", "content": content}]}
-        # a API oficial usa max_completion_tokens; servidores compatíveis costumam usar max_tokens
-        tok = "max_completion_tokens" if "api.openai.com" in self.base_url else "max_tokens"
-        body[tok] = self.max_tokens
-        if self.temperature is not None:
-            body["temperature"] = self.temperature
-        if self.json_mode:
-            body["response_format"] = {"type": "json_object"}
-        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-        out = http_post(f"{self.base_url}/chat/completions", headers, body, self.timeout)
-        try:
-            return out["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError):
-            raise LLMError(f"resposta inesperada: {str(out)[:300]}") from None
 
-class GeminiProvider(Provider):
-    default_key_env = "GEMINI_API_KEY"
-    default_base_url = "https://generativelanguage.googleapis.com/v1beta"
+class ModelRotation:
+    """Rodízio entre modelos separados por vírgula: cada pedido começa no próximo
+    modelo e, em erro de cota, indisponibilidade ou modelo inexistente, tenta o seguinte."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    rotation_family = "modelos"
+
+    def _init_rotation(self) -> None:
         self.models = list(dict.fromkeys(m.strip() for m in self.model.split(",") if m.strip()))
         if not self.models:
-            raise ValueError("informe pelo menos um modelo Gemini")
+            raise ValueError(f"informe pelo menos um modelo ({self.rotation_family})")
         self._rotation_lock = threading.Lock()
         self._rotation_index = 0
         self._thread_state = threading.local()
@@ -201,6 +176,79 @@ class GeminiProvider(Provider):
             self._rotation_index = (self._rotation_index + 1) % len(self.models)
             return index
 
+    def _rotation_attempts(self, single: int) -> int:
+        # Com vários modelos, trocar de modelo substitui as novas tentativas no mesmo.
+        return 1 if len(self.models) > 1 else single
+
+    def _rotate(self, call) -> str:
+        first = self._next_model_index()
+        failures: list[tuple[str, LLMError]] = []
+        for offset in range(len(self.models)):
+            model = self.models[(first + offset) % len(self.models)]
+            try:
+                answer = call(model)
+                self._thread_state.model = model
+                return answer
+            except LLMError as e:
+                if e.status_code not in _ROTATION_RETRYABLE:
+                    raise
+                failures.append((model, e))
+        codes = {error.status_code for _, error in failures}
+        status_code = next(iter(codes)) if len(codes) == 1 else None
+        detail = " | ".join(f"{model}: {error}" for model, error in failures)
+        raise LLMError(f"todos os {self.rotation_family} da rotação falharam: " + detail,
+                       status_code=status_code)
+
+
+class OpenAICompatProvider(ModelRotation, Provider):
+    """OpenAI e qualquer servidor que fale /chat/completions; aceita vários modelos
+    separados por vírgula, em rodízio como no Gemini."""
+    default_key_env = "OPENAI_API_KEY"
+    default_base_url = "https://api.openai.com/v1"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_rotation()
+
+    def complete(self, system, user, images=None):
+        if images:
+            content: str | list = [{"type": "text", "text": user}] + [
+                {"type": "image_url",
+                 "image_url": {"url": "data:image/png;base64," + base64.b64encode(im).decode()}}
+                for im in images
+            ]
+        else:
+            content = user
+        body: dict = {"messages": [{"role": "system", "content": system},
+                                   {"role": "user", "content": content}]}
+        # a API oficial usa max_completion_tokens; servidores compatíveis costumam usar max_tokens
+        tok = "max_completion_tokens" if "api.openai.com" in self.base_url else "max_tokens"
+        body[tok] = self.max_tokens
+        if self.temperature is not None:
+            body["temperature"] = self.temperature
+        if self.json_mode:
+            body["response_format"] = {"type": "json_object"}
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+
+        def call(model: str) -> str:
+            out = http_post(f"{self.base_url}/chat/completions", headers, {"model": model, **body},
+                            self.timeout, attempts=self._rotation_attempts(self.request_attempts))
+            try:
+                return out["choices"][0]["message"]["content"] or ""
+            except (KeyError, IndexError, TypeError):
+                raise LLMError(f"resposta inesperada: {str(out)[:300]}") from None
+
+        return self._rotate(call)
+
+class GeminiProvider(ModelRotation, Provider):
+    default_key_env = "GEMINI_API_KEY"
+    default_base_url = "https://generativelanguage.googleapis.com/v1beta"
+    rotation_family = "modelos Gemini"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._init_rotation()
+
     def complete(self, system, user, images=None):
         parts: list[dict] = [{"text": user}] + [
             {"inline_data": {"mime_type": "image/png", "data": base64.b64encode(im).decode()}}
@@ -214,29 +262,17 @@ class GeminiProvider(Provider):
         body = {"systemInstruction": {"parts": [{"text": system}]},
                 "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": gen}
-        first = self._next_model_index()
-        failures: list[tuple[str, LLMError]] = []
-        for offset in range(len(self.models)):
-            model = self.models[(first + offset) % len(self.models)]
+
+        def call(model: str) -> str:
+            out = http_post(f"{self.base_url}/models/{model}:generateContent",
+                            {"x-goog-api-key": self.api_key or ""}, body, self.timeout,
+                            attempts=self._rotation_attempts(4))
             try:
-                out = http_post(f"{self.base_url}/models/{model}:generateContent",
-                                {"x-goog-api-key": self.api_key or ""}, body, self.timeout,
-                                attempts=1 if len(self.models) > 1 else 4)
-                try:
-                    answer = "".join(p.get("text", "") for p in out["candidates"][0]["content"]["parts"])
-                except (KeyError, IndexError, TypeError):
-                    raise LLMError(f"resposta inesperada: {str(out)[:300]}") from None
-                self._thread_state.model = model
-                return answer
-            except LLMError as e:
-                if e.status_code not in (None, 408, 409, 404, 429, 500, 502, 503, 504, 529):
-                    raise
-                failures.append((model, e))
-        codes = {error.status_code for _, error in failures}
-        status_code = next(iter(codes)) if len(codes) == 1 else None
-        detail = " | ".join(f"{model}: {error}" for model, error in failures)
-        raise LLMError("todos os modelos Gemini da rotação falharam: " + detail,
-                       status_code=status_code)
+                return "".join(p.get("text", "") for p in out["candidates"][0]["content"]["parts"])
+            except (KeyError, IndexError, TypeError):
+                raise LLMError(f"resposta inesperada: {str(out)[:300]}") from None
+
+        return self._rotate(call)
 
 
 class RotatingPoolProvider(Provider):
