@@ -33,6 +33,14 @@
 - Suíte completa aprovada: 68 testes (`PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v`); `compileall` e `git diff --check` também passaram.
 - Próxima etapa editorial: receber `docs/fuvest-taxonomy-proposal.json` do Agente A, auditar fontes e granularidade e então atualizar a árvore sem misturar essa revisão com o código de integração.
 
+## Claude — aprofundamento da taxonomia
+
+- **Branch:** `feature/classification/hierarchical-taxonomy`
+- **Domínio:** `classification`
+- **Feito:** Matemática ganhou um 4º nível (subconteúdos com `level: "subcontent"`), e a taxonomia passou para `fuvest-2027.v2`. O classificador agora trabalha em duas etapas (`refine_one` em `service.py`). Os IDs de conteúdo de Matemática continuam válidos, como nós que podem ser refinados.
+- **Próximo:** aplicar o mesmo padrão às outras matérias, começando por Física.
+- **Última atualização:** 2026-10-15
+
 ## Decisões cross-agent pendentes
 
 | Decisão | Levantada por | Impacto |

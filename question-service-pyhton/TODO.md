@@ -25,7 +25,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 
 | # | Fase | Status | Feitos/Total |
 |---|---|---|---|
-| 1 | Taxonomia | em andamento | 1/5 |
+| 1 | Taxonomia | em andamento | 2/7 |
 | 2 | Revisão de questões → fonte de verdade | pendente | 0/7 |
 | 3 | Questões mal recortadas | pendente | 0/5 |
 | 4 | Reorganização e otimização (código + IA) | pendente | 0/5 |
@@ -42,7 +42,15 @@ Base: `src/studai/features/classification/content_taxonomy.json`, `taxonomy.py`.
 - [x] Árvore canônica hierárquica integrada ao classificador, revisão, RAG/embeddings, API, frontend e diagnósticos (commit fb01893, 2026-10-15)
 - [ ] Auditar e integrar a proposta editorial `docs/fuvest-taxonomy-proposal.json` (fontes oficiais, IDs estáveis, granularidade)
 - [ ] Mapear os rótulos legados (classificações antigas) para os IDs canônicos, com um relatório do que ficou sem correspondência
-- [ ] Garantir que as folhas sejam específicas o suficiente para o diagnóstico (ex.: `Matemática → Trigonometria → Identidades → Arco duplo`)
+- [~] Garantir que as folhas sejam específicas o suficiente para o diagnóstico: árvore com 4 níveis, matéria → área → conteúdo → subconteúdo (em andamento: Claude, `feature/classification/hierarchical-taxonomy`)
+  - [x] Matemática: 189 subconteúdos (`level: "subcontent"`), Trigonometria sem grupos redundantes, versão `fuvest-2027.v2` (2026-10-15)
+  - [ ] Física
+  - [ ] Química
+  - [ ] Biologia
+  - [ ] Demais matérias (Humanas, Linguagens)
+  - [ ] Revisão editorial humana dos subconteúdos de Matemática
+- [x] Classificação em duas etapas: 1ª etapa escolhe o conteúdo e a 2ª refina entre os subconteúdos; se não houver subconteúdo confiável, a questão fica com `subconteudo_pendente` para revisão (2026-10-15)
+- [ ] Medir a acurácia do classificador em duas etapas com as questões revisadas (`docs/benchmarks/`) e reconstruir o índice de embeddings de tópicos
 - [ ] Manter `tests/test_content_taxonomy.py` cobrindo a estrutura (IDs únicos, caminhos válidos, fontes presentes)
 
 ## Fase 2 — Revisão de questões → fonte de verdade
@@ -107,4 +115,5 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | Data | Agente / Branch | O que mudou | Commit |
 |---|---|---|---|
 | 2026-10-15 | — / `feature/classification/hierarchical-taxonomy` | Taxonomia canônica hierárquica | fb01893 |
-| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Criado este TODO.md | — |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Criado este TODO.md | 19957a1 |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Matemática aprofundada até subconteúdos; classificador em duas etapas | — |

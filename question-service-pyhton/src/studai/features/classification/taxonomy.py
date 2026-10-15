@@ -69,6 +69,10 @@ def validate_content_taxonomy(payload: dict[str, Any]) -> dict[str, dict[str, An
                 "path_ids": [part["id"] for part in path_nodes],
                 "path": [part["name"] for part in path_nodes],
                 "is_leaf": not children,
+                # Conteúdo cujos filhos são todos subconteúdos: a 1ª etapa escolhe o
+                # conteúdo e a 2ª etapa refina entre os filhos.
+                "refinable": bool(children) and all(child.get("level") == "subcontent"
+                                                    and not child.get("children") for child in children),
             }
     return index
 
@@ -93,6 +97,33 @@ DEFAULT_CONTENTS_BY_SUBJECT = {
 }
 
 
+def is_stage_one_option(node: dict[str, Any]) -> bool:
+    """Options listed in the first classification step: refinable contents and plain leaves."""
+    return node["refinable"] or (node["is_leaf"] and node.get("level") != "subcontent")
+
+
+STAGE_ONE_OPTIONS = [node for node in CONTENT_INDEX.values() if is_stage_one_option(node)]
+
+
+def stage_one_id(content_id: str) -> str | None:
+    """Map a leaf or stage-one option to the option the first step must choose."""
+    node = CONTENT_INDEX.get(content_id)
+    if not node:
+        return None
+    if is_stage_one_option(node):
+        return node["id"]
+    parent = CONTENT_INDEX.get(node["path_ids"][-2]) if len(node["path_ids"]) > 1 else None
+    return parent["id"] if parent and parent["refinable"] else None
+
+
+def refinement_options(content_id: str) -> list[dict[str, Any]]:
+    """Subcontent leaves the second step chooses from; empty when no refinement exists."""
+    node = CONTENT_INDEX.get(content_id)
+    if not node or not node["refinable"]:
+        return []
+    return [CONTENT_INDEX[child["id"]] for child in node.get("children") or []]
+
+
 def content_path(content_id: str) -> str | None:
     node = CONTENT_INDEX.get(content_id)
     return " → ".join(node["path"]) if node else None
@@ -114,24 +145,35 @@ def public_content_options() -> dict[str, list[dict[str, str]]]:
             for subject, nodes in DEFAULT_CONTENTS_BY_SUBJECT.items()}
 
 
-def canonical_content_id(value: str, *, subject: str | None = None) -> str | None:
-    """Resolve an ID or an exact leaf name/alias without fuzzy guessing."""
+def canonical_content_id(value: str, *, subject: str | None = None,
+                         allow_refinable: bool = False) -> str | None:
+    """Resolve an ID or an exact leaf name/alias without fuzzy guessing.
+
+    ``allow_refinable`` also accepts contents whose subcontent was not chosen yet.
+    """
+    def accepted(node: dict[str, Any]) -> bool:
+        return ((node["is_leaf"] or (allow_refinable and node["refinable"]))
+                and (subject is None or node["subject"] == subject))
+
     if value in CONTENT_INDEX:
-        node = CONTENT_INDEX[value]
-        return value if node["is_leaf"] and (subject is None or node["subject"] == subject) else None
+        return value if accepted(CONTENT_INDEX[value]) else None
     folded = value.strip().casefold()
     matches = [node["id"] for node in CONTENT_INDEX.values()
-               if node["is_leaf"] and (subject is None or node["subject"] == subject)
+               if accepted(node)
                and (node["name"].casefold() == folded
                     or any(alias.casefold() == folded for alias in node.get("aliases", [])))]
     return matches[0] if len(matches) == 1 else None
 
 
 def aggregate_content_ids(content_ids: list[str]) -> list[str]:
-    """Return each selected leaf and its unique ancestor IDs, ordered by depth."""
+    """Return each selected node and its unique ancestor IDs, ordered by depth.
+
+    Non-leaf contents are accepted so labels made before a content gained
+    subcontents still count toward their area in diagnostics.
+    """
     result = set()
     for content_id in content_ids:
         node = CONTENT_INDEX.get(content_id)
-        if node and node["is_leaf"]:
+        if node:
             result.update(node["path_ids"])
     return sorted(result, key=lambda identity: (len(CONTENT_INDEX.get(identity, {}).get("path_ids", [])), identity))

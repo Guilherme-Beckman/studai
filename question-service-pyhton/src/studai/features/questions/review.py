@@ -57,6 +57,8 @@ def review_reasons(question: dict) -> list[str]:
         reasons.append("erro_classificacao")
     if not isinstance(question.get("classificacao"), dict):
         reasons.append("classificacao_ausente")
+    elif question["classificacao"].get("subconteudo_pendente"):
+        reasons.append("subconteudo_pendente")
     return list(dict.fromkeys(str(reason) for reason in reasons if reason))
 
 
