@@ -1,0 +1,1724 @@
+{
+  "created_at": "2026-10-15T16:45:46.775359+00:00",
+  "dataset": "simulados/cache/reviewed-topic-eval.jsonl",
+  "labeled_questions": 41,
+  "taxonomy_topics": 477,
+  "embedding_model": "qwen3-embedding:0.6b",
+  "embedding_endpoint": "http://localhost:11434",
+  "cache": {
+    "cached": false,
+    "count": 477,
+    "taxonomy_hash": "b940d9c1937b6661189263ff8601931bf088a54cc9670daf4715eef1c2ed3cab",
+    "model": "qwen3-embedding:0.6b",
+    "path": "/home/beckman/projects/studai/backend-studai/question-service-pyhton/simulados/cache/topic-embeddings.json"
+  },
+  "recall_at_k": {
+    "5": {
+      "hits": 23,
+      "total": 41,
+      "recall": 0.5609756097560976
+    },
+    "10": {
+      "hits": 28,
+      "total": 41,
+      "recall": 0.6829268292682927
+    },
+    "15": {
+      "hits": 31,
+      "total": 41,
+      "recall": 0.7560975609756098
+    },
+    "20": {
+      "hits": 31,
+      "total": 41,
+      "recall": 0.7560975609756098
+    }
+  },
+  "items": [
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q16",
+      "subject": "Matemática",
+      "topic": "Razões, proporções e grandezas proporcionais",
+      "gold_rank": 6,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Atrito e plano inclinado",
+          "score": 0.41869088043813096
+        },
+        {
+          "subject": "Educação Física",
+          "topic": "Regras e organização das práticas corporais",
+          "score": 0.34230267922559554
+        },
+        {
+          "subject": "Física",
+          "topic": "Lançamento oblíquo e composição de movimentos",
+          "score": 0.3421228189548181
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "score": 0.3377263736817191
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Planificações e vistas ortogonais",
+          "score": 0.3370999367356454
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q17",
+      "subject": "Matemática",
+      "topic": "Plano cartesiano e distância entre pontos",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "score": 0.5412445463490465
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "score": 0.4175313131954473
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Relações métricas em triângulos e círculos",
+          "score": 0.412957804054062
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "score": 0.4029053121565967
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Sintaxe: coordenação e subordinação",
+          "score": 0.39792240829804015
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q18",
+      "subject": "Física",
+      "topic": "Impulso, momento linear e colisões",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Impulso, momento linear e colisões",
+          "score": 0.4537357614061064
+        },
+        {
+          "subject": "Física",
+          "topic": "Hidrostática e empuxo",
+          "score": 0.37530735664260256
+        },
+        {
+          "subject": "Física",
+          "topic": "Lei de Coulomb",
+          "score": 0.34500474680879595
+        },
+        {
+          "subject": "Física",
+          "topic": "Intensidade de ondas eletromagnéticas",
+          "score": 0.33460770826060476
+        },
+        {
+          "subject": "História",
+          "topic": "Expansão marítima e conquista da América",
+          "score": 0.33068970736908443
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q19",
+      "subject": "Física",
+      "topic": "Efeito fotoelétrico e quantização da energia",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Efeito fotoelétrico e quantização da energia",
+          "score": 0.46905341241201975
+        },
+        {
+          "subject": "Física",
+          "topic": "Intensidade de ondas eletromagnéticas",
+          "score": 0.4158949283108965
+        },
+        {
+          "subject": "Física",
+          "topic": "Espectro eletromagnético",
+          "score": 0.39288073424460557
+        },
+        {
+          "subject": "Física",
+          "topic": "Interferência de ondas",
+          "score": 0.38351121668159777
+        },
+        {
+          "subject": "Física",
+          "topic": "Lançamento oblíquo e composição de movimentos",
+          "score": 0.3796221106700381
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q22",
+      "subject": "Física",
+      "topic": "Refração da luz e lentes",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Refração da luz e lentes",
+          "score": 0.6055523244328018
+        },
+        {
+          "subject": "Física",
+          "topic": "Reflexão da luz e espelhos planos",
+          "score": 0.5947208940083863
+        },
+        {
+          "subject": "Física",
+          "topic": "Espelhos esféricos",
+          "score": 0.4893153540602243
+        },
+        {
+          "subject": "Física",
+          "topic": "Interferência de ondas",
+          "score": 0.4755547048579062
+        },
+        {
+          "subject": "Física",
+          "topic": "Intensidade de ondas eletromagnéticas",
+          "score": 0.46495750613050596
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q33",
+      "subject": "Física",
+      "topic": "Cinemática escalar",
+      "gold_rank": 13,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Impulso, momento linear e colisões",
+          "score": 0.45535932073007857
+        },
+        {
+          "subject": "Física",
+          "topic": "Gravitação e leis de Kepler",
+          "score": 0.38169803586480805
+        },
+        {
+          "subject": "Física",
+          "topic": "Atrito e plano inclinado",
+          "score": 0.3811029163232719
+        },
+        {
+          "subject": "Física",
+          "topic": "Big Bang e relatividade",
+          "score": 0.3803636408087931
+        },
+        {
+          "subject": "Física",
+          "topic": "Método científico e fake news",
+          "score": 0.3797739850080057
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q37",
+      "subject": "Literatura",
+      "topic": "Conteúdo de leitura obrigatória",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: charge e cartum",
+          "score": 0.3201681024209496
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Retextualização e reescrita",
+          "score": 0.3187961084955321
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Impessoalização e voz passiva",
+          "score": 0.31859238373775345
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Norma culta e mudança da língua",
+          "score": 0.31257470012406346
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: artigo de opinião",
+          "score": 0.30255186220668817
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q38",
+      "subject": "Língua Portuguesa",
+      "topic": "Sentido denotativo e conotativo",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "score": 0.47561436082069325
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Metáfora e personificação",
+          "score": 0.4240259885688921
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Polissemia e ambiguidade",
+          "score": 0.4206655990913024
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: charge e cartum",
+          "score": 0.4192868021907495
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Intertextualidade, paródia e interdiscursividade",
+          "score": 0.4040764703178754
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q41",
+      "subject": "Inglês",
+      "topic": "Interpretação de texto em inglês",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Obsolescência programada e descarte",
+          "score": 0.3487465778520522
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: canção",
+          "score": 0.33263592609055137
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Modernismo: poesia de 30",
+          "score": 0.3238560596565552
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "score": 0.3231888624381052
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Romantismo: poesia",
+          "score": 0.3221717632972357
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q42",
+      "subject": "Língua Portuguesa",
+      "topic": "Interpretação de texto: canção",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Migrações, refugiados e terrorismo",
+          "score": 0.3592177123362664
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "score": 0.3436772953345106
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Racionalização e burocracia",
+          "score": 0.3328671001637702
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: crônica",
+          "score": 0.33251757841900836
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "score": 0.3323726784354958
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q43",
+      "subject": "Literatura",
+      "topic": "Modernismo: poesia de 30",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Literatura",
+          "topic": "Modernismo: poesia de 30",
+          "score": 0.5322031390747626
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Modernismo: prosa de 30",
+          "score": 0.5101485498055162
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Poesia de Mário de Andrade",
+          "score": 0.4987738333300743
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Modernismo: primeira geração",
+          "score": 0.48314389559407694
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Drummond e Caetano Veloso",
+          "score": 0.467915174258627
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q52",
+      "subject": "Matemática",
+      "topic": "Ciclo trigonométrico e funções trigonométricas",
+      "gold_rank": 6,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Ondas harmônicas e equação fundamental",
+          "score": 0.5098840378272317
+        },
+        {
+          "subject": "Física",
+          "topic": "Interferência de ondas",
+          "score": 0.45619013927356045
+        },
+        {
+          "subject": "Física",
+          "topic": "Intensidade de ondas eletromagnéticas",
+          "score": 0.45595151727263394
+        },
+        {
+          "subject": "Física",
+          "topic": "Ondas sonoras e nível de intensidade",
+          "score": 0.4536610083463617
+        },
+        {
+          "subject": "Física",
+          "topic": "Ressonância em tubos sonoros",
+          "score": 0.44442407535604084
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q59",
+      "subject": "Física",
+      "topic": "Calorimetria e mudanças de fase",
+      "gold_rank": 2,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Termometria e dilatação térmica",
+          "score": 0.5831870049577896
+        },
+        {
+          "subject": "Física",
+          "topic": "Calorimetria e mudanças de fase",
+          "score": 0.47081279519922864
+        },
+        {
+          "subject": "Física",
+          "topic": "Efeito estufa e aquecimento global",
+          "score": 0.41784929058024084
+        },
+        {
+          "subject": "Física",
+          "topic": "Transmissão de calor",
+          "score": 0.40772114523442227
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "score": 0.40322537938140646
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q60",
+      "subject": "Química",
+      "topic": "Proteção catódica e corrosão",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Química",
+          "topic": "Proteção catódica e corrosão",
+          "score": 0.41485176775641647
+        },
+        {
+          "subject": "Química",
+          "topic": "Oxigênio dissolvido e vida aquática",
+          "score": 0.4021173247536422
+        },
+        {
+          "subject": "Física",
+          "topic": "Calorimetria e mudanças de fase",
+          "score": 0.3920472028369593
+        },
+        {
+          "subject": "Química",
+          "topic": "Densidade e flutuação",
+          "score": 0.3796854316781816
+        },
+        {
+          "subject": "Filosofia",
+          "topic": "Civilização e barbárie",
+          "score": 0.37597057014684
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q69",
+      "subject": "Matemática",
+      "topic": "Funções modulares",
+      "gold_rank": 13,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "score": 0.49386099341662437
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "score": 0.45717296776336597
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções quadráticas",
+          "score": 0.4569179022417601
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Composição e ponto fixo de funções",
+          "score": 0.42983209003731526
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções definidas por partes",
+          "score": 0.4271379596114946
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q70",
+      "subject": "Matemática",
+      "topic": "Progressões aritméticas",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Progressões aritméticas",
+          "score": 0.6031062988571212
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Progressões geométricas",
+          "score": 0.550362068491083
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Razões, proporções e grandezas proporcionais",
+          "score": 0.4698038895619937
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Arco metade",
+          "score": 0.43196718509193577
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções racionais",
+          "score": 0.4296769109729455
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q75",
+      "subject": "Matemática",
+      "topic": "Cones, troncos e esferas",
+      "gold_rank": 2,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Volume de pirâmides",
+          "score": 0.5899752442767653
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Cones, troncos e esferas",
+          "score": 0.5348468425007182
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Relações métricas em triângulos e círculos",
+          "score": 0.5294407554829159
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Prismas e cilindros",
+          "score": 0.5186576191799305
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Polígonos e circunferência",
+          "score": 0.4751229255675642
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q76",
+      "subject": "Matemática",
+      "topic": "Prismas e cilindros",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Prismas e cilindros",
+          "score": 0.5257896680699727
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Volume de pirâmides",
+          "score": 0.4871122019573166
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Cones, troncos e esferas",
+          "score": 0.4702684355063042
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Relações métricas em triângulos e círculos",
+          "score": 0.45158994864991964
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Congruência e semelhança de triângulos",
+          "score": 0.4154820029146209
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q77",
+      "subject": "Matemática",
+      "topic": "Circunferência no plano cartesiano",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "score": 0.56235169483686
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "score": 0.5454669204792361
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Relações métricas em triângulos e círculos",
+          "score": 0.5041609385331665
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Planificações e vistas ortogonais",
+          "score": 0.4710217739062062
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Identidades e equações trigonométricas",
+          "score": 0.46994441542934234
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q1",
+      "subject": "Língua Portuguesa",
+      "topic": "Paráfrase e sinonímia",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Fake news e leitura crítica de fontes",
+          "score": 0.41372005757203856
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "score": 0.40539853809737925
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: publicidade",
+          "score": 0.3832355929195463
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: artigo de opinião",
+          "score": 0.36698826126141343
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Drummond e Caetano Veloso",
+          "score": 0.3634564957076621
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q2",
+      "subject": "Língua Portuguesa",
+      "topic": "Interpretação de texto: publicidade",
+      "gold_rank": 3,
+      "top_candidates": [
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: tirinha",
+          "score": 0.3637021959079008
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: artigo de opinião",
+          "score": 0.35869203893250934
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: publicidade",
+          "score": 0.3554386134695
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "score": 0.35254721798924255
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: charge e cartum",
+          "score": 0.3522775152094598
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q3",
+      "subject": "Matemática",
+      "topic": "Análise combinatória",
+      "gold_rank": 3,
+      "top_candidates": [
+        {
+          "subject": "Geografia",
+          "topic": "Transição demográfica e envelhecimento",
+          "score": 0.3374441111859366
+        },
+        {
+          "subject": "História",
+          "topic": "Diretas Já e eleição de 1985",
+          "score": 0.33001361629180237
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Análise combinatória",
+          "score": 0.31418896241645555
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Quartis, decis e percentis",
+          "score": 0.30928383188521463
+        },
+        {
+          "subject": "Física",
+          "topic": "Efeito fotoelétrico e quantização da energia",
+          "score": 0.30671000076144184
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q4",
+      "subject": "Matemática",
+      "topic": "Logaritmos e funções logarítmicas",
+      "gold_rank": 9,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Probabilidade condicional e independência",
+          "score": 0.4238526302062656
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Probabilidade",
+          "score": 0.4101523281036963
+        },
+        {
+          "subject": "Química",
+          "topic": "Entalpia por energia de ligação",
+          "score": 0.39947187078577
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Inequações logarítmicas",
+          "score": 0.3897103497669863
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Análise combinatória",
+          "score": 0.3860574949209791
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q5",
+      "subject": "Química",
+      "topic": "Ligações iônica e metálica",
+      "gold_rank": 2,
+      "top_candidates": [
+        {
+          "subject": "Química",
+          "topic": "Estruturas de Lewis e ligação covalente",
+          "score": 0.5408533664656014
+        },
+        {
+          "subject": "Química",
+          "topic": "Ligações iônica e metálica",
+          "score": 0.5156716307429695
+        },
+        {
+          "subject": "Química",
+          "topic": "Modelos atômicos",
+          "score": 0.45383594598647103
+        },
+        {
+          "subject": "Química",
+          "topic": "Geometria molecular e polaridade",
+          "score": 0.44858003638584176
+        },
+        {
+          "subject": "Química",
+          "topic": "Entalpia por energia de ligação",
+          "score": 0.44681406622931935
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q7",
+      "subject": "Matemática",
+      "topic": "Trigonometria no triângulo",
+      "gold_rank": 4,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Identidades e equações trigonométricas",
+          "score": 0.5534137188894548
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Ciclo trigonométrico e funções trigonométricas",
+          "score": 0.49204374972718323
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções trigonométricas inversas",
+          "score": 0.4612675080519693
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Trigonometria no triângulo",
+          "score": 0.42278105921779663
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Inequações logarítmicas",
+          "score": 0.39671599842397776
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q11",
+      "subject": "Literatura",
+      "topic": "Conteúdo de leitura obrigatória",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Escravidão e questão racial no Brasil",
+          "score": 0.47235446672493364
+        },
+        {
+          "subject": "História",
+          "topic": "Imigração e industrialização no Brasil",
+          "score": 0.44997691161624126
+        },
+        {
+          "subject": "História",
+          "topic": "Açúcar e escravidão na América portuguesa",
+          "score": 0.41548777339090415
+        },
+        {
+          "subject": "História",
+          "topic": "Apartheid e segregação racial",
+          "score": 0.4107816251679999
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Pensamento social brasileiro",
+          "score": 0.40398914934444213
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q12",
+      "subject": "Literatura",
+      "topic": "Conteúdo de leitura obrigatória",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Escravidão e questão racial no Brasil",
+          "score": 0.41226433771600124
+        },
+        {
+          "subject": "História",
+          "topic": "Imigração e industrialização no Brasil",
+          "score": 0.3980703878386206
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Pensamento social brasileiro",
+          "score": 0.37025930247704436
+        },
+        {
+          "subject": "História",
+          "topic": "Ditadura militar no Brasil",
+          "score": 0.37016283522728055
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Guimarães Rosa: Campo Geral",
+          "score": 0.3568525746634137
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q18",
+      "subject": "Matemática",
+      "topic": "Logaritmos e funções logarítmicas",
+      "gold_rank": 2,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Inequações logarítmicas",
+          "score": 0.4152891497237623
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Logaritmos e funções logarítmicas",
+          "score": 0.4061074366955095
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções exponenciais",
+          "score": 0.3811959555426785
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Distribuição e crescimento populacional",
+          "score": 0.36011424276513954
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Notação científica e algarismos significativos",
+          "score": 0.3450910783985194
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q32",
+      "subject": "Química",
+      "topic": "Equilíbrio químico e deslocamento",
+      "gold_rank": 2,
+      "top_candidates": [
+        {
+          "subject": "Química",
+          "topic": "Equilíbrio ácido-base",
+          "score": 0.46539763964902
+        },
+        {
+          "subject": "Química",
+          "topic": "Equilíbrio químico e deslocamento",
+          "score": 0.45440016914315334
+        },
+        {
+          "subject": "Química",
+          "topic": "Ácidos, bases, sais e pH",
+          "score": 0.452487167301145
+        },
+        {
+          "subject": "Química",
+          "topic": "Proteção catódica e corrosão",
+          "score": 0.44942457620030163
+        },
+        {
+          "subject": "Química",
+          "topic": "Equilíbrio de solubilidade",
+          "score": 0.4396698486267025
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q36",
+      "subject": "Matemática",
+      "topic": "Trigonometria no triângulo",
+      "gold_rank": 8,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "score": 0.40760425322212984
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Identidades e equações trigonométricas",
+          "score": 0.39768876704192735
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "score": 0.3934077703261271
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Congruência e semelhança de triângulos",
+          "score": 0.3887239246628374
+        },
+        {
+          "subject": "Física",
+          "topic": "Atrito e plano inclinado",
+          "score": 0.3873607974359849
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q37",
+      "subject": "Matemática",
+      "topic": "Circunferência no plano cartesiano",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "score": 0.5431343913816401
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Relações métricas em triângulos e círculos",
+          "score": 0.506840169103177
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "score": 0.5056919601097583
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Polígonos e circunferência",
+          "score": 0.4988303478841429
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "score": 0.4468091331421174
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q38",
+      "subject": "Geografia",
+      "topic": "Urbanização e metrópoles",
+      "gold_rank": 5,
+      "top_candidates": [
+        {
+          "subject": "Geografia",
+          "topic": "Regionalização do Brasil",
+          "score": 0.484799791612692
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Urbanização e problemas urbanos",
+          "score": 0.4640773684431399
+        },
+        {
+          "subject": "História",
+          "topic": "Imigração e industrialização no Brasil",
+          "score": 0.44792610717299025
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Segregação socioespacial e periferias",
+          "score": 0.44714924307071907
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Urbanização e metrópoles",
+          "score": 0.4470708962832173
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q39",
+      "subject": "Língua Portuguesa",
+      "topic": "Interpretação de texto: crônica",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Direito à cidade e gentrificação",
+          "score": 0.3665099843171339
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Urbanização e problemas urbanos",
+          "score": 0.34852068762154476
+        },
+        {
+          "subject": "Educação Física",
+          "topic": "Políticas públicas de acesso às práticas corporais",
+          "score": 0.3429848196829098
+        },
+        {
+          "subject": "História",
+          "topic": "Reforma urbana do Rio de Janeiro",
+          "score": 0.33919647014689713
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Trabalho urbano e rural contemporâneo",
+          "score": 0.3379975203660603
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q50",
+      "subject": "História",
+      "topic": "Oriente Médio contemporâneo",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Mobilidade urbana",
+          "score": 0.271361736247255
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Persuasão e argumentação",
+          "score": 0.27074953865964546
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Migrações, refugiados e terrorismo",
+          "score": 0.27017393013703417
+        },
+        {
+          "subject": "Educação Física",
+          "topic": "História das práticas corporais",
+          "score": 0.26582374689164456
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Norma culta e mudança da língua",
+          "score": 0.26476453907438247
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q51",
+      "subject": "História",
+      "topic": "Oriente Médio contemporâneo",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Migrações, refugiados e terrorismo",
+          "score": 0.40127536445756096
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Conflitos territoriais na América Latina",
+          "score": 0.29005187307041463
+        },
+        {
+          "subject": "História",
+          "topic": "Migrações e xenofobia",
+          "score": 0.2869647455692859
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Migrações e refugiados",
+          "score": 0.2856689974811143
+        },
+        {
+          "subject": "História",
+          "topic": "Descolonização da África e da Ásia",
+          "score": 0.26575628839207244
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q52",
+      "subject": "Geografia",
+      "topic": "Geopolítica e potências mundiais",
+      "gold_rank": 4,
+      "top_candidates": [
+        {
+          "subject": "Geografia",
+          "topic": "Ocupação da Amazônia",
+          "score": 0.2622127516689284
+        },
+        {
+          "subject": "Biologia",
+          "topic": "Sistema ABO e Rh",
+          "score": 0.2580069352687644
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Extrativismo e cadeias produtivas",
+          "score": 0.256635674211493
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Geopolítica e potências mundiais",
+          "score": 0.2549062420659458
+        },
+        {
+          "subject": "História",
+          "topic": "Absolutismo e mercantilismo",
+          "score": 0.25305607609118846
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q55",
+      "subject": "Matemática",
+      "topic": "Divisibilidade e números primos",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Divisibilidade e números primos",
+          "score": 0.5623418109821822
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Progressões aritméticas",
+          "score": 0.44805363613866167
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Progressões geométricas",
+          "score": 0.44002686157675314
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Polinômios e divisão euclidiana",
+          "score": 0.42373562547107413
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Identidades e equações trigonométricas",
+          "score": 0.38432864789726456
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q60",
+      "subject": "Física",
+      "topic": "Gravitação e leis de Kepler",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Gravitação e leis de Kepler",
+          "score": 0.399965898981777
+        },
+        {
+          "subject": "Física",
+          "topic": "Big Bang e relatividade",
+          "score": 0.3452706087633842
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Escravidão e questão racial no Brasil",
+          "score": 0.3443658203401222
+        },
+        {
+          "subject": "Química",
+          "topic": "Densidade e flutuação",
+          "score": 0.33757960861297764
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Racismo e etnocentrismo",
+          "score": 0.33605830394980685
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q61",
+      "subject": "Física",
+      "topic": "Efeito fotoelétrico e quantização da energia",
+      "gold_rank": 1,
+      "top_candidates": [
+        {
+          "subject": "Física",
+          "topic": "Efeito fotoelétrico e quantização da energia",
+          "score": 0.6523150921931222
+        },
+        {
+          "subject": "Física",
+          "topic": "Intensidade de ondas eletromagnéticas",
+          "score": 0.48056407942138346
+        },
+        {
+          "subject": "Física",
+          "topic": "Geração e transmissão de energia elétrica",
+          "score": 0.45668359537522035
+        },
+        {
+          "subject": "Física",
+          "topic": "Potência elétrica e consumo de energia",
+          "score": 0.4533357355754486
+        },
+        {
+          "subject": "Física",
+          "topic": "Espectro eletromagnético",
+          "score": 0.42586841347908805
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q74",
+      "subject": "Matemática",
+      "topic": "Funções quadráticas",
+      "gold_rank": 7,
+      "top_candidates": [
+        {
+          "subject": "Matemática",
+          "topic": "Composição e ponto fixo de funções",
+          "score": 0.4708251903134404
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções trigonométricas inversas",
+          "score": 0.47038019589411034
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções afins",
+          "score": 0.4600824167735709
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Logaritmos e funções logarítmicas",
+          "score": 0.4567579357692228
+        },
+        {
+          "subject": "Matemática",
+          "topic": "Funções definidas por partes",
+          "score": 0.4564982652831662
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q87",
+      "subject": "Língua Portuguesa",
+      "topic": "Interpretação de texto: charge e cartum",
+      "gold_rank": 12,
+      "top_candidates": [
+        {
+          "subject": "Biologia",
+          "topic": "Hormônios vegetais e tropismos",
+          "score": 0.3594579337635505
+        },
+        {
+          "subject": "Biologia",
+          "topic": "Adaptações das plantas ao ambiente terrestre",
+          "score": 0.3555457478558254
+        },
+        {
+          "subject": "Biologia",
+          "topic": "Ciclos reprodutivos de plantas",
+          "score": 0.34926067009335915
+        },
+        {
+          "subject": "Biologia",
+          "topic": "Movimentos de nastia",
+          "score": 0.29595428535001767
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "score": 0.2881236786034954
+        }
+      ]
+    }
+  ],
+  "misses_at_max_k": [
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q37",
+      "subject": "Literatura",
+      "topic": "Conteúdo de leitura obrigatória",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: charge e cartum",
+          "score": 0.3201681024209496
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Retextualização e reescrita",
+          "score": 0.3187961084955321
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Impessoalização e voz passiva",
+          "score": 0.31859238373775345
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Norma culta e mudança da língua",
+          "score": 0.31257470012406346
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: artigo de opinião",
+          "score": 0.30255186220668817
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q38",
+      "subject": "Língua Portuguesa",
+      "topic": "Sentido denotativo e conotativo",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "score": 0.47561436082069325
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Metáfora e personificação",
+          "score": 0.4240259885688921
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Polissemia e ambiguidade",
+          "score": 0.4206655990913024
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: charge e cartum",
+          "score": 0.4192868021907495
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Intertextualidade, paródia e interdiscursividade",
+          "score": 0.4040764703178754
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q41",
+      "subject": "Inglês",
+      "topic": "Interpretação de texto em inglês",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Obsolescência programada e descarte",
+          "score": 0.3487465778520522
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: canção",
+          "score": 0.33263592609055137
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Modernismo: poesia de 30",
+          "score": 0.3238560596565552
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "score": 0.3231888624381052
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Romantismo: poesia",
+          "score": 0.3221717632972357
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q42",
+      "subject": "Língua Portuguesa",
+      "topic": "Interpretação de texto: canção",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Migrações, refugiados e terrorismo",
+          "score": 0.3592177123362664
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "score": 0.3436772953345106
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Racionalização e burocracia",
+          "score": 0.3328671001637702
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: crônica",
+          "score": 0.33251757841900836
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "score": 0.3323726784354958
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q1",
+      "subject": "Língua Portuguesa",
+      "topic": "Paráfrase e sinonímia",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Fake news e leitura crítica de fontes",
+          "score": 0.41372005757203856
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "score": 0.40539853809737925
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: publicidade",
+          "score": 0.3832355929195463
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: artigo de opinião",
+          "score": 0.36698826126141343
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Drummond e Caetano Veloso",
+          "score": 0.3634564957076621
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q11",
+      "subject": "Literatura",
+      "topic": "Conteúdo de leitura obrigatória",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Escravidão e questão racial no Brasil",
+          "score": 0.47235446672493364
+        },
+        {
+          "subject": "História",
+          "topic": "Imigração e industrialização no Brasil",
+          "score": 0.44997691161624126
+        },
+        {
+          "subject": "História",
+          "topic": "Açúcar e escravidão na América portuguesa",
+          "score": 0.41548777339090415
+        },
+        {
+          "subject": "História",
+          "topic": "Apartheid e segregação racial",
+          "score": 0.4107816251679999
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Pensamento social brasileiro",
+          "score": 0.40398914934444213
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q12",
+      "subject": "Literatura",
+      "topic": "Conteúdo de leitura obrigatória",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Escravidão e questão racial no Brasil",
+          "score": 0.41226433771600124
+        },
+        {
+          "subject": "História",
+          "topic": "Imigração e industrialização no Brasil",
+          "score": 0.3980703878386206
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Pensamento social brasileiro",
+          "score": 0.37025930247704436
+        },
+        {
+          "subject": "História",
+          "topic": "Ditadura militar no Brasil",
+          "score": 0.37016283522728055
+        },
+        {
+          "subject": "Literatura",
+          "topic": "Guimarães Rosa: Campo Geral",
+          "score": 0.3568525746634137
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q39",
+      "subject": "Língua Portuguesa",
+      "topic": "Interpretação de texto: crônica",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Direito à cidade e gentrificação",
+          "score": 0.3665099843171339
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Urbanização e problemas urbanos",
+          "score": 0.34852068762154476
+        },
+        {
+          "subject": "Educação Física",
+          "topic": "Políticas públicas de acesso às práticas corporais",
+          "score": 0.3429848196829098
+        },
+        {
+          "subject": "História",
+          "topic": "Reforma urbana do Rio de Janeiro",
+          "score": 0.33919647014689713
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Trabalho urbano e rural contemporâneo",
+          "score": 0.3379975203660603
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q50",
+      "subject": "História",
+      "topic": "Oriente Médio contemporâneo",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Mobilidade urbana",
+          "score": 0.271361736247255
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Persuasão e argumentação",
+          "score": 0.27074953865964546
+        },
+        {
+          "subject": "Sociologia",
+          "topic": "Migrações, refugiados e terrorismo",
+          "score": 0.27017393013703417
+        },
+        {
+          "subject": "Educação Física",
+          "topic": "História das práticas corporais",
+          "score": 0.26582374689164456
+        },
+        {
+          "subject": "Língua Portuguesa",
+          "topic": "Norma culta e mudança da língua",
+          "score": 0.26476453907438247
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q51",
+      "subject": "História",
+      "topic": "Oriente Médio contemporâneo",
+      "gold_rank": null,
+      "top_candidates": [
+        {
+          "subject": "Sociologia",
+          "topic": "Migrações, refugiados e terrorismo",
+          "score": 0.40127536445756096
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Conflitos territoriais na América Latina",
+          "score": 0.29005187307041463
+        },
+        {
+          "subject": "História",
+          "topic": "Migrações e xenofobia",
+          "score": 0.2869647455692859
+        },
+        {
+          "subject": "Geografia",
+          "topic": "Migrações e refugiados",
+          "score": 0.2856689974811143
+        },
+        {
+          "subject": "História",
+          "topic": "Descolonização da África e da Ásia",
+          "score": 0.26575628839207244
+        }
+      ]
+    }
+  ]
+}
