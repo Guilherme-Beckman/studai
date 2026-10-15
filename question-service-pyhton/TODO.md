@@ -97,9 +97,8 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
   - [x] `benchmark_topic_retrieval --per-subject`: recall dos conteúdos por embeddings dentro da matéria
 - [x] Medir o roteamento hierárquico contra o modo plano (`--limit 10`, qwen3.5:4b): 2,8× mais rápido (76 s contra 212 s por questão), conteúdo da 1ª etapa 50% contra 20%; ver `docs/benchmarks/two-stage-routing.md` (2026-10-15)
 - [x] Ordenar o processamento local por etapa (`STUDAI_STAGE_ORDER=1`, `classify_stage_major`): implementado e medido, sem ganho (483 s contra 496 s em 10 questões), porque o Ollama 0.40 já reaproveita o prompt de sistema entre etapas alternadas. A flag fica desligada; ver `docs/benchmarks/two-stage-routing.md` (commit cf44202, 2026-10-15)
-- [ ] Pôr o enunciado antes das instruções de cada etapa, para que as etapas 2 e 3 reaproveitem do cache os cerca de 10 s de leitura da questão (exige benchmark de acurácia)
-  - [x] Implementado atrás da flag `STUDAI_QUESTION_FIRST=1` (`stage_messages`): system genérico único, questão + exemplos no início da mensagem e o bloco `<etapa>` no fim; `PROMPT_VERSION` vira `v9-question-first` (2026-10-15)
-  - [ ] Medir com e sem a flag (`evaluate_classifier --limit 10`, questões ainda fora do cache) e decidir se vira padrão
+- [x] Pôr o enunciado antes das instruções de cada etapa (`STUDAI_QUESTION_FIRST=1`, `stage_messages`; `PROMPT_VERSION` `v9-question-first`): implementado e medido, 26% **mais lento** (85 s contra 68 s por questão, questões 11 a 20). O qwen3.5 é híbrido, e o llama.cpp só retoma o cache em checkpoints a 4 e a ~1 024 tokens do fim do prompt, nunca no fim da questão. Acurácia igual ou melhor (qwen 8 contra 6 de 10 no conteúdo; Gemini 14 contra 14 de 20). A flag fica desligada; ver `docs/benchmarks/two-stage-routing.md` (2026-10-15)
+- [ ] Testar um modelo local sem camadas recorrentes (o cache de prefixo volta a valer para qualquer prefixo) ou o llama.cpp direto com checkpoint no fim da questão
 - [ ] Melhorar regras e descrições de Inglês × Língua Portuguesa × Literatura (canções e poemas confundem a matéria)
 - [x] Medir recall por matéria: top-15 de 92,7% (qwen3-embedding) e 82,9% (bge-m3), abaixo de 98%, então o pré-filtro **não** foi ativado (2026-10-15)
 - [ ] Testar o backend Vulkan do Ollama na iGPU AMD e medir com `evaluate_classifier --limit 10`
@@ -147,3 +146,4 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Roteamento hierárquico, faixas grátis com cota no pool, lotes para nuvem, medições por etapa | 3af7324 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Benchmark hierárquico vs plano e recall de embeddings por matéria | — |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Ordem por etapa no Ollama local (flag `STUDAI_STAGE_ORDER`), medida sem ganho | cf44202 |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Enunciado antes das instruções (flag `STUDAI_QUESTION_FIRST`), medido 26% mais lento no qwen3.5 | f2430e2 |

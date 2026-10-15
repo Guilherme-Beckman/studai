@@ -110,3 +110,44 @@ As predições foram idênticas nos dois modos, questão a questão.
 - **O subconteúdo saiu quase de graça nas duas rodadas,** porque estas 10 questões já tinham rodado antes e o prompt completo estava no cache. Com questões novas, o subconteúdo volta a custar cerca de 13 s de prefill (ver a tabela de custo por etapa acima). A comparação entre os modos continua justa, mas os tempos absolutos ficaram abaixo dos 76 s da primeira medição por causa disso.
 
 Resultados completos: `bench-stage-off-10.json` e `bench-stage-on-10.json` em `simulados/cache/` (arquivos locais não versionados).
+
+
+## Enunciado antes das instruções (`STUDAI_QUESTION_FIRST=1`)
+
+Medição: 2026-10-15, 18:43–19:24 (horário local). `qwen3.5:4b` em CPU, 1 worker, Ollama 0.40.0 com runner llama.cpp, `--timeout 300`. Para não pegar prompts já em cache, as rodadas usaram as questões 11 a 20 de `reviewed-topic-eval.jsonl`, e não as 10 primeiras. A API local (`api.py`) estava no ar, mas ociosa.
+
+Com a flag, as 3 etapas mandam o mesmo prompt de sistema curto. A mensagem começa pela questão (com os exemplos do RAG) e termina num bloco `<etapa>` com as instruções e opções da etapa. A ideia era que as etapas 2 e 3 reaproveitassem do cache a leitura da questão. Também medimos uma variante em que o Ollama recebia a questão e o bloco `<etapa>` em duas mensagens do usuário separadas.
+
+| Métrica | Sem a flag | Com a flag | Com a flag, 2 mensagens |
+|---|---:|---:|---:|
+| Tempo de parede (10 questões), s | 677.2 | 851.4 | 837.5 |
+| Segundos por questão (média) | 67.7 | 85.1 | 83.7 |
+| Prefill por questão, s | 52.4 | 72.2 | 71.1 |
+| Geração por questão, s | 14.2 | 12.5 | 12.1 |
+| Acurácia de matéria / conteúdo (1ª etapa) | 100% / 60% | 100% / 80% | 100% / 80% |
+| Subconteúdo escolhido / pendente | 10 / 0 | 10 / 0 | 10 / 0 |
+| Falhas de JSON/classificação | 0 | 0 | 0 |
+
+Prefill por chamada (s) e tokens reaproveitados do cache (prompt total menos os tokens avaliados no `journalctl -u ollama`; mediana por chamada):
+
+| Etapa | Sem a flag | Com a flag | Com a flag, 2 mensagens |
+|---|---:|---:|---:|
+| materia | 15.2 s, 0 do cache | 18.4 s, 0 | 17.6 s, 15 |
+| conteudo | 26.4 s, 1 158 do cache | 40.8 s, 15 | 40.5 s, 15 |
+| subconteudo | 10.8 s, 0 do cache | 13.0 s, 15 | 13.1 s, 15 |
+
+As duas variantes com a flag deram as mesmas predições nas 10 questões. Contra a rodada sem a flag, a matéria coincidiu em 10 e o conteúdo da 1ª etapa em 6.
+
+### Acurácia no Gemini
+
+Para checar só a acurácia com um modelo maior, rodamos as 41 questões com `gemini-3.5-flash-lite` (1 worker), sem e com a flag. A cota gratuita devolveu HTTP 429 em 9 questões sem a flag e em 12 com ela. Nas 20 questões respondidas nas duas rodadas, a matéria acertou 18 contra 19 e o conteúdo da 1ª etapa 14 contra 14. O conteúdo da 1ª etapa coincidiu em 17 das 20. O Gemini não usa o cache do Ollama, então essa rodada não mede tempo.
+
+### Conclusões
+
+- **Sem ganho de tempo: a flag fica desligada.** Com a questão na frente, cada questão ficou 26% mais lenta (85 s contra 68 s). A questão não veio do cache em nenhuma etapa, e o prompt de sistema da etapa de conteúdo, que antes vinha do cache, deixou de vir.
+- **Por quê: o qwen3.5 é um modelo híbrido (camadas recorrentes).** O llama.cpp não consegue cortar o cache de um modelo assim num ponto qualquer. Ele só retoma de *checkpoints*, e o log mostra onde eles ficam: a 4 tokens do fim do prompt e a mais 1 020 tokens antes disso (ex.: prompt de 1 524 tokens → checkpoints em 1 520 e 500). A posição depende do tamanho do prompt, não do fim da questão nem da divisão em mensagens, por isso a variante com 2 mensagens também não ajudou. Um prompt só é reaproveitado se algum checkpoint de um prompt anterior cair dentro do prefixo comum.
+- **Isso explica as medições anteriores.** O "prompt de sistema do conteúdo vem do cache" acontecia porque o checkpoint a 1 024 tokens do fim de uma chamada de conteúdo caía dentro do prompt de sistema longo da matéria. O subconteúdo "quase de graça" vinha do checkpoint a 4 tokens do fim de um prompt idêntico já rodado. Com o system genérico curto (cerca de 130 tokens), nenhum checkpoint cai no prefixo comum.
+- **A acurácia não piorou.** O conteúdo da 1ª etapa acertou 8 contra 6 no qwen e 14 contra 14 no Gemini, mas a amostra é pequena demais para concluir que melhorou.
+- **Para reaproveitar a questão,** seria preciso um checkpoint logo no fim da questão. Pela API de chat do Ollama não dá para pedir isso. Os caminhos possíveis são um modelo sem camadas recorrentes (o cache volta a valer para qualquer prefixo) ou o llama.cpp direto, controlando onde ficam os checkpoints.
+
+Resultados completos: `bench-question-first-{off,on,split}-q11-20.json` e `bench-question-first-gemini-{off,on}.json` em `simulados/cache/` (arquivos locais não versionados). A variante com 2 mensagens foi medida e não ficou no código.
