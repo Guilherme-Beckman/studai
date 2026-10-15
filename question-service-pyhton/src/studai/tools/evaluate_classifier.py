@@ -14,7 +14,7 @@ from studai.features.classification import service as clf
 from studai.features.classification.cache import ClassificationCache
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, LocalExampleRetriever
 from studai.features.classification.taxonomy import (
-    CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, canonical_content_id, stage_one_id,
+    CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, resolve_stage_one, stage_one_id,
 )
 from studai.integrations.llm import make_provider
 from studai.settings import DEFAULT_CLASSIFICATION_CACHE
@@ -42,14 +42,13 @@ def score(rows: list[dict], gold_key: str, pred_key: str) -> dict:
             "per_label": per_label}
 
 
+USAGE_KEYS = ("prompt_tokens", "completion_tokens", "eval_duration_ns",
+              "prompt_eval_duration_ns", "load_duration_ns")
+
+
 def gold_stage_one_id(row: dict) -> str | None:
     """Content the first step should choose; legacy topic names resolve to their content."""
-    if row.get("content_id"):
-        return stage_one_id(str(row["content_id"]))
-    if row.get("topic") and row.get("subject"):
-        identity = canonical_content_id(str(row["topic"]), subject=row["subject"], allow_refinable=True)
-        return stage_one_id(identity) if identity else None
-    return None
+    return resolve_stage_one(row.get("subject"), row.get("content_id"), row.get("topic"))
 
 
 def load_jsonl(path: Path, *, require_labels: bool = True) -> list[dict]:
@@ -110,12 +109,8 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                                               exclude_year=row.get("year"))
             candidate_topics = ({str(item["result"].get("content_id") or item["result"].get("topic")) for item in examples}
                                 if examples else None)
-            system = clf.build_system(clf.DEFAULT_TAXONOMY, clf.DEFAULT_TOPIC_TAXONOMY,
-                                      candidate_topics)
-            result = clf.classify_one(provider,
-                                      system,
-                                      question, None, clf.DEFAULT_TAXONOMY, images,
-                                      clf.DEFAULT_TOPIC_TAXONOMY, examples, candidate_topics)
+            result = clf.classify_question(provider, question, None, clf.DEFAULT_TAXONOMY, images,
+                                           clf.DEFAULT_TOPIC_TAXONOMY, examples, candidate_topics)
             error = None
         except Exception as exc:
             result, error = {}, str(exc)
@@ -125,8 +120,15 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
         request_usages = usage_history[usage_history_start:]
         if request_usages:
             usage = {key: sum(int(request.get(key, 0)) for request in request_usages)
-                     for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns")}
+                     for key in USAGE_KEYS}
             usage["calls"] = len(request_usages)
+            usage["by_stage"] = {}
+            for request in request_usages:
+                stage_row = usage["by_stage"].setdefault(request.get("stage") or "sem_etapa",
+                                                         {"calls": 0, **{key: 0 for key in USAGE_KEYS}})
+                stage_row["calls"] += 1
+                for key in USAGE_KEYS:
+                    stage_row[key] += int(request.get(key, 0))
             usage["by_host"] = {}
             for request in request_usages:
                 host = request.get("host")
@@ -175,7 +177,13 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                 progress({"completed": completed, "total": len(data), "question": row.get("id", index),
                           "seconds": elapsed, "error": error})
     usage_totals = {key: sum(int(item.get("usage", {}).get(key, 0)) for item in outcomes)
-                    for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns", "calls")}
+                    for key in (*USAGE_KEYS, "calls")}
+    stages: dict[str, dict] = {}
+    for item in outcomes:
+        for stage, stage_usage in (item.get("usage", {}).get("by_stage") or {}).items():
+            entry = stages.setdefault(stage, {"calls": 0, **{key: 0 for key in USAGE_KEYS}})
+            for key in ("calls", *USAGE_KEYS):
+                entry[key] += int(stage_usage.get(key, 0))
     hosts = {}
     for item in outcomes:
         per_host = item.get("usage", {}).get("by_host") or {}
@@ -218,11 +226,12 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                              "subcontent_chosen": sum(not item["subcontent_pending"] for item in refined),
                              "subcontent_pending": sum(item["subcontent_pending"] for item in refined)},
               "taxonomy_version": clf.CONTENT_TAXONOMY_VERSION,
+              "routing": clf.CLASSIFICATION_ROUTING, "prompt_version": clf.PROMPT_VERSION,
               "review_rate": review_count / len(outcomes) if outcomes else 0.0,
               "review_count": review_count,
               "prompt_tokens_per_call": (usage_totals["prompt_tokens"] / usage_totals["calls"]
                                           if usage_totals["calls"] else 0),
-              "items": outcomes, "usage": usage_totals, "hosts": hosts}
+              "items": outcomes, "usage": usage_totals, "stages": stages, "hosts": hosts}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     if cache:
@@ -265,7 +274,7 @@ def main() -> None:
                       workers=args.workers, rag=args.rag, embedding_model=args.embedding_model,
                       rag_examples=args.rag_examples, allow_unlabeled=args.allow_unlabeled)
     print(json.dumps({key: result[key] for key in ("count", "subject", "content_stage1", "refinement",
-                                                   "latency_seconds",
+                                                   "latency_seconds", "stages",
                                                    "invalid_json_or_classification", "attempts", "hosts")},
                      ensure_ascii=False, indent=2))
 

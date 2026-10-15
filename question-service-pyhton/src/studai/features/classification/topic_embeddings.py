@@ -19,17 +19,33 @@ DEFAULT_TOPIC_EMBEDDING_CACHE = Path(os.environ.get(
 ))
 
 
-def taxonomy_rows(taxonomy: dict) -> list[dict[str, str]]:
-    """Return searchable leaf content; accept the old flat format for callers in migration."""
+def taxonomy_rows(taxonomy: dict, level: str = "leaf") -> list[dict[str, str]]:
+    """Return searchable content; accept the old flat format for callers in migration.
+
+    ``level="leaf"`` indexes subcontents; ``level="stage1"`` indexes the contents the first
+    classification step chooses from, with their subcontent names folded into the text.
+    """
     if isinstance(taxonomy, dict) and isinstance(taxonomy.get("subjects"), list):
         index = taxonomy.get("index") or {}
         if not index:
             from studai.features.classification.taxonomy import validate_content_taxonomy
             index = validate_content_taxonomy(taxonomy)
-        return [{"content_id": node["id"], "subject": node["subject"], "topic": node["name"],
-                 "path": " → ".join(node["path"]), "description": node.get("description", ""),
-                 "aliases": " | ".join(node.get("aliases", []))}
-                for node in index.values() if node["is_leaf"]]
+        if level == "stage1":
+            nodes = [node for node in index.values()
+                     if node["refinable"] or (node["is_leaf"] and node.get("level") != "subcontent")]
+        elif level == "leaf":
+            nodes = [node for node in index.values() if node["is_leaf"]]
+        else:
+            raise ValueError("level deve ser 'leaf' ou 'stage1'")
+        rows = []
+        for node in nodes:
+            aliases = list(node.get("aliases", []))
+            if level == "stage1":
+                aliases += [child["name"] for child in node.get("children") or []]
+            rows.append({"content_id": node["id"], "subject": node["subject"], "topic": node["name"],
+                         "path": " → ".join(node["path"]), "description": node.get("description", ""),
+                         "aliases": " | ".join(aliases)})
+        return rows
     return [{"subject": subject, "topic": topic}
             for subject, topics in taxonomy.items() for topic in topics]
 
@@ -49,15 +65,16 @@ class TopicEmbeddingIndex:
     """Persist vectors by embedding model and taxonomy hash; rebuild on either change."""
 
     def __init__(self, path: Path = DEFAULT_TOPIC_EMBEDDING_CACHE, *, model: str = DEFAULT_TOPIC_EMBEDDING_MODEL,
-                 base_url: str = "http://localhost:11434", embed=ollama_embed):
+                 base_url: str = "http://localhost:11434", embed=ollama_embed, level: str = "leaf"):
         self.path = Path(path)
+        self.level = level
         self.model = model
         self.base_url = base_url
         self.embed = embed
 
     def build(self, topics_by_subject: dict = DEFAULT_CONTENT_TAXONOMY,
               *, batch_size: int = 64) -> dict:
-        rows = taxonomy_rows(topics_by_subject)
+        rows = taxonomy_rows(topics_by_subject, self.level)
         digest = taxonomy_digest(topics_by_subject)
         cached = self._load(digest, rows)
         cached_vectors = cached.get("vectors", []) if cached else []
@@ -89,8 +106,8 @@ class TopicEmbeddingIndex:
                 "model": self.model, "path": str(self.path)}
 
     def rank(self, vector: list[float], *, limit: int = 10,
-             topics_by_subject: dict = DEFAULT_CONTENT_TAXONOMY) -> list[dict]:
-        rows = taxonomy_rows(topics_by_subject)
+             topics_by_subject: dict = DEFAULT_CONTENT_TAXONOMY, subject: str | None = None) -> list[dict]:
+        rows = taxonomy_rows(topics_by_subject, self.level)
         payload = self._load(taxonomy_digest(topics_by_subject), rows)
         if not payload:
             raise ValueError("Índice de embeddings ausente ou incompatível; execute build() primeiro.")
@@ -99,7 +116,7 @@ class TopicEmbeddingIndex:
             return []
         ranked = []
         for row, candidate in zip(payload["topics"], payload["vectors"]):
-            if len(candidate) != len(vector):
+            if len(candidate) != len(vector) or (subject is not None and row.get("subject") != subject):
                 continue
             candidate_norm = math.sqrt(sum(value * value for value in candidate))
             similarity = sum(a * b for a, b in zip(vector, candidate)) / (query_norm * candidate_norm) if candidate_norm else 0

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import contextvars
 import importlib
 import json
 import os
@@ -22,7 +23,25 @@ OPENAI_COMPAT_PRESETS = {
     "together": ("https://api.together.xyz/v1", "TOGETHER_API_KEY"),
     "mistral": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY"),
     "xai": ("https://api.x.ai/v1", "XAI_API_KEY"),
+    # Roteador do Hugging Face (Inference Providers); o modelo aceita sufixos como ":fastest".
+    "huggingface": ("https://router.huggingface.co/v1", "HF_TOKEN"),
 }
+
+_DAILY_QUOTA_MARKERS = ("per day", "perday", "per_day", "daily", "rpd", "requests per day", "tokens per day")
+
+
+def is_daily_quota_error(error: Exception) -> bool:
+    """429 whose message points to a daily cap (retrying on the same day would only fail again)."""
+    if getattr(error, "status_code", None) != 429:
+        return False
+    text = str(error).casefold()
+    return any(marker in text for marker in _DAILY_QUOTA_MARKERS)
+
+
+def _next_local_midnight(now: float | None = None) -> float:
+    current = time.localtime(now if now is not None else time.time())
+    tomorrow = time.mktime((current.tm_year, current.tm_mon, current.tm_mday + 1, 0, 0, 0, 0, 0, -1))
+    return tomorrow
 
 def load_dotenv(path: Path) -> None:
     """Carrega pares simples KEY=VALUE sem sobrescrever variáveis já exportadas."""
@@ -38,6 +57,11 @@ def load_dotenv(path: Path) -> None:
             value = value[1:-1]
         if key:
             os.environ.setdefault(key, value)
+
+# Etapa da classificação em andamento nesta thread (ex.: "materia", "conteudo"),
+# registrada no uso de tokens para medir o custo de cada etapa.
+REQUEST_STAGE: contextvars.ContextVar[str] = contextvars.ContextVar("studai_request_stage", default="")
+
 
 class LLMError(Exception):
     def __init__(self, message: str, status_code: int | None = None):
@@ -218,15 +242,22 @@ class GeminiProvider(Provider):
 class RotatingPoolProvider(Provider):
     """Distributes each request to one free provider lane and retries on another lane."""
 
-    def __init__(self, lanes: list[tuple], **kwargs):
+    def __init__(self, lanes: list[tuple], *, clock=time.monotonic, wall_clock=time.time, **kwargs):
+        """``lanes`` items are (name, provider[, capacity[, rpm]]); rpm=0 means unlimited."""
         if not lanes:
             raise ValueError("selecione ao menos um modelo local ou Gemini configurado")
         super().__init__(model="pool", **kwargs)
         self.lanes = [(str(lane[0]), lane[1]) for lane in lanes]
         self._lane_capacities = [max(1, int(lane[2])) if len(lane) > 2 else 1 for lane in lanes]
+        self._lane_rpm = [max(0, int(lane[3])) if len(lane) > 3 and lane[3] else 0 for lane in lanes]
         self._condition = threading.Condition()
         self._busy: dict[int, int] = {}
         self._disabled: set[int] = set()
+        # Faixas sem cota diária ficam fora até a meia-noite local (horário de parede).
+        self._quota_until: dict[int, float] = {}
+        self._recent_starts: dict[int, list[float]] = {}
+        self._clock = clock
+        self._wall_clock = wall_clock
         self._next_lane = 0
         self._thread_state = threading.local()
 
@@ -255,21 +286,49 @@ class RotatingPoolProvider(Provider):
         finally:
             self._thread_state.context = previous
 
+    def _out_of_quota(self, index: int) -> bool:
+        until = self._quota_until.get(index)
+        if until is None:
+            return False
+        if self._wall_clock() >= until:
+            self._quota_until.pop(index, None)
+            return False
+        return True
+
+    def _rate_wait(self, index: int, now: float) -> float:
+        """Seconds until the lane may start another request under its RPM limit (0 = now)."""
+        rpm = self._lane_rpm[index]
+        if not rpm:
+            return 0.0
+        starts = [moment for moment in self._recent_starts.get(index, []) if now - moment < 60]
+        self._recent_starts[index] = starts
+        return 0.0 if len(starts) < rpm else 60 - (now - starts[0])
+
     def _acquire_lane(self, excluded: set[int]) -> int | None:
         with self._condition:
             while True:
                 candidates = [i for i in range(len(self.lanes))
-                              if i not in self._disabled and i not in excluded]
+                              if i not in self._disabled and i not in excluded and not self._out_of_quota(i)]
                 if not candidates:
                     return None
-                available = [i for i in candidates
-                             if self._busy.get(i, 0) < self._lane_capacities[i]]
+                now = self._clock()
+                free = [i for i in candidates if self._busy.get(i, 0) < self._lane_capacities[i]]
+                waits = {i: self._rate_wait(i, now) for i in free}
+                available = [i for i in free if waits[i] <= 0]
                 if available:
                     index = next((i for i in available if i >= self._next_lane), available[0])
                     self._next_lane = (index + 1) % len(self.lanes)
                     self._busy[index] = self._busy.get(index, 0) + 1
+                    if self._lane_rpm[index]:
+                        self._recent_starts.setdefault(index, []).append(now)
                     return index
-                self._condition.wait()
+                # Sem faixa livre: espera uma liberar ou o limite de RPM da mais próxima abrir.
+                self._condition.wait(timeout=min(waits.values()) if waits else None)
+
+    @property
+    def quota_exhausted_lanes(self) -> list[str]:
+        with self._condition:
+            return [self.lanes[i][0] for i in range(len(self.lanes)) if self._out_of_quota(i)]
 
     def complete(self, system, user, images=None):
         excluded: set[int] = set()
@@ -295,6 +354,9 @@ class RotatingPoolProvider(Provider):
                 if error.status_code in (401, 403, 404):
                     with self._condition:
                         self._disabled.add(index)
+                elif is_daily_quota_error(error):
+                    with self._condition:
+                        self._quota_until[index] = _next_local_midnight(self._wall_clock())
                 if (error.status_code is not None
                         and error.status_code not in (401, 403, 404, 408, 409, 429)
                         and not 500 <= error.status_code < 600):
@@ -404,6 +466,10 @@ class OllamaProvider(Provider):
             usage = {"prompt_tokens": int(out.get("prompt_eval_count", 0)),
                      "completion_tokens": int(out.get("eval_count", 0)),
                      "eval_duration_ns": int(out.get("eval_duration", 0)),
+                     # Na CPU, ler o prompt (prefill) costuma dominar o tempo da chamada.
+                     "prompt_eval_duration_ns": int(out.get("prompt_eval_duration", 0)),
+                     "load_duration_ns": int(out.get("load_duration", 0)),
+                     "stage": REQUEST_STAGE.get(),
                      "host": server}
             self._thread_state.usage = usage
             history = getattr(self._thread_state, "usage_history", None)

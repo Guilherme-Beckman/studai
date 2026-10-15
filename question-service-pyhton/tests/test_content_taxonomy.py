@@ -104,6 +104,87 @@ class ContentTaxonomyTests(unittest.TestCase):
         from studai.features.questions.review import review_reasons
         self.assertIn("subconteudo_pendente", review_reasons({"classificacao": result}))
 
+    def test_routed_classifier_uses_short_per_subject_prompts(self):
+        parent = "matematica.content.trigonometria-no-triangulo"
+        leaf = "matematica.trigonometria-no-triangulo.lei-dos-senos"
+        provider = ScriptedProvider([
+            {"materia": "Matemática", "materias_secundarias": ["Física"], "confianca": 0.95},
+            {"conteudo_principal_id": parent, "conteudos_relacionados_ids": [], "confianca": 0.8},
+            {"subconteudo_id": leaf, "confianca": 0.7}])
+        question = {"numero": 1, "enunciado": "Num triângulo, sen A / a = ...", "alternativas": {}}
+        result = service.classify_routed(provider, question, None, service.DEFAULT_TAXONOMY, [])
+        self.assertEqual(result["materia"], "Matemática")
+        self.assertEqual(result["materias_secundarias"], ["Física"])
+        self.assertEqual(result["conteudo_principal_id"], leaf)
+        self.assertEqual(result["confianca"], 0.7)
+        self.assertEqual(result["roteamento"], "hierarchical")
+        subject_system, content_system, refine_system = provider.systems
+        self.assertNotIn("[id=", subject_system)
+        self.assertIn(f"[id={parent}]", content_system)
+        self.assertNotIn("[id=fisica.", content_system)
+        self.assertIn("Lei dos senos", refine_system)
+        flat_system = service.build_system(service.DEFAULT_TAXONOMY)
+        self.assertLess(len(subject_system) + len(content_system), len(flat_system) / 4)
+
+    def test_routed_classifier_falls_back_to_secondary_subject(self):
+        content = "fisica.content.movimento-harmonico-simples"
+        provider = ScriptedProvider([
+            {"materia": "Matemática", "materias_secundarias": ["Física"], "confianca": 0.6},
+            {"conteudo_principal_id": "REVISAR", "conteudos_relacionados_ids": [], "confianca": 0.2},
+            {"conteudo_principal_id": content, "conteudos_relacionados_ids": [], "confianca": 0.8},
+            {"subconteudo_id": "fisica.movimento-harmonico-simples.pendulo-simples", "confianca": 0.9}])
+        question = {"numero": 2, "enunciado": "Período de um pêndulo", "alternativas": {}}
+        result = service.classify_routed(provider, question, None, service.DEFAULT_TAXONOMY, [])
+        self.assertEqual(result["materia"], "Física")
+        self.assertEqual(result["materia_reroteada_de"], "Matemática")
+        self.assertEqual(result["conteudo_principal_id"],
+                         "fisica.movimento-harmonico-simples.pendulo-simples")
+        self.assertIn("Física", provider.systems[2])
+
+    def test_routed_classifier_retries_invalid_content_for_subject(self):
+        provider = ScriptedProvider([
+            {"materia": "Química", "materias_secundarias": [], "confianca": 0.9},
+            {"conteudo_principal_id": "matematica.content.probabilidade", "conteudos_relacionados_ids": [],
+             "confianca": 0.9},
+            {"conteudo_principal_id": "REVISAR", "conteudos_relacionados_ids": [], "confianca": 0.1}])
+        question = {"numero": 3, "enunciado": "Reação", "alternativas": {}}
+        result = service.classify_routed(provider, question, None, service.DEFAULT_TAXONOMY, [])
+        self.assertIsNone(result["conteudo_principal_id"])
+        self.assertEqual(result["assunto"], "REVISAR")
+        self.assertEqual(result["tentativas"], 3)
+
+    def test_batch_routing_classifies_many_questions_with_one_request_per_stage_group(self):
+        provider = BatchProvider()
+        entries = [(str(n), service.render_questao({"enunciado": text, "alternativas": {}}, None, False))
+                   for n, text in ((1, "triângulo lei dos senos"), (2, "triângulo área"), (3, "pêndulo"))]
+        results = service.classify_batch_routed(provider, entries, service.DEFAULT_TAXONOMY)
+        self.assertEqual(set(results), {"1", "2", "3"})
+        self.assertEqual(results["1"]["conteudo_principal_id"],
+                         "matematica.trigonometria-no-triangulo.lei-dos-senos")
+        self.assertEqual(results["3"]["materia"], "Física")
+        self.assertEqual(results["3"]["roteamento"], "hierarchical-batch")
+        # 1 matéria + 2 conteúdo (Matemática, Física) + 3 subconteúdo (um por conteúdo pai),
+        # contra 9 requests questão a questão.
+        self.assertEqual(len(provider.calls), 6)
+        self.assertTrue(all("MODO LOTE" in system for system, _ in provider.calls))
+
+    def test_batch_items_missing_from_answer_fall_back_to_single_classification(self):
+        import tempfile
+        from pathlib import Path
+        provider = BatchProvider(drop_ids={"2"})
+        with tempfile.TemporaryDirectory() as temp:
+            exam = Path(temp) / "questoes.json"
+            exam.write_text(json.dumps({"prova": "t", "questoes": [
+                {"numero": 1, "enunciado": "triângulo lei dos senos", "alternativas": {}},
+                {"numero": 2, "enunciado": "triângulo área", "alternativas": {}}]}), encoding="utf-8")
+            data = service.classificar(exam, provider, service.DEFAULT_TAXONOMY, workers=1,
+                                       use_cache=False, use_rag=False, batch_size=5, log=lambda *_: None)
+        by_number = {q["numero"]: q["classificacao"] for q in data["questoes"]}
+        self.assertEqual(by_number[1]["roteamento"], "hierarchical-batch")
+        self.assertEqual(by_number[2]["roteamento"], "hierarchical")
+        self.assertEqual(by_number[2]["conteudo_principal_id"],
+                         "matematica.areas-de-figuras-planas.areas-de-poligonos")
+
     def test_validator_rejects_duplicate_ids(self):
         sample = {"version": "test", "subjects": [{"id": "s", "name": "S", "description": "subject", "sources": [{"url": "x"}], "children": [
             {"id": "same", "name": "A", "description": "area", "sources": [{"url": "x"}], "children": [
@@ -125,6 +206,43 @@ class ScriptedProvider(Provider):
     def complete(self, system, user, images=None):
         self.systems.append(system)
         return json.dumps(self.answers.pop(0), ensure_ascii=False)
+
+
+class BatchProvider(Provider):
+    """Answers the routed prompts by keyword, in batch or single mode."""
+    SUBJECT = {"senos": ("Matemática", "matematica.content.trigonometria-no-triangulo",
+                         "matematica.trigonometria-no-triangulo.lei-dos-senos"),
+               "área": ("Matemática", "matematica.content.areas-de-figuras-planas",
+                        "matematica.areas-de-figuras-planas.areas-de-poligonos"),
+               "pêndulo": ("Física", "fisica.content.movimento-harmonico-simples",
+                           "fisica.movimento-harmonico-simples.pendulo-simples")}
+
+    def __init__(self, drop_ids=()):
+        super().__init__(model="batch")
+        self.calls = []
+        self.drop_ids = set(drop_ids)
+
+    def _label(self, text):
+        return next(value for key, value in self.SUBJECT.items() if key in text)
+
+    def _answer(self, system, text):
+        subject, content, leaf = self._label(text)
+        if "identifica a matéria" in system:
+            return {"materia": subject, "materias_secundarias": [], "confianca": 0.9}
+        if "classifica o conteúdo" in system:
+            return {"conteudo_principal_id": content, "conteudos_relacionados_ids": [], "confianca": 0.8}
+        return {"subconteudo_id": leaf, "confianca": 0.7}
+
+    def complete(self, system, user, images=None):
+        self.calls.append((system, user))
+        if "MODO LOTE" not in system:
+            return json.dumps(self._answer(system, user), ensure_ascii=False)
+        import re
+        items = []
+        for key, body in re.findall(r'<questao id="([^"]+)">(.*?)</questao>', user, flags=re.S):
+            if key not in self.drop_ids:
+                items.append({"id": key, **self._answer(system, body)})
+        return json.dumps({"itens": items}, ensure_ascii=False)
 
 
 if __name__ == "__main__":

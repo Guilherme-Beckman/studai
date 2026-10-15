@@ -359,9 +359,71 @@ def _ai_options() -> dict:
             "geminiModels": _available_gemini_models(keys),
             "geminiConfigured": bool(keys),
             "geminiKeyCount": len(keys),
+            "freeCloudLanes": [name for name, *_ in _cloud_lanes(max_tokens=1)],
         }
         AI_OPTIONS_CACHE = (now, options)
         return dict(options)
+
+
+# Faixas grátis de nuvem compatíveis com a API da OpenAI, ativadas só quando a chave
+# e os modelos estão no .env (os catálogos gratuitos mudam com frequência).
+CLOUD_LANE_PRESETS = {
+    "groq": {"label": "Groq", "models_env": "STUDAI_GROQ_MODELS", "rpm_env": "STUDAI_GROQ_RPM",
+             "rpm_default": 30, "parallel_env": "STUDAI_GROQ_PARALLEL"},
+    "huggingface": {"label": "Hugging Face", "models_env": "STUDAI_HF_MODELS", "rpm_env": "STUDAI_HF_RPM",
+                    "rpm_default": 0, "parallel_env": "STUDAI_HF_PARALLEL"},
+}
+
+
+def _env_int(name: str, default: int, low: int, high: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = int(raw) if raw else default
+    except ValueError:
+        raise ValueError(f"{name} deve ser um inteiro entre {low} e {high}") from None
+    if not low <= value <= high:
+        raise ValueError(f"{name} deve ser um inteiro entre {low} e {high}")
+    return value
+
+
+def _cloud_lanes(*, max_tokens: int) -> list[tuple]:
+    """Lanes for free OpenAI-compatible tiers configured in the environment."""
+    lanes: list[tuple] = []
+    for preset, config in CLOUD_LANE_PRESETS.items():
+        base_url, key_env = classification.OPENAI_COMPAT_PRESETS[preset]
+        key = os.environ.get(key_env, "").strip()
+        models = [m.strip() for m in os.environ.get(config["models_env"], "").split(",") if m.strip()]
+        if not key or not models:
+            continue
+        rpm = _env_int(config["rpm_env"], config["rpm_default"], 0, 10_000)
+        parallel = _env_int(config["parallel_env"], 2, 1, 16)
+        for model in models:
+            provider = make_provider(preset, model, base_url=base_url, key_env=key_env, temperature=0,
+                                     max_tokens=max_tokens, json_mode=True, request_attempts=1)
+            lanes.append((f"{config['label']} ({model})", provider, parallel, rpm))
+    return lanes
+
+
+SHARED_POOLS: dict[str, tuple[float, RotatingPoolProvider]] = {}
+SHARED_POOLS_LOCK = threading.Lock()
+SHARED_POOL_TTL_SECONDS = 15 * 60
+POOL_PAYLOAD_KEYS = ("useOllama", "ollamaModels", "geminiModels", "useFreeCloud", "ollamaThreads", "baseUrl")
+
+
+def _shared_pool_provider(payload: dict) -> RotatingPoolProvider:
+    """Reuse one pool per configuration so simultaneous jobs share lane capacity and quota state."""
+    signature = json.dumps({key: str(payload.get(key) or "") for key in POOL_PAYLOAD_KEYS}, sort_keys=True)
+    with SHARED_POOLS_LOCK:
+        now = time.monotonic()
+        for key, (created, _) in list(SHARED_POOLS.items()):
+            if now - created > SHARED_POOL_TTL_SECONDS:
+                SHARED_POOLS.pop(key, None)
+        cached = SHARED_POOLS.get(signature)
+        if cached:
+            return cached[1]
+        provider = _pool_provider(payload)
+        SHARED_POOLS[signature] = (now, provider)
+        return provider
 
 
 def _pool_provider(payload: dict, *, max_tokens: int = 1600) -> RotatingPoolProvider:
@@ -384,7 +446,9 @@ def _pool_provider(payload: dict, *, max_tokens: int = 1600) -> RotatingPoolProv
         raise ValueError("um dos modelos Gemini selecionados não está disponível para as chaves configuradas")
     if selected_gemini and not keys:
         raise ValueError("configure GEMINI_API_KEYS no arquivo .env para usar Gemini")
-    if not selected_ollama and not selected_gemini:
+    use_cloud = str(payload.get("useFreeCloud", "true")).strip().casefold() not in {"false", "0", "no", "off"}
+    cloud_lanes = _cloud_lanes(max_tokens=max_tokens) if use_cloud else []
+    if not selected_ollama and not selected_gemini and not cloud_lanes:
         raise ValueError("selecione ao menos um modelo Ollama ou Gemini")
     try:
         threads = int(payload.get("ollamaThreads") or 0)
@@ -422,7 +486,9 @@ def _pool_provider(payload: dict, *, max_tokens: int = 1600) -> RotatingPoolProv
         if not 1 <= gemini_parallelism <= 16:
             raise ValueError("STUDAI_GEMINI_PARALLEL_REQUESTS deve ser um inteiro entre 1 e 16")
         lanes.append((f"Gemini chave {index} ({','.join(selected_gemini)})",
-                      gemini_provider, gemini_parallelism))
+                      gemini_provider, gemini_parallelism,
+                      _env_int("STUDAI_GEMINI_RPM", 0, 0, 10_000)))
+    lanes.extend(cloud_lanes)
     if len(lanes) > 64:
         raise ValueError("o pool pode ter no máximo 64 faixas; reduza as chaves ou os modelos locais")
     provider = RotatingPoolProvider(lanes, temperature=0, max_tokens=max_tokens, json_mode=True)
@@ -815,7 +881,7 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
     clean_name = Path(filename).name
     if not clean_name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
         raise ValueError("envie um arquivo PDF válido")
-    provider = (_pool_provider(payload) if str(payload.get("provider") or "") == "pool"
+    provider = (_shared_pool_provider(payload) if str(payload.get("provider") or "") == "pool"
                 else _provider(payload))
     workers = provider.worker_count if isinstance(provider, RotatingPoolProvider) else int(payload.get("workers") or 2)
     if not 1 <= workers <= 64:

@@ -200,4 +200,29 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 Cada chave Gemini aceita até quatro chamadas simultâneas por padrão, inclusive quando só há uma chave. Ajuste `STUDAI_GEMINI_PARALLEL_REQUESTS` para um valor de 1 a 16 conforme os limites de taxa da API. O paralelismo não aumenta a cota do projeto; erros de limite de taxa acionam novas tentativas. As variáveis antigas `GEMINI_API_KEY` e `GOOGLE_API_KEY` continuam aceitas. Reinicie `api.py` depois de alterar o `.env`. A interface mostra somente quantas chaves estão configuradas; não exibe seus valores. O catálogo Gemini e os modelos Ollama são consultados pelo backend. A API e a interface são ferramentas de desenvolvimento local e ainda não incluem login.
 
+### Faixas grátis de nuvem (Groq e Hugging Face)
+
+Além de Ollama e Gemini, o pool aceita faixas compatíveis com a API da OpenAI. Elas só entram quando a chave **e** os modelos estão no `.env`. Os catálogos gratuitos mudam com frequência, por isso não há modelo padrão: confira os disponíveis no console de cada serviço.
+
+```env
+GROQ_API_KEY=CHAVE_GROQ
+STUDAI_GROQ_MODELS=modelo-1,modelo-2   # um modelo por faixa
+STUDAI_GROQ_RPM=30                     # limite por minuto de cada faixa (0 = sem limite)
+STUDAI_GROQ_PARALLEL=2
+HF_TOKEN=TOKEN_HUGGING_FACE
+STUDAI_HF_MODELS=org/modelo:fastest    # roteador https://router.huggingface.co/v1
+STUDAI_HF_RPM=0
+STUDAI_GEMINI_RPM=0                    # limite por minuto opcional para cada chave Gemini
+```
+
+Quando uma faixa recebe 429 indicando cota **diária** esgotada, ela sai do pool até a meia-noite local, em vez de ser testada em toda questão. Um 429 por minuto só faz a questão tentar outra faixa. Uploads simultâneos com a mesma configuração compartilham o mesmo pool, para respeitar a capacidade de cada faixa. Envie `useFreeCloud=false` no processamento para ignorar essas faixas.
+
+### Velocidade da classificação
+
+- **Roteamento hierárquico (padrão).** São 3 chamadas curtas por questão: matéria, conteúdo da matéria e subconteúdo. O prompt de sistema da etapa de conteúdo é fixo por matéria (cerca de 8× menos texto que a árvore inteira), e o Ollama reaproveita esse prefixo entre questões. `STUDAI_CLASSIFICATION_ROUTING=flat` volta para a chamada única com a árvore inteira.
+- **Lotes para nuvem.** `STUDAI_CLASSIFY_BATCH=8` classifica até 8 questões só de texto por request em cada etapa, gastando menos da cota diária. Questões que faltarem na resposta seguem individualmente. Use em faixas de nuvem. No Ollama em CPU, o lote não reduz o tempo total.
+- **Ollama em CPU.** Use `OLLAMA_NUM_PARALLEL=1` e um worker por host. Com o roteamento hierárquico, `STUDAI_OLLAMA_NUM_CTX=4096` costuma bastar, o que reduz memória e tempo. `STUDAI_OLLAMA_KEEP_ALIVE=30m` evita recarregar o modelo durante lotes longos.
+- **GPU integrada AMD (experimental).** As versões recentes do Ollama têm backend Vulkan, desligado por padrão (`OLLAMA_VULKAN=1` no serviço do Ollama, segundo a comunidade). Meça com `evaluate_classifier --limit 10` antes de adotar.
+- **Medir.** `python -m studai.tools.evaluate_classifier` registra, por etapa, chamadas, tokens e o tempo de leitura do prompt (`prompt_eval_duration_ns`), que domina em CPU. `python -m studai.tools.benchmark_topic_retrieval --per-subject --model bge-m3` mede o recall dos conteúdos ranqueados por embeddings dentro da matéria.
+
 Para executar os testes de regressão: `python -m unittest discover -s tests`.

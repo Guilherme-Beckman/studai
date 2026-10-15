@@ -116,6 +116,17 @@ def stage_one_id(content_id: str) -> str | None:
     return parent["id"] if parent and parent["refinable"] else None
 
 
+def resolve_stage_one(subject: str | None, content_id: str | None = None,
+                      topic: str | None = None) -> str | None:
+    """Stage-one option for a label given as canonical ID or as a legacy topic name."""
+    if content_id:
+        return stage_one_id(str(content_id))
+    if topic and subject:
+        identity = canonical_content_id(str(topic), subject=subject, allow_refinable=True)
+        return stage_one_id(identity) if identity else None
+    return None
+
+
 def refinement_options(content_id: str) -> list[dict[str, Any]]:
     """Subcontent leaves the second step chooses from; empty when no refinement exists."""
     node = CONTENT_INDEX.get(content_id)
