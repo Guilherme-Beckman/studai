@@ -1,0 +1,1105 @@
+{
+  "_meta": {
+    "schema_version": "1.0",
+    "generated_at": "2026-10-15",
+    "generated_by": "Antigravity (Gemini) — branch feature/classification/fuvest-taxonomy-research",
+    "status": "PROPOSAL — não editar arquivos de integração até revisão aprovada",
+    "sources": [
+      {
+        "id": "guia2026",
+        "label": "Guia de Provas e Programas FUVEST 2026",
+        "file": "docs/fuvest2026_guia-provas-programas.pdf",
+        "url": "https://www.fuvest.br",
+        "note": "Fonte primária usada nesta proposta. Contém competências, habilidades e Objetos de Conhecimento por componente curricular, alinhados à BNCC."
+      },
+      {
+        "id": "guia2027",
+        "label": "Guia de Provas FUVEST 2027",
+        "file": "docs/fuvest2027-guia-provas.pdf",
+        "url": "https://www.fuvest.br",
+        "note": "Confirma estrutura de áreas e componentes; detalhe de OKs idêntico ao guia 2026 para a 1ª fase."
+      },
+      {
+        "id": "taxonomy_current",
+        "label": "Taxonomia atual do sistema",
+        "file": "src/studai/features/classification/topic_taxonomy.json",
+        "note": "477 tópicos existentes usados como insumo de alias e para preservar continuidade editorial."
+      }
+    ],
+    "limitations": [
+      "O guia 2027 disponível localmente (docs/fuvest2027-guia-provas.pdf) é o guia de carreiras/avaliação, não o programa detalhado de OKs. Os OKs desta proposta vêm do guia 2026.",
+      "O programa oficial FUVEST 2027 com detalhamento de OKs não estava acessível para download direto; estrutura confirmada via busca web (idêntica à 2026 por ser BNCC-alinhada).",
+      "Literatura não aparece como componente nos guias BNCC: é tratada dentro de Língua Portuguesa. Mantida como matéria separada por decisão editorial do sistema e relevância diagnóstica.",
+      "Questões interdisciplinares (ex.: Física+Química, História+Geografia) podem exigir nós em múltiplas matérias; aliases cross-matéria estão indicados onde identificados."
+    ],
+    "stats": {
+      "subjects": 13,
+      "areas": 47,
+      "topics": 198,
+      "leaf_nodes": 198
+    }
+  },
+  "subjects": [
+    {
+      "id": "arte",
+      "name": "Arte",
+      "description": "Linguagens artísticas (artes visuais, música, teatro, dança), patrimônio cultural, mediação e história da arte. Componente de Linguagens e suas Tecnologias — FUVEST 2026 guia p. 2–22.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 2–22, Competências 1–9, Componente Arte",
+      "areas": [
+        {
+          "id": "arte.linguagens",
+          "name": "Linguagens e elementos artísticos",
+          "description": "Códigos, signos, técnicas e materialidades das quatro linguagens artísticas.",
+          "source_ref": "guia2026 p. 3–4, Competência 1, Objetos de conhecimento Arte",
+          "topics": [
+            {
+              "id": "arte.linguagens.elementos",
+              "name": "Elementos da linguagem artística",
+              "description": "Informações, códigos, símbolos e signos usados nas artes visuais, música, teatro e dança.",
+              "aliases": ["linguagem visual", "linguagem musical", "linguagem cênica", "elementos formais da arte"],
+              "current_taxonomy_match": "Elementos da linguagem artística"
+            },
+            {
+              "id": "arte.linguagens.materialidades",
+              "name": "Materialidades e técnicas artísticas",
+              "description": "Matéria, suportes, ferramentas e técnicas manuais e corporais no processo criativo.",
+              "aliases": ["técnicas de pintura", "escultura e materiais", "suporte artístico"],
+              "current_taxonomy_match": "Materialidades e técnicas artísticas"
+            },
+            {
+              "id": "arte.linguagens.processo_criacao",
+              "name": "Processo de criação artística",
+              "description": "Percurso do artista: projetos, esboços, protótipos, registros e diálogo com a matéria.",
+              "aliases": ["criação artística", "making of", "processo poético"],
+              "current_taxonomy_match": "Processo de criação artística"
+            }
+          ]
+        },
+        {
+          "id": "arte.historia",
+          "name": "História da Arte e patrimônio",
+          "description": "Movimentos, períodos e patrimônio cultural material e imaterial.",
+          "source_ref": "guia2026 p. 3–4, 14–16, Competências 1, 4, 9",
+          "topics": [
+            {
+              "id": "arte.historia.patrimonio",
+              "name": "Patrimônio cultural material e imaterial",
+              "description": "Obras em museus, manifestações populares, bens culturais e preservação.",
+              "aliases": ["patrimônio histórico", "bens culturais", "tombamento"],
+              "current_taxonomy_match": "Patrimônio cultural material e imaterial"
+            },
+            {
+              "id": "arte.historia.vanguardas",
+              "name": "Vanguardas europeias",
+              "description": "Cubismo, Futurismo, Expressionismo, Dadaísmo, Surrealismo e suas influências.",
+              "aliases": ["modernismo europeu", "arte moderna", "avant-garde"],
+              "current_taxonomy_match": "Vanguardas europeias"
+            },
+            {
+              "id": "arte.historia.modernismo_br",
+              "name": "Modernismo e Semana de Arte Moderna",
+              "description": "Semana de 22, geração modernista brasileira, regionalismos.",
+              "aliases": ["arte brasileira moderna", "Semana de 22"],
+              "current_taxonomy_match": "Modernismo e Semana de Arte Moderna"
+            },
+            {
+              "id": "arte.historia.barroco_colonial",
+              "name": "Arte barroca e colonial brasileira",
+              "description": "Barroco mineiro, Aleijadinho, arte jesuítica e expressões coloniais.",
+              "aliases": ["barroco brasileiro", "arte colonial", "Aleijadinho"],
+              "current_taxonomy_match": "Arte barroca e colonial brasileira"
+            },
+            {
+              "id": "arte.historia.contemporanea",
+              "name": "Arte contemporânea",
+              "description": "Produções a partir de meados do século XX; conceitualismo, instalação, performance.",
+              "aliases": ["arte atual", "instalação artística", "arte conceitual"],
+              "current_taxonomy_match": "Arte contemporânea"
+            },
+            {
+              "id": "arte.historia.indigena_africana",
+              "name": "Arte indígena e africana",
+              "description": "Signos africanos, arte indígena brasileira, multiculturalidade estética.",
+              "aliases": ["arte afro-brasileira", "arte originária", "estética africana"],
+              "current_taxonomy_match": "Arte indígena e africana"
+            }
+          ]
+        },
+        {
+          "id": "arte.mediacao",
+          "name": "Mediação cultural e instituições",
+          "description": "Museus, galerias, curadoria, programas educativos e acesso à arte.",
+          "source_ref": "guia2026 p. 4, Competência 1, OK Mediação cultural",
+          "topics": [
+            {
+              "id": "arte.mediacao.instituicoes",
+              "name": "Mediação cultural e instituições de arte",
+              "description": "Como museus, galerias e espaços culturais viabilizam o acesso à produção artística.",
+              "aliases": ["curadoria", "museu", "galeria", "acessibilidade cultural"],
+              "current_taxonomy_match": "Mediação cultural e instituições de arte"
+            }
+          ]
+        },
+        {
+          "id": "arte.estetica",
+          "name": "Estética, sociedade e política",
+          "description": "Relações entre práticas artísticas e dimensões sociais, políticas e históricas.",
+          "source_ref": "guia2026 p. 3, Competência 1 Arte",
+          "topics": [
+            {
+              "id": "arte.estetica.sociedade_politica",
+              "name": "Arte, sociedade e política",
+              "description": "Arte como fenômeno social, político, histórico e cultural.",
+              "aliases": ["arte engajada", "arte e poder", "arte e ideologia"],
+              "current_taxonomy_match": "Arte, sociedade e política"
+            },
+            {
+              "id": "arte.estetica.saberes",
+              "name": "Saberes estéticos e culturais",
+              "description": "Contribuições da Filosofia, Psicologia e Sociologia para compreender o papel do artista; ideia de beleza em culturas diversas.",
+              "aliases": ["filosofia da arte", "teoria estética", "beleza e cultura"],
+              "current_taxonomy_match": "Saberes estéticos e culturais"
+            }
+          ]
+        },
+        {
+          "id": "arte.linguagens_especificas",
+          "name": "Linguagens artísticas específicas",
+          "description": "Artes visuais, música, teatro, dança como linguagens autônomas.",
+          "source_ref": "guia2026 Competências 2–9",
+          "topics": [
+            { "id": "arte.artes_visuais", "name": "Artes visuais", "aliases": ["pintura", "desenho", "gravura", "fotografia artística"], "current_taxonomy_match": "Artes visuais" },
+            { "id": "arte.musica", "name": "Música", "aliases": ["linguagem musical", "história da música", "música popular"], "current_taxonomy_match": "Música" },
+            { "id": "arte.teatro", "name": "Teatro", "aliases": ["linguagem cênica", "dramaturgia"], "current_taxonomy_match": "Teatro" },
+            { "id": "arte.danca", "name": "Dança", "aliases": ["linguagem corporal artística"], "current_taxonomy_match": "Dança" },
+            { "id": "arte.tecnologias", "name": "Arte e tecnologias digitais", "aliases": ["arte digital", "mídias digitais na arte", "arte e internet"], "current_taxonomy_match": "Arte e tecnologias digitais" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "biologia",
+      "name": "Biologia",
+      "description": "Ciências da Natureza — Biologia. FUVEST 2026 guia p. 27–33, Habilidades 1–3.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 27–33, Ciências da Natureza, Componente Biologia",
+      "areas": [
+        {
+          "id": "bio.celula",
+          "name": "Citologia e bioquímica celular",
+          "source_ref": "guia2026 p. 32–33, Habilidade 3, Biologia",
+          "topics": [
+            { "id": "bio.celula.tipos", "name": "Células procarióticas e eucarióticas", "aliases": ["célula animal", "célula vegetal", "procarioto"], "current_taxonomy_match": "Células procarióticas e eucarióticas" },
+            { "id": "bio.celula.organelas", "name": "Organelas celulares", "aliases": ["mitocôndria", "cloroplasto", "retículo endoplasmático"], "current_taxonomy_match": "Organelas celulares" },
+            { "id": "bio.celula.membrana", "name": "Membrana plasmática e transporte", "aliases": ["osmose", "difusão", "transporte ativo"], "current_taxonomy_match": "Membrana plasmática e transporte" },
+            { "id": "bio.celula.respiracao", "name": "Respiração celular e fermentação", "aliases": ["metabolismo celular", "glicólise", "fermentação alcoólica"], "current_taxonomy_match": "Respiração celular e fermentação" },
+            { "id": "bio.celula.fotossintese", "name": "Fotossíntese e estresse hídrico", "aliases": ["fotossíntese", "clorofila", "ciclo de Calvin"], "current_taxonomy_match": "Fotossíntese e estresse hídrico" }
+          ]
+        },
+        {
+          "id": "bio.genetica",
+          "name": "Genética e biologia molecular",
+          "source_ref": "guia2026 p. 32–33, Habilidade 3, Biologia",
+          "topics": [
+            { "id": "bio.gen.mendel", "name": "Leis de Mendel", "aliases": ["herança mendeliana", "primeira lei", "segunda lei"], "current_taxonomy_match": "Leis de Mendel" },
+            { "id": "bio.gen.genes", "name": "Genes, alelos e cromossomos", "aliases": ["genótipo", "fenótipo", "alelo recessivo"], "current_taxonomy_match": "Genes, alelos e cromossomos" },
+            { "id": "bio.gen.autossomica", "name": "Herança autossômica", "aliases": ["herança autossômica dominante", "herança autossômica recessiva"], "current_taxonomy_match": "Herança autossômica" },
+            { "id": "bio.gen.ligadaX", "name": "Herança ligada ao X", "aliases": ["daltonismo", "hemofilia", "herança gonossomal"], "current_taxonomy_match": "Herança ligada ao X" },
+            { "id": "bio.gen.DNA", "name": "DNA, código genético e síntese de proteínas", "aliases": ["transcrição", "tradução", "mRNA", "proteínas"], "current_taxonomy_match": "DNA, código genético e síntese de proteínas" },
+            { "id": "bio.gen.mutacoes", "name": "Mutações e estrutura gênica", "aliases": ["mutação pontual", "mutação cromossômica", "oncogenes"], "current_taxonomy_match": "Mutações e estrutura gênica" },
+            { "id": "bio.gen.biotecnologia", "name": "Biotecnologia e manipulação do DNA", "aliases": ["DNA recombinante", "transgênicos", "CRISPR", "clonagem"], "current_taxonomy_match": "Biotecnologia e manipulação do DNA" },
+            { "id": "bio.gen.mitose_meiose", "name": "Mitose e meiose", "aliases": ["divisão celular", "gametogênese", "ciclo celular"], "current_taxonomy_match": "Mitose e meiose" },
+            { "id": "bio.gen.variabilidade", "name": "Variabilidade genética e recombinação", "aliases": ["crossing over", "recombinação gênica", "variação genética"], "current_taxonomy_match": "Variabilidade genética e recombinação" }
+          ]
+        },
+        {
+          "id": "bio.evolucao",
+          "name": "Evolução e filogenia",
+          "source_ref": "guia2026 p. 30, Habilidade 2, Biologia",
+          "topics": [
+            { "id": "bio.evo.selecao", "name": "Seleção natural e teoria sintética da evolução", "aliases": ["darwinismo", "neodarwinismo", "pressão seletiva"], "current_taxonomy_match": "Seleção natural e teoria sintética da evolução" },
+            { "id": "bio.evo.especiacao", "name": "Especiação e isolamento reprodutivo", "aliases": ["especiação alopátrica", "isolamento geográfico", "nova espécie"], "current_taxonomy_match": "Especiação e isolamento reprodutivo" },
+            { "id": "bio.evo.evidencias", "name": "Evidências da evolução", "aliases": ["fósseis", "anatomia comparada", "embriologia comparada"], "current_taxonomy_match": "Evidências da evolução" },
+            { "id": "bio.evo.humana", "name": "Evolução humana", "aliases": ["Homo sapiens", "hominídeos", "australopiteco"], "current_taxonomy_match": "Evolução humana" },
+            { "id": "bio.evo.filogenia", "name": "Filogenia e classificação", "aliases": ["cladística", "sistemática filogenética", "táxon"], "current_taxonomy_match": "Filogenia e classificação" }
+          ]
+        },
+        {
+          "id": "bio.ecologia",
+          "name": "Ecologia e meio ambiente",
+          "source_ref": "guia2026 p. 30, Habilidade 2, Biologia",
+          "topics": [
+            { "id": "bio.eco.cadeias", "name": "Cadeias alimentares e populações", "aliases": ["teia alimentar", "pirâmide ecológica", "nicho ecológico"], "current_taxonomy_match": "Cadeias alimentares e populações" },
+            { "id": "bio.eco.ciclos", "name": "Ciclos biogeoquímicos", "aliases": ["ciclo do carbono", "ciclo do nitrogênio", "ciclo da água biologia"], "current_taxonomy_match": "Ciclos biogeoquímicos" },
+            { "id": "bio.eco.relacoes", "name": "Relações ecológicas", "aliases": ["parasitismo", "mutualismo", "comensalismo", "predação"], "current_taxonomy_match": "Relações ecológicas" },
+            { "id": "bio.eco.sucessao", "name": "Sucessão ecológica e ecossistemas", "aliases": ["clímax", "comunidade clímax", "bioma"], "current_taxonomy_match": "Sucessão ecológica e ecossistemas" },
+            { "id": "bio.eco.mudancas", "name": "Mudanças climáticas e impactos na biodiversidade", "aliases": ["branqueamento de corais", "efeito estufa biologia", "perda de habitat"], "current_taxonomy_match": "Mudanças climáticas e impactos na biodiversidade" },
+            { "id": "bio.eco.erosao", "name": "Erosão e desmatamento", "aliases": ["degradação ambiental", "solo e erosão"], "current_taxonomy_match": "Erosão e desmatamento" },
+            { "id": "bio.eco.microrganismos", "name": "Importância dos microrganismos", "aliases": ["bactérias do solo", "fungos decompositores", "biodiversidade microbiana"], "current_taxonomy_match": "Importância dos microrganismos" }
+          ]
+        },
+        {
+          "id": "bio.fisiologia",
+          "name": "Fisiologia humana e saúde",
+          "source_ref": "guia2026 p. 32–33, Habilidade 3, Biologia",
+          "topics": [
+            { "id": "bio.fisio.sistemas", "name": "Integração dos sistemas respiratório, circulatório e digestório", "aliases": ["sistema cardiovascular", "trocas gasosas", "digestão"], "current_taxonomy_match": "Integração dos sistemas respiratório, circulatório e digestório" },
+            { "id": "bio.fisio.nervoso", "name": "Sistema nervoso", "aliases": ["neurônio", "sinapses", "sistema nervoso central"], "current_taxonomy_match": "Sistema nervoso" },
+            { "id": "bio.fisio.endocrino", "name": "Sistema endócrino e sexualidade humana", "aliases": ["hormônios", "glândulas endócrinas", "ciclo menstrual"], "current_taxonomy_match": "Sistema endócrino e sexualidade humana" },
+            { "id": "bio.fisio.nutricao", "name": "Nutrição e segurança alimentar", "aliases": ["vitaminas", "desnutrição", "obesidade"], "current_taxonomy_match": "Nutrição e segurança alimentar" },
+            { "id": "bio.fisio.doencas_virus", "name": "Doenças causadas por vírus e bactérias", "aliases": ["dengue", "tuberculose", "covid-19", "varíola"], "current_taxonomy_match": "Doenças causadas por vírus e bactérias" },
+            { "id": "bio.fisio.parasitoses", "name": "Parasitoses humanas", "aliases": ["esquistossomose", "malária", "toxoplasmose", "lombriga"], "current_taxonomy_match": "Parasitoses humanas" },
+            { "id": "bio.fisio.vacinas", "name": "Vacinas e sistema imune", "aliases": ["imunidade", "anticorpos", "vacinação"], "current_taxonomy_match": "Vacinas e sistema imune" },
+            { "id": "bio.fisio.IST", "name": "Infecções sexualmente transmissíveis", "aliases": ["HIV", "sífilis", "herpes genital", "IST"], "current_taxonomy_match": "Infecções sexualmente transmissíveis" },
+            { "id": "bio.fisio.saneamento", "name": "Saneamento e saúde pública", "aliases": ["tratamento de esgoto", "epidemiologia", "vigilância sanitária"], "current_taxonomy_match": "Saneamento e saúde pública" }
+          ]
+        },
+        {
+          "id": "bio.botanica",
+          "name": "Botânica",
+          "source_ref": "guia2026 p. 30, Habilidade 2 — adaptações das plantas",
+          "topics": [
+            { "id": "bio.bot.adaptacoes", "name": "Adaptações das plantas ao ambiente terrestre", "aliases": ["briófitas", "pteridófitas", "gimnospermas", "angiospermas"], "current_taxonomy_match": "Adaptações das plantas ao ambiente terrestre" },
+            { "id": "bio.bot.reproducao", "name": "Ciclos reprodutivos de plantas", "aliases": ["alternância de gerações", "polinização", "fecundação em plantas"], "current_taxonomy_match": "Ciclos reprodutivos de plantas" },
+            { "id": "bio.bot.transporte", "name": "Transporte de seiva e relações hídricas", "aliases": ["floema", "xilema", "pressão de raiz", "transpiração"], "current_taxonomy_match": "Transporte de seiva e relações hídricas" },
+            { "id": "bio.bot.hormônios", "name": "Hormônios vegetais e tropismos", "aliases": ["auxina", "giberelina", "fototropismo", "gravitropismo"], "current_taxonomy_match": "Hormônios vegetais e tropismos" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "educacao_fisica",
+      "name": "Educação Física",
+      "description": "Práticas corporais, cultura do movimento, saúde e inclusão. Componente de Linguagens — guia2026 p. 2–22, Competências 1–9.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 2–22, Competências 1–9, Componente Educação Física",
+      "areas": [
+        {
+          "id": "ef.praticas",
+          "name": "Práticas corporais e cultura",
+          "source_ref": "guia2026 Competência 1, OK Educação Física",
+          "topics": [
+            { "id": "ef.praticas.textos_culturais", "name": "Práticas corporais como textos culturais", "aliases": ["corpo e cultura", "gestualidade cultural"], "current_taxonomy_match": "Práticas corporais como textos culturais" },
+            { "id": "ef.praticas.historia", "name": "História das práticas corporais", "aliases": ["história do esporte", "história da dança", "evolução das práticas corporais"], "current_taxonomy_match": "História das práticas corporais" },
+            { "id": "ef.praticas.esportes", "name": "Esportes", "aliases": ["esportes coletivos", "esportes individuais", "esporte e competição"], "current_taxonomy_match": "Esportes" },
+            { "id": "ef.praticas.lutas", "name": "Lutas", "aliases": ["artes marciais", "capoeira", "judô"], "current_taxonomy_match": "Lutas" },
+            { "id": "ef.praticas.dancas", "name": "Danças", "aliases": ["danças folclóricas", "danças urbanas", "dança e cultura"], "current_taxonomy_match": "Danças" },
+            { "id": "ef.praticas.ginasticas", "name": "Ginásticas", "aliases": ["ginástica rítmica", "ginástica artística", "ginástica laboral"], "current_taxonomy_match": "Ginásticas" },
+            { "id": "ef.praticas.brincadeiras", "name": "Brincadeiras e jogos", "aliases": ["jogos populares", "jogos cooperativos", "brinquedo e cultura"], "current_taxonomy_match": "Brincadeiras e jogos" }
+          ]
+        },
+        {
+          "id": "ef.saude",
+          "name": "Saúde, corpo e sociedade",
+          "source_ref": "guia2026 Competências 6–8, OK Educação Física",
+          "topics": [
+            { "id": "ef.saude.atividade", "name": "Atividade física, saúde e qualidade de vida", "aliases": ["sedentarismo", "exercício físico", "aptidão física"], "current_taxonomy_match": "Atividade física, saúde e qualidade de vida" },
+            { "id": "ef.saude.sedentarismo", "name": "Sedentarismo e prevenção de riscos", "aliases": ["doenças crônicas", "prevenção de doenças", "estilo de vida ativo"], "current_taxonomy_match": "Sedentarismo e prevenção de riscos" },
+            { "id": "ef.saude.representacao", "name": "Representação do corpo na mídia", "aliases": ["imagem corporal", "mídia e corpo", "padrão de beleza"], "current_taxonomy_match": "Representação do corpo na mídia" },
+            { "id": "ef.saude.suplementos", "name": "Suplementos e consumo consciente", "aliases": ["doping", "ergogênicos", "suplementação esportiva"], "current_taxonomy_match": "Suplementos e consumo consciente" }
+          ]
+        },
+        {
+          "id": "ef.cidadania",
+          "name": "Cidadania, inclusão e políticas",
+          "source_ref": "guia2026 Competências 2–5, OK Educação Física",
+          "topics": [
+            { "id": "ef.cid.inclusao", "name": "Preconceito e inclusão nas práticas corporais", "aliases": ["inclusão no esporte", "acessibilidade esportiva", "paralimpíadas"], "current_taxonomy_match": "Preconceito e inclusão nas práticas corporais" },
+            { "id": "ef.cid.regras", "name": "Regras e organização das práticas corporais", "aliases": ["fair play", "regulamento esportivo", "organização competitiva"], "current_taxonomy_match": "Regras e organização das práticas corporais" },
+            { "id": "ef.cid.politicas", "name": "Políticas públicas de acesso às práticas corporais", "aliases": ["lazer e políticas públicas", "esporte e estado", "direito ao esporte"], "current_taxonomy_match": "Políticas públicas de acesso às práticas corporais" },
+            { "id": "ef.cid.linguagem_corporal", "name": "Linguagem corporal e expressão cultural", "aliases": ["expressão corporal", "gesto e cultura"], "current_taxonomy_match": "Linguagem corporal e expressão cultural" },
+            { "id": "ef.cid.tecnologias", "name": "Tecnologias e mídias nas práticas corporais", "aliases": ["tecnologia no esporte", "wearables", "esporte eletrônico"], "current_taxonomy_match": "Tecnologias e mídias nas práticas corporais" },
+            { "id": "ef.cid.sustentabilidade", "name": "Práticas corporais e sustentabilidade", "aliases": ["esporte e meio ambiente", "turismo de aventura", "esportes na natureza"], "current_taxonomy_match": "Práticas corporais e sustentabilidade" },
+            { "id": "ef.cid.lazer", "name": "Lazer, trabalho e profissões do movimento", "aliases": ["profissões do esporte", "educação física como profissão", "tempo livre"], "current_taxonomy_match": "Lazer, trabalho e profissões do movimento" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "filosofia",
+      "name": "Filosofia",
+      "description": "Componente de Ciências Humanas e Sociais Aplicadas. FUVEST 2026 guia p. 35–37, Habilidades 1–6.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 35–37, Componente Filosofia, Habilidades 1–6",
+      "areas": [
+        {
+          "id": "fil.historia",
+          "name": "História da Filosofia",
+          "source_ref": "guia2026 p. 35, Habilidade 1 — grandes períodos da filosofia ocidental",
+          "topics": [
+            { "id": "fil.hist.antiga", "name": "Filosofia antiga", "aliases": ["Pré-socráticos", "Platão", "Aristóteles", "Epicuro", "Estoicismo"], "current_taxonomy_match": "Filosofia antiga" },
+            { "id": "fil.hist.medieval", "name": "Filosofia medieval", "aliases": ["Tomás de Aquino", "Agostinho", "escolástica", "filosofia cristã"], "current_taxonomy_match": "Filosofia medieval" },
+            { "id": "fil.hist.moderna", "name": "Filosofia do Renascimento e moderna", "aliases": ["Descartes", "Hume", "Kant", "Maquiavel", "Rousseau", "Iluminismo filosófico"], "current_taxonomy_match": "Filosofia do Renascimento e moderna" },
+            { "id": "fil.hist.contemporanea", "name": "Filosofia contemporânea", "aliases": ["Hegel", "Marx", "Husserl", "Arendt", "Beauvoir", "existencialismo"], "current_taxonomy_match": "Filosofia contemporânea" },
+            { "id": "fil.hist.origens", "name": "Origens da filosofia e outras formas de pensar", "aliases": ["mito e razão", "filosofia e religião", "senso comum"], "current_taxonomy_match": "Origens da filosofia e outras formas de pensar" }
+          ]
+        },
+        {
+          "id": "fil.epistemologia",
+          "name": "Epistemologia e teoria do conhecimento",
+          "source_ref": "guia2026 p. 35–36, Habilidade 2 — Epistemologia",
+          "topics": [
+            { "id": "fil.epist.racionalismo", "name": "Racionalismo e empirismo", "aliases": ["teoria do conhecimento", "a priori e a posteriori", "fundamentos do saber"], "current_taxonomy_match": "Racionalismo e empirismo" },
+            { "id": "fil.epist.ceticismo", "name": "Ceticismo e justificação do conhecimento", "aliases": ["dúvida metódica", "pirronismo", "justificação epistêmica"], "current_taxonomy_match": "Ceticismo e justificação do conhecimento" },
+            { "id": "fil.epist.fe_razao", "name": "Fé e razão", "aliases": ["religião e filosofia", "teologia e razão"], "current_taxonomy_match": "Fé e razão" },
+            { "id": "fil.epist.ciencia", "name": "Ciência, tecnologia e pensamento crítico", "aliases": ["filosofia da ciência", "fake news filosófica", "método científico"], "current_taxonomy_match": "Ciência, tecnologia e pensamento crítico" },
+            { "id": "fil.epist.saberes_originarios", "name": "Saberes de povos originários", "aliases": ["conhecimento indígena", "etnociência", "saberes tradicionais"], "current_taxonomy_match": "Saberes de povos originários" }
+          ]
+        },
+        {
+          "id": "fil.etica",
+          "name": "Ética e Filosofia Política",
+          "source_ref": "guia2026 p. 36, Habilidades 3–4 — Ética e Filosofia Política",
+          "topics": [
+            { "id": "fil.etica.teorias", "name": "Teorias éticas", "aliases": ["deontologia", "consequencialismo", "ética das virtudes", "utilitarismo"], "current_taxonomy_match": "Teorias éticas" },
+            { "id": "fil.etica.direitos_humanos", "name": "Ética e direitos humanos", "aliases": ["bioética", "ética ambiental", "direitos fundamentais"], "current_taxonomy_match": "Ética e direitos humanos" },
+            { "id": "fil.etica.violencia", "name": "Violência e poder", "aliases": ["violência simbólica", "violência institucional", "poder legítimo"], "current_taxonomy_match": "Violência e poder" },
+            { "id": "fil.etica.estado_justica", "name": "Estado, poder e justiça", "aliases": ["contrato social", "soberania", "Estado de Direito"], "current_taxonomy_match": "Estado, poder e justiça" },
+            { "id": "fil.etica.democracia", "name": "Democracia, liberdade e igualdade", "aliases": ["liberalismo político", "cidadania democrática"], "current_taxonomy_match": "Democracia, liberdade e igualdade" },
+            { "id": "fil.etica.liberalismo", "name": "Liberalismo, socialismo e anarquismo", "aliases": ["doutrinas políticas", "socialismo filosófico", "anarquismo"], "current_taxonomy_match": "Liberalismo, socialismo e anarquismo" }
+          ]
+        },
+        {
+          "id": "fil.estetica",
+          "name": "Estética filosófica",
+          "source_ref": "guia2026 p. 36, Habilidade 4 — Estética",
+          "topics": [
+            { "id": "fil.est.arte", "name": "Estética e filosofia da arte", "aliases": ["teoria do belo", "filosofia da criação", "arte e gosto"], "current_taxonomy_match": "Estética e filosofia da arte" }
+          ]
+        },
+        {
+          "id": "fil.logica",
+          "name": "Lógica e argumentação",
+          "source_ref": "guia2026 p. 37, Habilidade 5 — Argumentação e expressão filosófica",
+          "topics": [
+            { "id": "fil.log.logica", "name": "Lógica e argumentação", "aliases": ["dedução", "indução", "silogismo", "argumentação filosófica"], "current_taxonomy_match": "Lógica e argumentação" },
+            { "id": "fil.log.falacias", "name": "Falácias", "aliases": ["falácias formais", "falácias informais", "ad hominem"], "current_taxonomy_match": "Falácias" }
+          ]
+        },
+        {
+          "id": "fil.antropologia",
+          "name": "Antropologia filosófica",
+          "source_ref": "guia2026 p. 37, Habilidade 6 — Antropologia filosófica",
+          "topics": [
+            { "id": "fil.antr.cultura_trabalho", "name": "Antropologia filosófica: cultura e trabalho", "aliases": ["humanização pelo trabalho", "alienação", "condição humana"], "current_taxonomy_match": "Antropologia filosófica: cultura e trabalho" },
+            { "id": "fil.antr.corpo", "name": "Corpo, gênero e afetividade", "aliases": ["corporalidade", "afetividade filosófica", "gênero e existência"], "current_taxonomy_match": "Corpo, gênero e afetividade" },
+            { "id": "fil.antr.finitude", "name": "Finitude e sentido da vida", "aliases": ["morte e filosofia", "existencialismo e finitude", "sentido da existência"], "current_taxonomy_match": "Finitude e sentido da vida" },
+            { "id": "fil.antr.consumo", "name": "Sociedade de consumo e do espetáculo", "aliases": ["mercantilização da vida", "espetáculo de Debord", "consumismo filosófico"], "current_taxonomy_match": "Sociedade de consumo e do espetáculo" },
+            { "id": "fil.antr.civilizacao", "name": "Civilização e barbárie", "aliases": ["etnocentrismo filosófico", "alteridade"], "current_taxonomy_match": "Civilização e barbárie" },
+            { "id": "fil.antr.metafisica", "name": "Metafísica e concepções de realidade", "aliases": ["idealismo", "materialismo", "realismo filosófico", "dualismo"], "current_taxonomy_match": "Metafísica e concepções de realidade" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fisica",
+      "name": "Física",
+      "description": "Ciências da Natureza — Física. FUVEST 2026 guia p. 27–33, Habilidades 1–3.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 27–33, Componente Física",
+      "areas": [
+        {
+          "id": "fis.mecanica",
+          "name": "Mecânica",
+          "source_ref": "guia2026 p. 27–28 e 31, Habilidades 1 e 3",
+          "topics": [
+            { "id": "fis.mec.cinematica_escalar", "name": "Cinemática escalar", "aliases": ["MRU", "MRUV", "velocidade escalar"], "current_taxonomy_match": "Cinemática escalar" },
+            { "id": "fis.mec.cinematica_vetorial", "name": "Cinemática vetorial", "aliases": ["velocidade vetorial", "aceleração vetorial", "componentes do movimento"], "current_taxonomy_match": "Cinemática vetorial" },
+            { "id": "fis.mec.lancamento", "name": "Lançamento oblíquo e composição de movimentos", "aliases": ["lançamento horizontal", "projétil", "trajetória parabólica"], "current_taxonomy_match": "Lançamento oblíquo e composição de movimentos" },
+            { "id": "fis.mec.newton", "name": "Leis de Newton e aplicações", "aliases": ["força resultante", "atrito", "3ª lei de Newton"], "current_taxonomy_match": "Leis de Newton e aplicações" },
+            { "id": "fis.mec.atrito", "name": "Atrito e plano inclinado", "aliases": ["força de atrito", "coeficiente de atrito", "plano inclinado"], "current_taxonomy_match": "Atrito e plano inclinado" },
+            { "id": "fis.mec.equilibrio", "name": "Equilíbrio e torque", "aliases": ["momento de força", "centro de gravidade", "equilíbrio de corpos rígidos"], "current_taxonomy_match": "Equilíbrio e torque" },
+            { "id": "fis.mec.trabalho_energia", "name": "Trabalho e conservação da energia", "aliases": ["energia cinética", "energia potencial", "trabalho da força"], "current_taxonomy_match": "Trabalho e conservação da energia" },
+            { "id": "fis.mec.impulso", "name": "Impulso, momento linear e colisões", "aliases": ["conservação do momento", "colisão elástica", "colisão inelástica"], "current_taxonomy_match": "Impulso, momento linear e colisões" },
+            { "id": "fis.mec.circular", "name": "Movimento circular", "aliases": ["aceleração centrípeta", "força centrípeta", "frequência angular"], "current_taxonomy_match": "Movimento circular" },
+            { "id": "fis.mec.gravitacao", "name": "Gravitação e leis de Kepler", "aliases": ["lei da gravidade", "peso", "órbitas planetárias"], "current_taxonomy_match": "Gravitação e leis de Kepler" },
+            { "id": "fis.mec.hidro", "name": "Hidrostática e empuxo", "aliases": ["pressão", "Arquimedes", "flutuação"], "current_taxonomy_match": "Hidrostática e empuxo" }
+          ]
+        },
+        {
+          "id": "fis.termologia",
+          "name": "Termologia e termodinâmica",
+          "source_ref": "guia2026 p. 27–28, Habilidade 1",
+          "topics": [
+            { "id": "fis.term.termometria", "name": "Termometria e dilatação térmica", "aliases": ["escalas termométricas", "dilatação linear", "coeficiente de dilatação"], "current_taxonomy_match": "Termometria e dilatação térmica" },
+            { "id": "fis.term.calorimetria", "name": "Calorimetria e mudanças de fase", "aliases": ["calor específico", "calor latente", "fusão e vaporização"], "current_taxonomy_match": "Calorimetria e mudanças de fase" },
+            { "id": "fis.term.transmissao", "name": "Transmissão de calor", "aliases": ["condução", "convecção", "irradiação"], "current_taxonomy_match": "Transmissão de calor" },
+            { "id": "fis.term.termodinamica", "name": "Leis da termodinâmica e máquinas térmicas", "aliases": ["1ª lei da termodinâmica", "2ª lei da termodinâmica", "rendimento térmico"], "current_taxonomy_match": "Leis da termodinâmica e máquinas térmicas" },
+            { "id": "fis.term.gases", "name": "Gases ideais e transformações gasosas", "aliases": ["lei de Boyle", "lei de Charles", "transformação isotérmica"], "current_taxonomy_match": "Gases ideais e transformações gasosas" },
+            { "id": "fis.term.motores", "name": "Motores a combustão", "aliases": ["ciclo de Carnot", "ciclo diesel", "ciclo Otto"], "current_taxonomy_match": "Motores a combustão" },
+            { "id": "fis.term.estufa", "name": "Efeito estufa e aquecimento global", "aliases": ["gases do efeito estufa", "aquecimento global física"], "current_taxonomy_match": "Efeito estufa e aquecimento global" }
+          ]
+        },
+        {
+          "id": "fis.eletricidade",
+          "name": "Eletricidade e eletromagnetismo",
+          "source_ref": "guia2026 p. 27–28, Habilidade 1",
+          "topics": [
+            { "id": "fis.elet.campo_eletrico", "name": "Campo elétrico e força eletrostática", "aliases": ["lei de Coulomb", "campo elétrico uniforme"], "current_taxonomy_match": "Campo elétrico e força eletrostática" },
+            { "id": "fis.elet.potencial", "name": "Potencial elétrico e capacitores", "aliases": ["diferença de potencial", "capacitância", "energia do capacitor"], "current_taxonomy_match": "Potencial elétrico e capacitores" },
+            { "id": "fis.elet.corrente", "name": "Corrente elétrica", "aliases": ["ampère", "carga elétrica"], "current_taxonomy_match": "Corrente elétrica" },
+            { "id": "fis.elet.resistencia", "name": "Resistência elétrica", "aliases": ["lei de Ohm", "resistividade", "efeito Joule"], "current_taxonomy_match": "Resistência elétrica" },
+            { "id": "fis.elet.circuitos", "name": "Circuitos elétricos e associação de resistores", "aliases": ["circuito em série", "circuito em paralelo", "ponte de Wheatstone"], "current_taxonomy_match": "Circuitos elétricos e associação de resistores" },
+            { "id": "fis.elet.potencia", "name": "Potência elétrica e consumo de energia", "aliases": ["kWh", "consumo elétrico", "fatura de energia"], "current_taxonomy_match": "Potência elétrica e consumo de energia" },
+            { "id": "fis.elet.campo_magnetico", "name": "Campo magnético e força magnética", "aliases": ["força de Lorentz", "campo de solenóide", "força sobre fio"], "current_taxonomy_match": "Campo magnético e força magnética" },
+            { "id": "fis.elet.inducao", "name": "Indução eletromagnética", "aliases": ["lei de Faraday", "lei de Lenz", "transformador"], "current_taxonomy_match": "Indução eletromagnética" },
+            { "id": "fis.elet.geracao", "name": "Geração e transmissão de energia elétrica", "aliases": ["gerador elétrico", "usina hidrelétrica", "alternador"], "current_taxonomy_match": "Geração e transmissão de energia elétrica" }
+          ]
+        },
+        {
+          "id": "fis.ondas_optica",
+          "name": "Ondas e óptica",
+          "source_ref": "guia2026 p. 31–32, Habilidades 2–3",
+          "topics": [
+            { "id": "fis.ond.espectro", "name": "Espectro eletromagnético", "aliases": ["ondas de rádio", "micro-ondas", "raios X", "luz visível"], "current_taxonomy_match": "Espectro eletromagnético" },
+            { "id": "fis.ond.espectroscopia", "name": "Espectroscopia", "aliases": ["espectro de emissão", "espectro de absorção", "linhas espectrais"], "current_taxonomy_match": "Espectroscopia" },
+            { "id": "fis.ond.reflexao", "name": "Reflexão da luz e espelhos planos", "aliases": ["lei da reflexão", "imagem em espelho plano"], "current_taxonomy_match": "Reflexão da luz e espelhos planos" },
+            { "id": "fis.ond.espelhos_esfericos", "name": "Espelhos esféricos", "aliases": ["espelho côncavo", "espelho convexo", "foco principal"], "current_taxonomy_match": "Espelhos esféricos" },
+            { "id": "fis.ond.refracao", "name": "Refração da luz e lentes", "aliases": ["índice de refração", "lente convergente", "óculos"], "current_taxonomy_match": "Refração da luz e lentes" },
+            { "id": "fis.ond.harmonica", "name": "Ondas harmônicas e equação fundamental", "aliases": ["velocidade de onda", "comprimento de onda", "frequência"], "current_taxonomy_match": "Ondas harmônicas e equação fundamental" },
+            { "id": "fis.ond.sonoras", "name": "Ondas sonoras e nível de intensidade", "aliases": ["decibéis", "timbre", "altura do som", "velocidade do som"], "current_taxonomy_match": "Ondas sonoras e nível de intensidade" },
+            { "id": "fis.ond.MHS", "name": "Movimento harmônico simples", "aliases": ["oscilação", "período de pêndulo", "mola e MHS"], "current_taxonomy_match": "Movimento harmônico simples" },
+            { "id": "fis.ond.interferencia", "name": "Interferência de ondas", "aliases": ["difração", "interferência construtiva", "interferência destrutiva"], "current_taxonomy_match": "Interferência de ondas" }
+          ]
+        },
+        {
+          "id": "fis.moderna",
+          "name": "Física moderna e nuclear",
+          "source_ref": "guia2026 p. 27–28 e 31, Habilidades 1–3",
+          "topics": [
+            { "id": "fis.mod.fotoeletrico", "name": "Efeito fotoelétrico e quantização da energia", "aliases": ["Einstein fotoelétrico", "fóton", "quantum de energia"], "current_taxonomy_match": "Efeito fotoelétrico e quantização da energia" },
+            { "id": "fis.mod.radioatividade", "name": "Radioatividade e decaimento radioativo", "aliases": ["meia-vida", "decaimento alfa beta gama"], "current_taxonomy_match": "Radioatividade e decaimento radioativo" },
+            { "id": "fis.mod.nuclear", "name": "Energia nuclear e armas nucleares", "aliases": ["fissão nuclear", "fusão nuclear", "bomba atômica"], "current_taxonomy_match": "Energia nuclear e armas nucleares" },
+            { "id": "fis.mod.relatividade", "name": "Big Bang e relatividade", "aliases": ["relatividade restrita", "relatividade geral", "cosmologia"], "current_taxonomy_match": "Big Bang e relatividade" },
+            { "id": "fis.mod.estelar", "name": "Evolução estelar", "aliases": ["estrelas", "anã branca", "supernova", "buraco negro"], "current_taxonomy_match": "Evolução estelar" },
+            { "id": "fis.mod.modelo_padrao", "name": "Modelo padrão de partículas", "aliases": ["quarks", "léptons", "bósons", "física de partículas"], "current_taxonomy_match": "Modelo padrão de partículas" },
+            { "id": "fis.mod.semicondutores", "name": "Semicondutores, transistores e circuitos integrados", "aliases": ["diodo", "chip", "tecnologia eletrônica"], "current_taxonomy_match": "Semicondutores, transistores e circuitos integrados" },
+            { "id": "fis.mod.solar", "name": "Energia solar e fontes renováveis", "aliases": ["painel fotovoltaico", "energia renovável"], "current_taxonomy_match": "Energia solar e fontes renováveis" },
+            { "id": "fis.mod.matriz", "name": "Matriz energética e fontes de energia", "aliases": ["hidrelétrica", "biomassa", "eólica"], "current_taxonomy_match": "Matriz energética e fontes de energia" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "geografia",
+      "name": "Geografia",
+      "description": "Componente de Ciências Humanas e Sociais Aplicadas. FUVEST 2026 guia p. 37–46, Habilidades 1–12.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 37–46, Componente Geografia",
+      "areas": [
+        {
+          "id": "geo.cartografia",
+          "name": "Cartografia e raciocínio geográfico",
+          "source_ref": "guia2026 p. 39, Habilidade 6 — cartografia e geotecnologias",
+          "topics": [
+            { "id": "geo.cart.cartografia", "name": "Cartografia e geotecnologias", "aliases": ["mapas", "SIG", "GPS", "sensoriamento remoto"], "current_taxonomy_match": "Cartografia e geotecnologias" },
+            { "id": "geo.cart.mapas", "name": "Mapas temáticos e raciocínio geográfico", "aliases": ["mapa temático", "leitura de mapa", "escala cartográfica"], "current_taxonomy_match": "Mapas temáticos e raciocínio geográfico" }
+          ]
+        },
+        {
+          "id": "geo.natureza",
+          "name": "Geografia física e meio ambiente",
+          "source_ref": "guia2026 p. 37–46",
+          "topics": [
+            { "id": "geo.nat.biomas", "name": "Biomas e domínios morfoclimáticos", "aliases": ["Cerrado", "Mata Atlântica", "Pantanal", "Caatinga", "Amazônia"], "current_taxonomy_match": "Biomas e domínios morfoclimáticos" },
+            { "id": "geo.nat.clima", "name": "Climatologia e massas de ar", "aliases": ["clima tropical", "frentes frias", "El Niño"], "current_taxonomy_match": "Climatologia e massas de ar" },
+            { "id": "geo.nat.relevo", "name": "Relevo e estrutura geológica", "aliases": ["planalto", "depressão", "placas tectônicas", "intemperismo"], "current_taxonomy_match": "Relevo e estrutura geológica" },
+            { "id": "geo.nat.hidrografia", "name": "Hidrografia e recursos hídricos", "aliases": ["bacia hidrográfica", "aquífero", "rio", "crise hídrica"], "current_taxonomy_match": "Hidrografia e recursos hídricos" },
+            { "id": "geo.nat.desertificacao", "name": "Desertificação e semiaridez", "aliases": ["semiárido nordestino", "desertificação", "seca"], "current_taxonomy_match": "Desertificação e semiaridez" },
+            { "id": "geo.nat.erosao", "name": "Erosão e conservação de solos", "aliases": ["voçoroca", "erosão hídrica", "conservação do solo"], "current_taxonomy_match": "Erosão e conservação de solos" },
+            { "id": "geo.nat.mudancas", "name": "Mudanças climáticas e acordos ambientais", "aliases": ["Acordo de Paris", "COP", "aquecimento global", "carbono"], "current_taxonomy_match": "Mudanças climáticas e acordos ambientais" },
+            { "id": "geo.nat.riscos", "name": "Riscos e desastres ambientais", "aliases": ["enchentes", "deslizamentos", "vulnerabilidade ambiental"], "current_taxonomy_match": "Riscos e desastres ambientais" },
+            { "id": "geo.nat.impactos", "name": "Impactos ambientais urbanos e rurais", "aliases": ["poluição urbana", "degradação ambiental", "passivo ambiental"], "current_taxonomy_match": "Impactos ambientais urbanos e rurais" }
+          ]
+        },
+        {
+          "id": "geo.populacao",
+          "name": "Geografia da população",
+          "source_ref": "guia2026 p. 40–41, Habilidades 7–11",
+          "topics": [
+            { "id": "geo.pop.distribuicao", "name": "Distribuição e crescimento populacional", "aliases": ["densidade demográfica", "taxa de natalidade", "crescimento vegetativo"], "current_taxonomy_match": "Distribuição e crescimento populacional" },
+            { "id": "geo.pop.transicao", "name": "Transição demográfica e envelhecimento", "aliases": ["envelhecimento populacional", "bônus demográfico", "pirâmide etária"], "current_taxonomy_match": "Transição demográfica e envelhecimento" },
+            { "id": "geo.pop.migracoes", "name": "Migrações e refugiados", "aliases": ["êxodo rural", "diáspora", "refugiados políticos", "deslocados"], "current_taxonomy_match": "Migrações e refugiados" },
+            { "id": "geo.pop.segregacao", "name": "Segregação socioespacial e vulnerabilidade", "aliases": ["favela", "periferia", "gueto", "vulnerabilidade social"], "current_taxonomy_match": "Segregação socioespacial e vulnerabilidade" },
+            { "id": "geo.pop.indigena", "name": "Terras indígenas e quilombolas", "aliases": ["demarcação de terras", "povos indígenas", "quilombola"], "current_taxonomy_match": "Terras indígenas e quilombolas" }
+          ]
+        },
+        {
+          "id": "geo.urbanizacao",
+          "name": "Urbanização e espaço urbano",
+          "source_ref": "guia2026 p. 41–43, Habilidades 10–12",
+          "topics": [
+            { "id": "geo.urb.urbanizacao", "name": "Urbanização e metrópoles", "aliases": ["megalópoles", "rede urbana", "conurbação"], "current_taxonomy_match": "Urbanização e metrópoles" },
+            { "id": "geo.urb.regionalizacao", "name": "Regionalização do Brasil", "aliases": ["Norte Nordeste Sul Sudeste Centro-Oeste", "desigualdades regionais"], "current_taxonomy_match": "Regionalização do Brasil" }
+          ]
+        },
+        {
+          "id": "geo.economia",
+          "name": "Geografia econômica",
+          "source_ref": "guia2026 p. 43–46, Habilidades 13–26",
+          "topics": [
+            { "id": "geo.eco.agropecuaria", "name": "Agropecuária e agronegócio", "aliases": ["monocultura", "soja", "agronegócio", "produção agropecuária"], "current_taxonomy_match": "Agropecuária e agronegócio" },
+            { "id": "geo.eco.fundiaria", "name": "Estrutura fundiária e conflitos no campo", "aliases": ["latifúndio", "reforma agrária", "MST", "grilagem"], "current_taxonomy_match": "Estrutura fundiária e conflitos no campo" },
+            { "id": "geo.eco.extrativismo", "name": "Extrativismo e cadeias produtivas", "aliases": ["extrativismo mineral", "mineração", "pesca"], "current_taxonomy_match": "Extrativismo e cadeias produtivas" },
+            { "id": "geo.eco.industrializacao", "name": "Industrialização e padrões industriais", "aliases": ["indústria no Brasil", "desindustrialização", "setor secundário"], "current_taxonomy_match": "Industrialização e padrões industriais" },
+            { "id": "geo.eco.matriz", "name": "Matriz energética brasileira", "aliases": ["energia no Brasil", "pré-sal", "energia hídrica"], "current_taxonomy_match": "Matriz energética brasileira" },
+            { "id": "geo.eco.trabalho", "name": "Trabalho e indicadores socioeconômicos", "aliases": ["IDH", "Gini", "emprego e renda"], "current_taxonomy_match": "Trabalho e indicadores socioeconômicos" },
+            { "id": "geo.eco.trabalho_contemporaneo", "name": "Trabalho urbano e rural contemporâneo", "aliases": ["uberização", "trabalho informal", "precarização"], "current_taxonomy_match": "Trabalho urbano e rural contemporâneo" },
+            { "id": "geo.eco.consumo", "name": "Consumo e sustentabilidade", "aliases": ["consumo consciente", "pegada ecológica", "sustentabilidade"], "current_taxonomy_match": "Consumo e sustentabilidade" }
+          ]
+        },
+        {
+          "id": "geo.geopolitica",
+          "name": "Geopolítica e relações internacionais",
+          "source_ref": "guia2026 p. 38–40, Habilidades 7–10",
+          "topics": [
+            { "id": "geo.geo.fronteiras", "name": "Fronteiras, território e territorialidade", "aliases": ["soberania territorial", "disputas territoriais", "fronteira seca"], "current_taxonomy_match": "Fronteiras, território e territorialidade" },
+            { "id": "geo.geo.geopolitica", "name": "Geopolítica e potências mundiais", "aliases": ["OTAN", "BRICS", "multipolaridade", "hegemonia"], "current_taxonomy_match": "Geopolítica e potências mundiais" },
+            { "id": "geo.geo.organismos", "name": "Organismos internacionais e blocos econômicos", "aliases": ["ONU", "OMC", "Mercosul", "União Europeia"], "current_taxonomy_match": "Organismos internacionais e blocos econômicos" },
+            { "id": "geo.geo.globalizacao", "name": "Globalização e fluxos financeiros", "aliases": ["capital financeiro", "globalização econômica", "offshore"], "current_taxonomy_match": "Globalização e fluxos financeiros" },
+            { "id": "geo.geo.MIT", "name": "Meio técnico-científico-informacional", "aliases": ["revolução técnico-científica", "globalização informacional", "Milton Santos"], "current_taxonomy_match": "Meio técnico-científico-informacional" },
+            { "id": "geo.geo.divisao", "name": "Divisão internacional do trabalho", "aliases": ["Norte e Sul global", "países periféricos", "desindustrialização do Sul"], "current_taxonomy_match": "Divisão internacional do trabalho" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "historia",
+      "name": "História",
+      "description": "Componente de Ciências Humanas e Sociais Aplicadas. FUVEST 2026 guia p. 46–54, Habilidades 1–30.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 46–54, Componente História",
+      "areas": [
+        {
+          "id": "hist.antiguidade",
+          "name": "Antiguidade e Medievo",
+          "source_ref": "guia2026 p. 46–48",
+          "topics": [
+            { "id": "hist.ant.oriente_africa", "name": "Civilizações antigas do Oriente e da África", "aliases": ["Mesopotâmia", "Egito antigo", "Fenícia", "África subsaariana clássica"], "current_taxonomy_match": "Civilizações antigas do Oriente e da África" },
+            { "id": "hist.ant.cidadania", "name": "Cidadania e democracia na Antiguidade", "aliases": ["Grécia clássica", "democracia ateniense", "República romana"], "current_taxonomy_match": "Cidadania e democracia na Antiguidade" },
+            { "id": "hist.ant.roma", "name": "Império Romano e cristianismo", "aliases": ["Roma Imperial", "expansão do cristianismo", "queda de Roma"], "current_taxonomy_match": "Império Romano e cristianismo" },
+            { "id": "hist.ant.feudalismo", "name": "Feudalismo e poder no Medievo", "aliases": ["Idade Média", "senhorio feudal", "vassalagem", "Cruzadas"], "current_taxonomy_match": "Feudalismo e poder no Medievo" }
+          ]
+        },
+        {
+          "id": "hist.moderna",
+          "name": "Modernidade europeia e expansão ultramarina",
+          "source_ref": "guia2026 p. 48–49",
+          "topics": [
+            { "id": "hist.mod.renascimento", "name": "Renascimento e Reforma", "aliases": ["humanismo", "Reforma Protestante", "Contrarreforma"], "current_taxonomy_match": "Renascimento e Reforma" },
+            { "id": "hist.mod.expansao", "name": "Expansão marítima e conquista da América", "aliases": ["grandes navegações", "colonialismo", "tratado de Tordesilhas"], "current_taxonomy_match": "Expansão marítima e conquista da América" },
+            { "id": "hist.mod.absolutismo", "name": "Absolutismo e mercantilismo", "aliases": ["monarquia absoluta", "mercantilismo", "Estado absolutista"], "current_taxonomy_match": "Absolutismo e mercantilismo" },
+            { "id": "hist.mod.iluminismo", "name": "Revolução Científica e Iluminismo", "aliases": ["Iluminismo", "Enciclopédia", "filosofia das luzes"], "current_taxonomy_match": "Revolução Científica e Iluminismo" },
+            { "id": "hist.mod.rev_francesa", "name": "Revolução Francesa", "aliases": ["1789", "Declaração dos Direitos do Homem", "terror jacobino"], "current_taxonomy_match": "Revolução Francesa" },
+            { "id": "hist.mod.rev_industrial", "name": "Revolução Industrial e capitalismo", "aliases": ["industrialização", "proletariado", "capitalismo industrial"], "current_taxonomy_match": "Revolução Industrial e capitalismo" }
+          ]
+        },
+        {
+          "id": "hist.americas",
+          "name": "Américas: colonização e independências",
+          "source_ref": "guia2026 p. 47–50",
+          "topics": [
+            { "id": "hist.ame.precolombiana", "name": "América pré-colombiana", "aliases": ["Astecas", "Maias", "Incas", "civilizações ameríndias"], "current_taxonomy_match": "América pré-colombiana" },
+            { "id": "hist.ame.colonial_esp", "name": "América colonial espanhola", "aliases": ["encomienda", "Vice-Reino", "mita"], "current_taxonomy_match": "América colonial espanhola" },
+            { "id": "hist.ame.acucar", "name": "Açúcar e escravidão na América portuguesa", "aliases": ["plantation", "engenho", "tráfico negreiro"], "current_taxonomy_match": "Açúcar e escravidão na América portuguesa" },
+            { "id": "hist.ame.independencias", "name": "Independências na América espanhola", "aliases": ["Bolívar", "San Martín", "guerras de independência"], "current_taxonomy_match": "Independências na América espanhola" },
+            { "id": "hist.ame.rev_mex", "name": "Revolução Mexicana", "aliases": ["Zapata", "Villa", "Constituição de 1917"], "current_taxonomy_match": "Revolução Mexicana" }
+          ]
+        },
+        {
+          "id": "hist.brasil",
+          "name": "História do Brasil",
+          "source_ref": "guia2026 p. 47–54",
+          "topics": [
+            { "id": "hist.br.economia_colonial", "name": "Economia colonial no século XVIII", "aliases": ["ciclo do ouro", "Minas Gerais colonial", "derrama"], "current_taxonomy_match": "Economia colonial no século XVIII" },
+            { "id": "hist.br.restauracao", "name": "Restauração portuguesa e domínio holandês", "aliases": ["invasões holandesas", "União Ibérica", "WIC"], "current_taxonomy_match": "Restauração portuguesa e domínio holandês" },
+            { "id": "hist.br.joanino", "name": "Período joanino e Independência", "aliases": ["Dom João VI", "independência do Brasil", "grito do Ipiranga"], "current_taxonomy_match": "Período joanino e Independência" },
+            { "id": "hist.br.primeiro_reinado", "name": "Primeiro Reinado e Regências", "aliases": ["Dom Pedro I", "Abdicação", "período regencial", "Cabanagem"], "current_taxonomy_match": "Primeiro Reinado e Regências" },
+            { "id": "hist.br.segundo_reinado", "name": "Segundo Reinado e abolição", "aliases": ["Dom Pedro II", "Lei Áurea", "abolição da escravidão"], "current_taxonomy_match": "Segundo Reinado e abolição" },
+            { "id": "hist.br.republica_1", "name": "Proclamação da República e coronelismo", "aliases": ["República Velha", "café com leite", "coronelismo", "tenentismo"], "current_taxonomy_match": "Proclamação da República e coronelismo" },
+            { "id": "hist.br.movimentos_1rep", "name": "Movimentos sociais na Primeira República", "aliases": ["Canudos", "Contestado", "Revolta da Vacina", "Cangaço"], "current_taxonomy_match": "Movimentos sociais na Primeira República" },
+            { "id": "hist.br.imigr_ind", "name": "Imigração e industrialização no Brasil", "aliases": ["imigrantes italianos japoneses", "industrialização São Paulo", "operariado"], "current_taxonomy_match": "Imigração e industrialização no Brasil" },
+            { "id": "hist.br.crises_vargas", "name": "Crises políticas de Vargas", "aliases": ["Revolução de 1930", "Estado Novo", "era Vargas"], "current_taxonomy_match": "Crises políticas de Vargas" },
+            { "id": "hist.br.rev_1932", "name": "Revolução de 1932 e Integralismo", "aliases": ["Revolução Constitucionalista", "integralismo brasileiro", "AIB"], "current_taxonomy_match": "Revolução de 1932 e Integralismo" },
+            { "id": "hist.br.rep_1945", "name": "República de 1945 a 1964", "aliases": ["redemocratização", "JK", "Brasília", "João Goulart"], "current_taxonomy_match": "República de 1945 a 1964" },
+            { "id": "hist.br.ditadura", "name": "Ditadura militar no Brasil", "aliases": ["golpe de 1964", "AI-5", "abertura política", "ARENA MDB"], "current_taxonomy_match": "Ditadura militar no Brasil" },
+            { "id": "hist.br.diretas", "name": "Diretas Já e eleição de 1985", "aliases": ["Diretas Já", "Tancredo Neves", "redemocratização"], "current_taxonomy_match": "Diretas Já e eleição de 1985" },
+            { "id": "hist.br.constituicao", "name": "Constituição de 1988 e democracia", "aliases": ["Constituição cidadã", "assembleia constituinte"], "current_taxonomy_match": "Constituição de 1988 e democracia" },
+            { "id": "hist.br.reforma_urbana", "name": "Reforma urbana do Rio de Janeiro", "aliases": ["Pereira Passos", "bota-abaixo", "revitalização urbana"], "current_taxonomy_match": "Reforma urbana do Rio de Janeiro" }
+          ]
+        },
+        {
+          "id": "hist.seculo20",
+          "name": "Século XX mundial",
+          "source_ref": "guia2026 p. 48–50",
+          "topics": [
+            { "id": "hist.s20.rev_russa", "name": "Revolução Russa", "aliases": ["1917", "Lênin", "bolcheviques", "sovietes"], "current_taxonomy_match": "Revolução Russa" },
+            { "id": "hist.s20.pgm1", "name": "Primeira Guerra Mundial", "aliases": ["Grande Guerra", "1914-1918", "Tratado de Versalhes"], "current_taxonomy_match": "Primeira Guerra Mundial" },
+            { "id": "hist.s20.crise1929", "name": "Crise de 1929 e totalitarismos", "aliases": ["Grande Depressão", "fascismo", "nazismo", "new deal"], "current_taxonomy_match": "Crise de 1929 e totalitarismos" },
+            { "id": "hist.s20.pgm2", "name": "Segunda Guerra Mundial", "aliases": ["holocausto", "1939-1945", "Hiroshima"], "current_taxonomy_match": "Segunda Guerra Mundial" },
+            { "id": "hist.s20.guerra_fria", "name": "Guerra Fria", "aliases": ["EUA x URSS", "cortina de ferro", "corrida armamentista", "corrida espacial"], "current_taxonomy_match": "Guerra Fria" },
+            { "id": "hist.s20.descolonizacao", "name": "Descolonização da África e da Ásia", "aliases": ["neocolonialismo", "independência africana", "pan-africanismo"], "current_taxonomy_match": "Descolonização da África e da Ásia" },
+            { "id": "hist.s20.contestacao", "name": "Contestação de 1968", "aliases": ["maio de 68", "movimentos contraculturais", "feminismo 2ª onda"], "current_taxonomy_match": "Contestação de 1968" },
+            { "id": "hist.s20.neoliberalismo", "name": "Neoliberalismo e globalização", "aliases": ["Reagan", "Thatcher", "consenso de Washington", "privatizações"], "current_taxonomy_match": "Neoliberalismo e globalização" },
+            { "id": "hist.s20.oriente_medio", "name": "Oriente Médio contemporâneo", "aliases": ["conflito árabe-israelense", "Palestina", "Primavera Árabe"], "current_taxonomy_match": "Oriente Médio contemporâneo" },
+            { "id": "hist.s20.ditaduras_al", "name": "Ditaduras e populismo na América Latina", "aliases": ["peronismo", "pinochetismo", "ditaduras latino-americanas"], "current_taxonomy_match": "Ditaduras e populismo na América Latina" }
+          ]
+        },
+        {
+          "id": "hist.temas_transversais",
+          "name": "Temas transversais e historiografia",
+          "source_ref": "guia2026 p. 46–48",
+          "topics": [
+            { "id": "hist.trans.patrimonio", "name": "Patrimônio, memória e conhecimento histórico", "aliases": ["historiografia", "fontes históricas", "memória coletiva"], "current_taxonomy_match": "Patrimônio, memória e conhecimento histórico" },
+            { "id": "hist.trans.resistencia", "name": "Resistência indígena e africana", "aliases": ["quilombos", "revoltas escravas", "resistência cultural"], "current_taxonomy_match": "Resistência indígena e africana" },
+            { "id": "hist.trans.diret_humanos", "name": "Declaração Universal dos Direitos Humanos", "aliases": ["1948", "ONU e direitos", "direitos humanos história"], "current_taxonomy_match": "Declaração Universal dos Direitos Humanos" },
+            { "id": "hist.trans.apartheid", "name": "Apartheid e segregação racial", "aliases": ["Mandela", "África do Sul", "Jim Crow"], "current_taxonomy_match": "Apartheid e segregação racial" },
+            { "id": "hist.trans.imperialismo", "name": "Imperialismo e neocolonialismo", "aliases": ["corrida colonial", "Africa scramble", "imperialismo econômico"], "current_taxonomy_match": "Imperialismo e neocolonialismo" },
+            { "id": "hist.trans.direitos_trabalhistas", "name": "Direitos trabalhistas na história", "aliases": ["CLT", "movimento operário", "sindicalismo histórico"], "current_taxonomy_match": "Direitos trabalhistas na história" },
+            { "id": "hist.trans.diapsora", "name": "Diáspora africana e sociedades latino-americanas", "aliases": ["africanos no Brasil", "cultura afro-brasileira", "tráfico atlântico"], "current_taxonomy_match": "Diáspora africana e sociedades latino-americanas" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ingles",
+      "name": "Inglês",
+      "description": "Compreensão leitora de textos em língua inglesa. Componente de Linguagens — guia2026 p. 7–21.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 7–21, Componente Língua Inglesa, Competências 1–9",
+      "areas": [
+        {
+          "id": "ing.compreensao",
+          "name": "Compreensão e interpretação de textos",
+          "source_ref": "guia2026 Competência 1–3, OK Língua Inglesa",
+          "topics": [
+            { "id": "ing.comp.interpretacao", "name": "Interpretação de texto em inglês", "aliases": ["reading comprehension", "leitura em inglês", "textos em inglês"], "current_taxonomy_match": "Interpretação de texto em inglês" },
+            { "id": "ing.comp.generos", "name": "Gêneros verbo-visuais em inglês", "aliases": ["infográfico em inglês", "charge em inglês", "multimodal text"], "current_taxonomy_match": "Gêneros verbo-visuais em inglês" },
+            { "id": "ing.comp.divulgacao", "name": "Divulgação científica em inglês", "aliases": ["science text", "artigo científico em inglês"], "current_taxonomy_match": "Divulgação científica em inglês" },
+            { "id": "ing.comp.relacoes_logicas", "name": "Relações lógico-discursivas em inglês", "aliases": ["connectives", "cause-effect in English", "argumentação em inglês"], "current_taxonomy_match": "Relações lógico-discursivas em inglês" },
+            { "id": "ing.comp.inferencia", "name": "Inferência de sentido em inglês", "aliases": ["vocabulário em contexto", "deducing meaning"], "current_taxonomy_match": "Inferência de sentido em inglês" }
+          ]
+        },
+        {
+          "id": "ing.lexico",
+          "name": "Léxico e estrutura",
+          "source_ref": "guia2026 Competências 1–5, OK Língua Inglesa",
+          "topics": [
+            { "id": "ing.lex.sinonimia", "name": "Sinonímia, antonímia e polissemia em inglês", "aliases": ["synonyms", "antonyms", "word meaning in English"], "current_taxonomy_match": "Sinonímia, antonímia e polissemia em inglês" },
+            { "id": "ing.lex.cognatos", "name": "Cognatos e falsos cognatos", "aliases": ["false friends", "cognates", "palavras parecidas"], "current_taxonomy_match": "Cognatos e falsos cognatos" },
+            { "id": "ing.lex.formacao", "name": "Formação de palavras em inglês", "aliases": ["prefixes", "suffixes", "word formation"], "current_taxonomy_match": "Formação de palavras em inglês" },
+            { "id": "ing.lex.substantivos", "name": "Substantivos e adjetivos: ordem em inglês", "aliases": ["noun phrases", "adjective order", "gramática inglesa"], "current_taxonomy_match": "Substantivos e adjetivos: ordem em inglês" },
+            { "id": "ing.lex.phrasal", "name": "Phrasal verbs", "aliases": ["verbos frasais", "to give up", "to look for"], "current_taxonomy_match": "Phrasal verbs" },
+            { "id": "ing.lex.expressoes", "name": "Expressões idiomáticas", "aliases": ["idioms", "expressões fixas", "collocations"], "current_taxonomy_match": "Expressões idiomáticas" },
+            { "id": "ing.lex.pronomes", "name": "Pronomes e referência textual", "aliases": ["pronouns", "referência anafórica em inglês"], "current_taxonomy_match": "Pronomes e referência textual" },
+            { "id": "ing.lex.tempos_verbais", "name": "Tempos verbais e marcadores de tempo", "aliases": ["present perfect", "simple past", "tense markers"], "current_taxonomy_match": "Tempos verbais e marcadores de tempo" },
+            { "id": "ing.lex.modais", "name": "Verbos modais e modalização", "aliases": ["can could may might", "modal verbs"], "current_taxonomy_match": "Verbos modais e modalização" },
+            { "id": "ing.lex.figuras", "name": "Figuras de linguagem em inglês", "aliases": ["metaphor in English", "irony", "figurative language"], "current_taxonomy_match": "Figuras de linguagem em inglês" }
+          ]
+        },
+        {
+          "id": "ing.sociolinguistica",
+          "name": "Sociolinguística e variação",
+          "source_ref": "guia2026 Competência 5–6, OK Língua Inglesa",
+          "topics": [
+            { "id": "ing.socio.variacao", "name": "Variação linguística e inglês como língua franca", "aliases": ["World Englishes", "inglês global", "variantes do inglês"], "current_taxonomy_match": "Variação linguística e inglês como língua franca" },
+            { "id": "ing.socio.geopolitica", "name": "Geopolítica da língua inglesa", "aliases": ["imperialismo linguístico", "inglês e poder", "língua e colonialismo"], "current_taxonomy_match": "Geopolítica da língua inglesa" },
+            { "id": "ing.socio.fake_news", "name": "Opinião, fato e fake news em inglês", "aliases": ["fact vs opinion in English", "misinformation", "media literacy in English"], "current_taxonomy_match": "Opinião, fato e fake news em inglês" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "literatura",
+      "name": "Literatura",
+      "description": "Obras, autores e escolas literárias em língua portuguesa (Brasil, Portugal, África lusófona). Nota: não é componente autônomo na BNCC; tratado aqui por relevância diagnóstica da FUVEST.",
+      "sources": ["taxonomy_current"],
+      "source_ref": "Taxonomia atual (topic_taxonomy.json) — lista de leitura obrigatória FUVEST e escolas literárias",
+      "areas": [
+        {
+          "id": "lit.escolas",
+          "name": "Escolas e períodos literários",
+          "topics": [
+            { "id": "lit.esc.trovadorismo", "name": "Trovadorismo e Humanismo", "aliases": ["trovadores", "cantigas medievais", "Gil Vicente"], "current_taxonomy_match": "Trovadorismo e Humanismo" },
+            { "id": "lit.esc.classicismo", "name": "Classicismo e Camões", "aliases": ["Luís de Camões", "Os Lusíadas", "classicismo português"], "current_taxonomy_match": "Classicismo e Camões" },
+            { "id": "lit.esc.barroco", "name": "Barroco: Gregório de Matos e Vieira", "aliases": ["barroco brasileiro", "Padre Vieira", "cultismo e conceptismo"], "current_taxonomy_match": "Barroco: Gregório de Matos e Vieira" },
+            { "id": "lit.esc.arcadismo", "name": "Arcadismo", "aliases": ["neoclassicismo", "Cláudio Manuel da Costa", "Tomás Antônio Gonzaga"], "current_taxonomy_match": "Arcadismo" },
+            { "id": "lit.esc.romantismo_prosa", "name": "Romantismo: prosa", "aliases": ["romance romântico", "José de Alencar", "Inocência"], "current_taxonomy_match": "Romantismo: prosa" },
+            { "id": "lit.esc.romantismo_poesia", "name": "Romantismo: poesia", "aliases": ["Álvares de Azevedo", "Castro Alves", "condoreirismo"], "current_taxonomy_match": "Romantismo: poesia" },
+            { "id": "lit.esc.realismo", "name": "Realismo e Naturalismo", "aliases": ["Eça de Queirós", "Aluísio Azevedo", "realismo português"], "current_taxonomy_match": "Realismo e Naturalismo" },
+            { "id": "lit.esc.parnasianismo", "name": "Parnasianismo e Simbolismo", "aliases": ["Olavo Bilac", "Cruz e Sousa", "Alphonsus de Guimaraens"], "current_taxonomy_match": "Parnasianismo e Simbolismo" },
+            { "id": "lit.esc.premodernismo", "name": "Pré-Modernismo", "aliases": ["Euclides da Cunha", "Lima Barreto", "Monteiro Lobato"], "current_taxonomy_match": "Pré-Modernismo" },
+            { "id": "lit.esc.modernismo1", "name": "Modernismo: primeira geração", "aliases": ["Semana de 22", "Oswald de Andrade", "Mário de Andrade", "Manuel Bandeira"], "current_taxonomy_match": "Modernismo: primeira geração" },
+            { "id": "lit.esc.modernismo_poesia30", "name": "Modernismo: poesia de 30", "aliases": ["Carlos Drummond de Andrade", "Cecília Meireles", "Murilo Mendes"], "current_taxonomy_match": "Modernismo: poesia de 30" },
+            { "id": "lit.esc.modernismo_prosa30", "name": "Modernismo: prosa de 30", "aliases": ["Graciliano Ramos", "Rachel de Queiroz", "Jorge Amado", "José Lins do Rego"], "current_taxonomy_match": "Modernismo: prosa de 30" }
+          ]
+        },
+        {
+          "id": "lit.obras",
+          "name": "Obras e autores de leitura obrigatória",
+          "source_ref": "Lista anual FUVEST — varia a cada edição",
+          "topics": [
+            { "id": "lit.obras.machado_quincas", "name": "Machado de Assis: Quincas Borba", "aliases": ["Quincas Borba", "Machado romance"], "current_taxonomy_match": "Machado de Assis: Quincas Borba" },
+            { "id": "lit.obras.machado_geral", "name": "Machado de Assis: romances e contos", "aliases": ["Dom Casmurro", "Memórias Póstumas", "contos machadianos"], "current_taxonomy_match": "Machado de Assis: romances e contos" },
+            { "id": "lit.obras.guimaraes", "name": "Guimarães Rosa: Campo Geral", "aliases": ["Campo Geral", "Manuelzão e Miguilim", "sertão Rosa"], "current_taxonomy_match": "Guimarães Rosa: Campo Geral" },
+            { "id": "lit.obras.drummond_caetano", "name": "Drummond e Caetano Veloso", "aliases": ["poesia Drummond", "canção Caetano", "intertextualidade poesia"], "current_taxonomy_match": "Drummond e Caetano Veloso" },
+            { "id": "lit.obras.mario", "name": "Poesia de Mário de Andrade", "aliases": ["Pauliceia Desvairada", "Mário modernismo"], "current_taxonomy_match": "Poesia de Mário de Andrade" },
+            { "id": "lit.obras.ruth", "name": "Ruth Guimarães: Água funda", "aliases": ["Água funda", "literatura afro-brasileira"], "current_taxonomy_match": "Ruth Guimarães: Água funda" },
+            { "id": "lit.obras.mia_couto", "name": "Mia Couto", "aliases": ["literatura moçambicana", "Terra Sonâmbula"], "current_taxonomy_match": "Mia Couto" },
+            { "id": "lit.obras.leitura_obrigatoria", "name": "Conteúdo de leitura obrigatória", "aliases": ["lista FUVEST", "obras do vestibular"], "current_taxonomy_match": "Conteúdo de leitura obrigatória" }
+          ]
+        },
+        {
+          "id": "lit.comparada",
+          "name": "Literatura comparada e outras literaturas",
+          "topics": [
+            { "id": "lit.comp.intertextualidade", "name": "Intertextualidade entre obras literárias", "aliases": ["diálogo entre textos", "paródia literária", "alusão"], "current_taxonomy_match": "Intertextualidade entre obras literárias" },
+            { "id": "lit.comp.contemporanea", "name": "Literatura contemporânea brasileira", "aliases": ["literatura brasileira atual", "novos autores"], "current_taxonomy_match": "Literatura contemporânea brasileira" },
+            { "id": "lit.comp.indigena_lat", "name": "Literatura indígena e latino-americana", "aliases": ["realismo mágico", "García Márquez", "literatura ameríndia"], "current_taxonomy_match": "Literatura indígena e latino-americana" },
+            { "id": "lit.comp.africana", "name": "Literaturas africanas de língua portuguesa", "aliases": ["PALOP", "Pepetela", "José Saramago relações"], "current_taxonomy_match": "Literaturas africanas de língua portuguesa" },
+            { "id": "lit.comp.portuguesa_moderna", "name": "Literatura portuguesa moderna", "aliases": ["Fernando Pessoa", "Eça de Queirós", "Saramago"], "current_taxonomy_match": "Literatura portuguesa moderna" },
+            { "id": "lit.comp.generos", "name": "Gêneros literários: conto, crônica, romance e poema", "aliases": ["teoria dos gêneros", "forma literária"], "current_taxonomy_match": "Gêneros literários: conto, crônica, romance e poema" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lingua_portuguesa",
+      "name": "Língua Portuguesa",
+      "description": "Gramática, norma culta, análise de textos e produção textual. Componente de Linguagens — guia2026 p. 4–22, Competências 1–9.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 4–22, Componente Língua Portuguesa",
+      "areas": [
+        {
+          "id": "lp.leitura",
+          "name": "Leitura e interpretação de texto",
+          "source_ref": "guia2026 Competências 1–3",
+          "topics": [
+            { "id": "lp.leit.generos", "name": "Gêneros textuais e tipologias", "aliases": ["crônica", "artigo de opinião", "reportagem", "dissertação"], "current_taxonomy_match": "Gêneros textuais e tipologias" },
+            { "id": "lp.leit.funcoes", "name": "Funções da linguagem", "aliases": ["função referencial", "função poética", "função apelativa"], "current_taxonomy_match": "Funções da linguagem" },
+            { "id": "lp.leit.coesao", "name": "Coesão e coerência", "aliases": ["elementos coesivos", "coerência textual", "progressão temática"], "current_taxonomy_match": "Coesão e coerência" },
+            { "id": "lp.leit.operadores", "name": "Operadores lógico-discursivos", "aliases": ["conectivos", "conjunções", "marcadores discursivos"], "current_taxonomy_match": "Operadores lógico-discursivos" },
+            { "id": "lp.leit.intertextualidade", "name": "Intertextualidade, paródia e interdiscursividade", "aliases": ["dialogismo", "referências culturais", "citação"], "current_taxonomy_match": "Intertextualidade, paródia e interdiscursividade" },
+            { "id": "lp.leit.divisao_cientifica", "name": "Divulgação científica", "aliases": ["texto científico popular", "reportagem científica"], "current_taxonomy_match": "Divulgação científica" },
+            { "id": "lp.leit.fake_news", "name": "Fake news e leitura crítica de fontes", "aliases": ["verificação de fatos", "desinformação", "checagem"], "current_taxonomy_match": "Fake news e leitura crítica de fontes" },
+            { "id": "lp.leit.parcialidade", "name": "Parcialidade em textos noticiosos", "aliases": ["viés jornalístico", "objetividade", "imparcialidade"], "current_taxonomy_match": "Parcialidade em textos noticiosos" },
+            { "id": "lp.leit.art_opiniao", "name": "Interpretação de texto: artigo de opinião", "aliases": ["artigo de opinião", "texto argumentativo"], "current_taxonomy_match": "Interpretação de texto: artigo de opinião" },
+            { "id": "lp.leit.cronica", "name": "Interpretação de texto: crônica", "aliases": ["crônica literária", "crônica jornalística"], "current_taxonomy_match": "Interpretação de texto: crônica" },
+            { "id": "lp.leit.charge", "name": "Interpretação de texto: charge e cartum", "aliases": ["charge política", "cartum humorístico", "texto visual"], "current_taxonomy_match": "Interpretação de texto: charge e cartum" },
+            { "id": "lp.leit.tirinha", "name": "Interpretação de texto: tirinha", "aliases": ["quadrinhos", "HQ", "história em quadrinhos"], "current_taxonomy_match": "Interpretação de texto: tirinha" },
+            { "id": "lp.leit.publicidade", "name": "Interpretação de texto: publicidade", "aliases": ["anúncio publicitário", "propaganda", "texto persuasivo"], "current_taxonomy_match": "Interpretação de texto: publicidade" },
+            { "id": "lp.leit.noticias", "name": "Interpretação de texto: notícia e reportagem", "aliases": ["texto jornalístico", "reportagem", "notícia"], "current_taxonomy_match": "Interpretação de texto: notícia e reportagem" },
+            { "id": "lp.leit.cancao", "name": "Interpretação de texto: canção", "aliases": ["letra de música", "poema musical"], "current_taxonomy_match": "Interpretação de texto: canção" }
+          ]
+        },
+        {
+          "id": "lp.gramatica",
+          "name": "Gramática e norma culta",
+          "source_ref": "guia2026 Competência 4–6",
+          "topics": [
+            { "id": "lp.gram.classes", "name": "Classes gramaticais e morfossintaxe", "aliases": ["substantivo", "adjetivo", "verbo", "pronome", "morfologia"], "current_taxonomy_match": "Classes gramaticais e morfossintaxe" },
+            { "id": "lp.gram.sintaxe", "name": "Sintaxe: coordenação e subordinação", "aliases": ["oração subordinada", "período composto", "análise sintática"], "current_taxonomy_match": "Sintaxe: coordenação e subordinação" },
+            { "id": "lp.gram.concordancia", "name": "Concordância verbal e nominal", "aliases": ["concordância", "sujeito e verbo", "norma padrão"], "current_taxonomy_match": "Concordância verbal e nominal" },
+            { "id": "lp.gram.regencia", "name": "Regência verbal e nominal", "aliases": ["crase", "regência", "preposição"], "current_taxonomy_match": "Regência verbal e nominal" },
+            { "id": "lp.gram.pontuacao", "name": "Pontuação e ortografia", "aliases": ["vírgula", "ponto e vírgula", "ortografia", "acentuação"], "current_taxonomy_match": "Pontuação e ortografia" },
+            { "id": "lp.gram.flexao", "name": "Flexão verbal e modo subjuntivo", "aliases": ["conjugação verbal", "subjuntivo", "imperfeito do subjuntivo"], "current_taxonomy_match": "Flexão verbal e modo subjuntivo" },
+            { "id": "lp.gram.impessoalizacao", "name": "Impessoalização e voz passiva", "aliases": ["voz passiva analítica", "voz passiva sintética", "índice de indeterminação"], "current_taxonomy_match": "Impessoalização e voz passiva" },
+            { "id": "lp.gram.variacao", "name": "Variação linguística e preconceito linguístico", "aliases": ["dialeto", "registro", "norma culta vs popular"], "current_taxonomy_match": "Variação linguística e preconceito linguístico" },
+            { "id": "lp.gram.norma_culta", "name": "Norma culta e mudança da língua", "aliases": ["neologismo", "arcaísmo", "mudança linguística"], "current_taxonomy_match": "Norma culta e mudança da língua" },
+            { "id": "lp.gram.estrangeirismos", "name": "Estrangeirismos", "aliases": ["anglicismos", "galicismos", "empréstimo linguístico"], "current_taxonomy_match": "Estrangeirismos" }
+          ]
+        },
+        {
+          "id": "lp.lexico_semant",
+          "name": "Léxico e semântica",
+          "source_ref": "guia2026 Competências 1–3",
+          "topics": [
+            { "id": "lp.lex.formacao", "name": "Composição e outros processos de formação de palavras", "aliases": ["composição", "derivação", "parasíntese", "formação de neologismos"], "current_taxonomy_match": "Composição e outros processos de formação de palavras" },
+            { "id": "lp.lex.derivacao", "name": "Derivação sufixal", "aliases": ["sufixo", "derivação", "morfema derivacional"], "current_taxonomy_match": "Derivação sufixal" },
+            { "id": "lp.lex.sinonimia", "name": "Paráfrase e sinonímia", "aliases": ["sinônimos", "paráfrase", "equivalência semântica"], "current_taxonomy_match": "Paráfrase e sinonímia" },
+            { "id": "lp.lex.polissemia", "name": "Polissemia e ambiguidade", "aliases": ["polissemia", "homonímia", "duplo sentido"], "current_taxonomy_match": "Polissemia e ambiguidade" },
+            { "id": "lp.lex.denotacao", "name": "Sentido denotativo e conotativo", "aliases": ["conotação", "denotação", "sentido figurado"], "current_taxonomy_match": "Sentido denotativo e conotativo" },
+            { "id": "lp.lex.metafora", "name": "Metáfora e personificação", "aliases": ["figuras de linguagem", "comparação", "prosopopeia"], "current_taxonomy_match": "Metáfora e personificação" },
+            { "id": "lp.lex.ironia", "name": "Ironia, metonímia e hipérbole", "aliases": ["ironia", "metonímia", "eufemismo", "hipérbole"], "current_taxonomy_match": "Ironia, metonímia e hipérbole" }
+          ]
+        },
+        {
+          "id": "lp.producao",
+          "name": "Produção textual e argumentação",
+          "source_ref": "guia2026 Competências 7–9",
+          "topics": [
+            { "id": "lp.prod.dissertacao", "name": "Produção textual: dissertação e argumentação", "aliases": ["redação dissertativa", "tese e argumentos", "produção escrita"], "current_taxonomy_match": "Produção textual: dissertação e argumentação" },
+            { "id": "lp.prod.persuasao", "name": "Persuasão e argumentação", "aliases": ["retórica", "argumentação", "estratégias argumentativas"], "current_taxonomy_match": "Persuasão e argumentação" },
+            { "id": "lp.prod.modalizacao", "name": "Modalização e posicionamento do enunciador", "aliases": ["modalização", "marcadores de posição", "enunciação"], "current_taxonomy_match": "Modalização e posicionamento do enunciador" },
+            { "id": "lp.prod.retextualizacao", "name": "Retextualização e reescrita", "aliases": ["paráfrase", "resumo", "adaptação textual"], "current_taxonomy_match": "Retextualização e reescrita" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "matematica",
+      "name": "Matemática",
+      "description": "Matemática e suas Tecnologias — FUVEST 2026 guia p. 10–26, Habilidades 1–5.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 10–26, Matemática e suas Tecnologias",
+      "areas": [
+        {
+          "id": "mat.numeros",
+          "name": "Números e álgebra",
+          "source_ref": "guia2026 p. 10–22, Habilidades 1–2",
+          "topics": [
+            { "id": "mat.num.conjuntos", "name": "Conjuntos numéricos e operações", "aliases": ["naturais", "inteiros", "racionais", "reais", "complexos"], "current_taxonomy_match": "Conjuntos numéricos e operações" },
+            { "id": "mat.num.divisibilidade", "name": "Divisibilidade e números primos", "aliases": ["MMC", "MDC", "divisores", "critérios de divisibilidade"], "current_taxonomy_match": "Divisibilidade e números primos" },
+            { "id": "mat.num.potencias", "name": "Fatoração, radiciação e expressões algébricas", "aliases": ["fatoração algébrica", "radiciação", "produtos notáveis"], "current_taxonomy_match": "Fatoração, radiciação e expressões algébricas" },
+            { "id": "mat.num.polinomios", "name": "Polinômios e divisão euclidiana", "aliases": ["polinômio", "divisão de polinômios", "Briot-Ruffini"], "current_taxonomy_match": "Polinômios e divisão euclidiana" },
+            { "id": "mat.num.sistemas", "name": "Sistemas lineares", "aliases": ["equações lineares", "sistema 2x2", "sistema 3x3", "Gauss"], "current_taxonomy_match": "Sistemas lineares" },
+            { "id": "mat.num.sistemas_numeracao", "name": "Sistemas de numeração", "aliases": ["base 2", "base 10", "hexadecimal"], "current_taxonomy_match": "Sistemas de numeração" },
+            { "id": "mat.num.porcentagem", "name": "Porcentagem", "aliases": ["percentual", "desconto", "acréscimo"], "current_taxonomy_match": "Porcentagem" },
+            { "id": "mat.num.razoes", "name": "Razões, proporções e grandezas proporcionais", "aliases": ["regra de três", "proporção", "grandeza diretamente proporcional"], "current_taxonomy_match": "Razões, proporções e grandezas proporcionais" },
+            { "id": "mat.num.grandezas", "name": "Grandezas compostas e unidades de medida", "aliases": ["velocidade", "densidade", "pressão", "unidades SI"], "current_taxonomy_match": "Grandezas compostas e unidades de medida" },
+            { "id": "mat.num.notacao", "name": "Notação científica e algarismos significativos", "aliases": ["potências de 10", "algarismos significativos"], "current_taxonomy_match": "Notação científica e algarismos significativos" },
+            { "id": "mat.num.juros", "name": "Juros simples e compostos", "aliases": ["capitalização", "montante", "taxa de juros"], "current_taxonomy_match": "Juros simples e compostos" },
+            { "id": "mat.num.progressao_ar", "name": "Progressões aritméticas", "aliases": ["PA", "razão da PA", "soma da PA"], "current_taxonomy_match": "Progressões aritméticas" },
+            { "id": "mat.num.progressao_geo", "name": "Progressões geométricas", "aliases": ["PG", "razão da PG", "soma da PG infinita"], "current_taxonomy_match": "Progressões geométricas" },
+            { "id": "mat.num.complexos", "name": "Números complexos", "aliases": ["número imaginário", "forma trigonométrica", "módulo e argumento"], "current_taxonomy_match": "Números complexos" }
+          ]
+        },
+        {
+          "id": "mat.funcoes",
+          "name": "Funções e análise",
+          "source_ref": "guia2026 p. 23–24, Habilidade 3",
+          "topics": [
+            { "id": "mat.func.afins", "name": "Funções afins", "aliases": ["função linear", "função do 1º grau", "crescimento linear"], "current_taxonomy_match": "Funções afins" },
+            { "id": "mat.func.quadraticas", "name": "Funções quadráticas", "aliases": ["função do 2º grau", "parábola", "vértice", "discriminante"], "current_taxonomy_match": "Funções quadráticas" },
+            { "id": "mat.func.modulares", "name": "Funções modulares", "aliases": ["módulo", "função modular", "valor absoluto"], "current_taxonomy_match": "Funções modulares" },
+            { "id": "mat.func.exponenciais", "name": "Funções exponenciais", "aliases": ["crescimento exponencial", "decaimento exponencial", "base e"], "current_taxonomy_match": "Funções exponenciais" },
+            { "id": "mat.func.logaritmicas", "name": "Logaritmos e funções logarítmicas", "aliases": ["logaritmo natural", "propriedades do logaritmo", "mudança de base"], "current_taxonomy_match": "Logaritmos e funções logarítmicas" },
+            { "id": "mat.func.inequacoes", "name": "Inequações logarítmicas", "aliases": ["inequação exponencial", "inequação do 2º grau", "inequação modular"], "current_taxonomy_match": "Inequações logarítmicas" },
+            { "id": "mat.func.racionais", "name": "Funções racionais", "aliases": ["função hipérbole", "assíntota"], "current_taxonomy_match": "Funções racionais" },
+            { "id": "mat.func.partes", "name": "Funções definidas por partes", "aliases": ["função por casos", "função escada"], "current_taxonomy_match": "Funções definidas por partes" },
+            { "id": "mat.func.composicao", "name": "Composição e ponto fixo de funções", "aliases": ["função composta", "inversa de função", "ponto fixo"], "current_taxonomy_match": "Composição e ponto fixo de funções" },
+            { "id": "mat.func.graficos", "name": "Gráficos, tabelas e infográficos", "aliases": ["leitura de gráfico", "interpretação de dados"], "current_taxonomy_match": "Gráficos, tabelas e infográficos" }
+          ]
+        },
+        {
+          "id": "mat.trigonometria",
+          "name": "Trigonometria",
+          "source_ref": "guia2026 p. 23–25, Habilidades 3–4",
+          "topics": [
+            { "id": "mat.trig.triangulo", "name": "Trigonometria no triângulo", "aliases": ["seno cosseno tangente", "lei dos senos", "lei dos cossenos"], "current_taxonomy_match": "Trigonometria no triângulo" },
+            { "id": "mat.trig.ciclo", "name": "Ciclo trigonométrico e funções trigonométricas", "aliases": ["círculo trigonométrico", "função seno", "função cosseno", "função tangente"], "current_taxonomy_match": "Ciclo trigonométrico e funções trigonométricas" },
+            { "id": "mat.trig.identidades", "name": "Identidades e equações trigonométricas", "aliases": ["identidades fundamentais", "arco duplo", "arco metade"], "current_taxonomy_match": "Identidades e equações trigonométricas" },
+            { "id": "mat.trig.arco_metade", "name": "Arco metade", "aliases": ["fórmulas do arco metade", "relações trigonométricas"], "current_taxonomy_match": "Arco metade" },
+            { "id": "mat.trig.inversas", "name": "Funções trigonométricas inversas", "aliases": ["arcoseno", "arcocosseno", "arcotangente"], "current_taxonomy_match": "Funções trigonométricas inversas" }
+          ]
+        },
+        {
+          "id": "mat.geometria",
+          "name": "Geometria",
+          "source_ref": "guia2026 p. 25, Habilidade 4",
+          "topics": [
+            { "id": "mat.geo.areas", "name": "Áreas de figuras planas", "aliases": ["área do triângulo", "área do círculo", "área do polígono"], "current_taxonomy_match": "Áreas de figuras planas" },
+            { "id": "mat.geo.semelhanca", "name": "Congruência e semelhança de triângulos", "aliases": ["critérios de semelhança", "escala"], "current_taxonomy_match": "Congruência e semelhança de triângulos" },
+            { "id": "mat.geo.relacoes", "name": "Relações métricas em triângulos e círculos", "aliases": ["Pitágoras", "relações métricas no triângulo retângulo", "corda e secante"], "current_taxonomy_match": "Relações métricas em triângulos e círculos" },
+            { "id": "mat.geo.poligonos", "name": "Polígonos e circunferência", "aliases": ["polígono regular", "ângulos do polígono", "circunferência inscrita"], "current_taxonomy_match": "Polígonos e circunferência" },
+            { "id": "mat.geo.transformacoes", "name": "Transformações geométricas e simetrias", "aliases": ["reflexão", "rotação", "translação", "homotetia"], "current_taxonomy_match": "Transformações geométricas e simetrias" },
+            { "id": "mat.geo.pavimentacoes", "name": "Pavimentações do plano", "aliases": ["ladrilhamento", "tesselação"], "current_taxonomy_match": "Pavimentações do plano" },
+            { "id": "mat.geo.prismas", "name": "Prismas e cilindros", "aliases": ["volume do prisma", "volume do cilindro", "área lateral"], "current_taxonomy_match": "Prismas e cilindros" },
+            { "id": "mat.geo.piramides", "name": "Volume de pirâmides", "aliases": ["volume da pirâmide", "pirâmide regular", "tronco de pirâmide"], "current_taxonomy_match": "Volume de pirâmides" },
+            { "id": "mat.geo.cones", "name": "Cones, troncos e esferas", "aliases": ["volume do cone", "área da esfera", "tronco de cone"], "current_taxonomy_match": "Cones, troncos e esferas" },
+            { "id": "mat.geo.poliedros", "name": "Poliedros e inscrição de sólidos", "aliases": ["cubo", "octaedro", "Euler para poliedros", "sólidos platônicos"], "current_taxonomy_match": "Poliedros e inscrição de sólidos" },
+            { "id": "mat.geo.planificacoes", "name": "Planificações e vistas ortogonais", "aliases": ["planificação do cubo", "vista frontal lateral superior"], "current_taxonomy_match": "Planificações e vistas ortogonais" }
+          ]
+        },
+        {
+          "id": "mat.analitica",
+          "name": "Geometria analítica",
+          "source_ref": "guia2026 p. 21–22, Habilidade 2",
+          "topics": [
+            { "id": "mat.an.plano", "name": "Plano cartesiano e distância entre pontos", "aliases": ["coordenadas", "distância entre pontos", "ponto médio"], "current_taxonomy_match": "Plano cartesiano e distância entre pontos" },
+            { "id": "mat.an.reta", "name": "Equação da reta", "aliases": ["coeficiente angular", "reta paralela e perpendicular", "equação geral da reta"], "current_taxonomy_match": "Equação da reta" },
+            { "id": "mat.an.circunferencia", "name": "Circunferência no plano cartesiano", "aliases": ["equação da circunferência", "centro e raio"], "current_taxonomy_match": "Circunferência no plano cartesiano" }
+          ]
+        },
+        {
+          "id": "mat.estatistica",
+          "name": "Estatística e probabilidade",
+          "source_ref": "guia2026 p. 26, Habilidade 5",
+          "topics": [
+            { "id": "mat.est.descritiva", "name": "Estatística descritiva: média, mediana e moda", "aliases": ["média aritmética", "mediana", "moda", "medidas de tendência central"], "current_taxonomy_match": "Estatística descritiva: média, mediana e moda" },
+            { "id": "mat.est.dispersao", "name": "Medidas de dispersão", "aliases": ["desvio padrão", "variância", "coeficiente de variação"], "current_taxonomy_match": "Medidas de dispersão" },
+            { "id": "mat.est.quartis", "name": "Quartis, decis e percentis", "aliases": ["box-plot", "medidas de posição", "distribuição"], "current_taxonomy_match": "Quartis, decis e percentis" },
+            { "id": "mat.est.amostragem", "name": "Amostragem e pesquisas", "aliases": ["população e amostra", "amostra aleatória", "viés amostral"], "current_taxonomy_match": "Amostragem e pesquisas" },
+            { "id": "mat.est.combinatoria", "name": "Análise combinatória", "aliases": ["arranjo", "permutação", "combinação", "princípio fundamental"], "current_taxonomy_match": "Análise combinatória" },
+            { "id": "mat.est.probabilidade", "name": "Probabilidade", "aliases": ["espaço amostral", "evento", "frequência relativa"], "current_taxonomy_match": "Probabilidade" },
+            { "id": "mat.est.prob_cond", "name": "Probabilidade condicional e independência", "aliases": ["probabilidade condicional", "Bayes", "eventos independentes"], "current_taxonomy_match": "Probabilidade condicional e independência" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quimica",
+      "name": "Química",
+      "description": "Ciências da Natureza — Química. FUVEST 2026 guia p. 27–33, Habilidades 1–3.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 27–33, Componente Química",
+      "areas": [
+        {
+          "id": "qui.geral",
+          "name": "Química geral e estrutura da matéria",
+          "source_ref": "guia2026 p. 32–33, Habilidade 3",
+          "topics": [
+            { "id": "qui.ger.modelos", "name": "Modelos atômicos", "aliases": ["Bohr", "Thomson", "Rutherford", "modelo quântico"], "current_taxonomy_match": "Modelos atômicos" },
+            { "id": "qui.ger.tabela", "name": "Tabela periódica e propriedades periódicas", "aliases": ["eletronegatividade", "raio atômico", "energia de ionização"], "current_taxonomy_match": "Tabela periódica e propriedades periódicas" },
+            { "id": "qui.ger.ligacoes_ionica", "name": "Ligações iônica e metálica", "aliases": ["sal iônico", "metal e ligação metálica", "cristal iônico"], "current_taxonomy_match": "Ligações iônica e metálica" },
+            { "id": "qui.ger.covalente", "name": "Estruturas de Lewis e ligação covalente", "aliases": ["estrutura de Lewis", "ligação dupla", "tripla"], "current_taxonomy_match": "Estruturas de Lewis e ligação covalente" },
+            { "id": "qui.ger.geometria", "name": "Geometria molecular e polaridade", "aliases": ["VSEPR", "molécula polar", "dipolo elétrico"], "current_taxonomy_match": "Geometria molecular e polaridade" },
+            { "id": "qui.ger.forcas", "name": "Forças intermoleculares", "aliases": ["van der Waals", "ligação de hidrogênio", "forças de London"], "current_taxonomy_match": "Forças intermoleculares" },
+            { "id": "qui.ger.estados", "name": "Estados físicos e separação de misturas", "aliases": ["destilação", "filtração", "decantação", "sublimação"], "current_taxonomy_match": "Estados físicos e separação de misturas" },
+            { "id": "qui.ger.gases", "name": "Lei dos gases", "aliases": ["lei de Boyle Química", "lei de Charles Química", "gás ideal"], "current_taxonomy_match": "Lei dos gases" },
+            { "id": "qui.ger.origem", "name": "Origem dos elementos químicos", "aliases": ["nucleossíntese estelar", "tabela periódica origem"], "current_taxonomy_match": "Origem dos elementos químicos" }
+          ]
+        },
+        {
+          "id": "qui.fisico",
+          "name": "Físico-química",
+          "source_ref": "guia2026 p. 27–28, Habilidade 1",
+          "topics": [
+            { "id": "qui.fis.leis_ponderais", "name": "Leis ponderais e conservação da massa", "aliases": ["Lei de Lavoisier", "Lei de Proust", "Lei de Dalton"], "current_taxonomy_match": "Leis ponderais e conservação da massa" },
+            { "id": "qui.fis.estequiometria", "name": "Estequiometria", "aliases": ["cálculo estequiométrico", "reagente limitante", "rendimento"], "current_taxonomy_match": "Estequiometria" },
+            { "id": "qui.fis.mol", "name": "Mol, massa molar e constante de Avogadro", "aliases": ["número de Avogadro", "mol", "massa molar"], "current_taxonomy_match": "Mol, massa molar e constante de Avogadro" },
+            { "id": "qui.fis.solucoes", "name": "Soluções e concentração", "aliases": ["concentração molar", "concentração comum", "diluição"], "current_taxonomy_match": "Soluções e concentração" },
+            { "id": "qui.fis.coligativas", "name": "Propriedades coligativas e pressão osmótica", "aliases": ["tonoscopia", "ebuliscopia", "crioscopia", "osmose Química"], "current_taxonomy_match": "Propriedades coligativas e pressão osmótica" },
+            { "id": "qui.fis.cinetica", "name": "Cinética química e catálise", "aliases": ["velocidade de reação", "catalisador", "fatores de velocidade"], "current_taxonomy_match": "Cinética química e catálise" },
+            { "id": "qui.fis.equilibrio", "name": "Equilíbrio químico e deslocamento", "aliases": ["Kc", "Le Chatelier", "equilíbrio heterogêneo"], "current_taxonomy_match": "Equilíbrio químico e deslocamento" },
+            { "id": "qui.fis.acido_base", "name": "Ácidos, bases, sais e pH", "aliases": ["Arrhenius", "Brønsted-Lowry", "pH e pOH"], "current_taxonomy_match": "Ácidos, bases, sais e pH" },
+            { "id": "qui.fis.equilibrio_ab", "name": "Equilíbrio ácido-base", "aliases": ["Ka", "Kb", "solução tampão"], "current_taxonomy_match": "Equilíbrio ácido-base" },
+            { "id": "qui.fis.termoquimica", "name": "Termoquímica e Lei de Hess", "aliases": ["entalpia de formação", "calor de neutralização", "ciclo de Born-Haber"], "current_taxonomy_match": "Termoquímica e Lei de Hess" },
+            { "id": "qui.fis.entalpia", "name": "Entalpia por energia de ligação", "aliases": ["energia de ligação", "DH de ligação"], "current_taxonomy_match": "Entalpia por energia de ligação" },
+            { "id": "qui.fis.eletroquimica", "name": "Pilhas e eletroquímica", "aliases": ["pilha de Daniell", "potencial de redução", "eletrólise"], "current_taxonomy_match": "Pilhas e eletroquímica" },
+            { "id": "qui.fis.electrolise", "name": "Eletrólise", "aliases": ["eletrólise ígnea", "eletrólise aquosa", "lei de Faraday"], "current_taxonomy_match": "Eletrólise" },
+            { "id": "qui.fis.oxirred", "name": "Oxirredução e combustão", "aliases": ["oxidação", "redução", "número de oxidação"], "current_taxonomy_match": "Oxirredução e combustão" },
+            { "id": "qui.fis.eq_solubilidade", "name": "Equilíbrio de solubilidade", "aliases": ["Kps", "produto de solubilidade"], "current_taxonomy_match": "Equilíbrio de solubilidade" }
+          ]
+        },
+        {
+          "id": "qui.organica",
+          "name": "Química orgânica",
+          "source_ref": "guia2026 p. 29–30 e 32, Habilidades 1–3",
+          "topics": [
+            { "id": "qui.org.funcoes", "name": "Funções orgânicas e nomenclatura", "aliases": ["álcool", "ácido carboxílico", "éster", "amina"], "current_taxonomy_match": "Funções orgânicas e nomenclatura" },
+            { "id": "qui.org.isomeria", "name": "Isomeria", "aliases": ["isomeria plana", "isomeria espacial", "enantiômeros"], "current_taxonomy_match": "Isomeria" },
+            { "id": "qui.org.hidrocarbonetos", "name": "Hidrocarbonetos, petróleo e combustíveis", "aliases": ["alcanos", "alcenos", "petróleo", "gasolina"], "current_taxonomy_match": "Hidrocarbonetos, petróleo e combustíveis" },
+            { "id": "qui.org.reacoes", "name": "Reações orgânicas", "aliases": ["adição", "substituição orgânica", "eliminação", "saponificação"], "current_taxonomy_match": "Reações orgânicas" },
+            { "id": "qui.org.polimeros", "name": "Polímeros e petroquímica", "aliases": ["plásticos", "borracha", "nylon", "polimerização"], "current_taxonomy_match": "Polímeros e petroquímica" },
+            { "id": "qui.org.biomoleculas", "name": "Biomoléculas e obtenção de energia dos alimentos", "aliases": ["glicídios", "proteínas", "lipídios", "ATP Química"], "current_taxonomy_match": "Biomoléculas e obtenção de energia dos alimentos" }
+          ]
+        },
+        {
+          "id": "qui.ambiental",
+          "name": "Química ambiental e industrial",
+          "source_ref": "guia2026 p. 27–30, Habilidades 1–2",
+          "topics": [
+            { "id": "qui.amb.ciclos", "name": "Ciclos do carbono, nitrogênio e enxofre", "aliases": ["ciclo do carbono química", "ciclo do enxofre", "fixação do nitrogênio"], "current_taxonomy_match": "Ciclos do carbono, nitrogênio e enxofre" },
+            { "id": "qui.amb.chuva_acida", "name": "Chuva ácida e poluição atmosférica", "aliases": ["dióxido de enxofre", "óxidos de nitrogênio", "smog"], "current_taxonomy_match": "Chuva ácida e poluição atmosférica" },
+            { "id": "qui.amb.tratamento_agua", "name": "Tratamento de água e parâmetros de qualidade", "aliases": ["cloração", "filtração de água", "DBO"], "current_taxonomy_match": "Tratamento de água e parâmetros de qualidade" },
+            { "id": "qui.amb.poluicao", "name": "Poluição da água e agrotóxicos", "aliases": ["pesticidas", "metais pesados", "bioacumulação"], "current_taxonomy_match": "Poluição da água e agrotóxicos" },
+            { "id": "qui.amb.residuos", "name": "Resíduos e impactos da indústria química", "aliases": ["descarte de resíduos", "química verde", "ISO ambiental"], "current_taxonomy_match": "Resíduos e impactos da indústria química" },
+            { "id": "qui.amb.inorganicos", "name": "Produção industrial de compostos inorgânicos", "aliases": ["amônia Haber-Bosch", "ácido sulfúrico", "cloro-álcali"], "current_taxonomy_match": "Produção industrial de compostos inorgânicos" },
+            { "id": "qui.amb.radioatividade", "name": "Radiações e radioatividade na química", "aliases": ["raios X química", "radiação ionizante", "isótopos"], "current_taxonomy_match": "Radiações e radioatividade na química" },
+            { "id": "qui.amb.oxigenio", "name": "Oxigênio dissolvido e vida aquática", "aliases": ["DBO", "eutrofização", "poluição de rios"], "current_taxonomy_match": "Oxigênio dissolvido e vida aquática" },
+            { "id": "qui.amb.corrosao", "name": "Proteção catódica e corrosão", "aliases": ["ferrugem", "galvanização", "proteção catódica"], "current_taxonomy_match": "Proteção catódica e corrosão" },
+            { "id": "qui.amb.titulacao", "name": "Titulação e retrotitulação", "aliases": ["titulação ácido-base", "ponto de equivalência", "indicador"], "current_taxonomy_match": "Titulação e retrotitulação" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sociologia",
+      "name": "Sociologia",
+      "description": "Componente de Ciências Humanas e Sociais Aplicadas. FUVEST 2026 guia p. 54–60, Habilidades 1–15.",
+      "sources": ["guia2026"],
+      "source_ref": "guia2026 p. 54–60, Componente Sociologia",
+      "areas": [
+        {
+          "id": "soc.teoria",
+          "name": "Teoria sociológica clássica e contemporânea",
+          "source_ref": "guia2026 p. 54–55, Habilidade 2",
+          "topics": [
+            { "id": "soc.teo.divisao", "name": "Divisão do trabalho e coesão social", "aliases": ["Durkheim", "solidariedade mecânica e orgânica", "anomia"], "current_taxonomy_match": "Divisão do trabalho e coesão social" },
+            { "id": "soc.teo.racionalizacao", "name": "Racionalização e burocracia", "aliases": ["Weber", "ação racional", "dominação legítima", "burocracia"], "current_taxonomy_match": "Racionalização e burocracia" },
+            { "id": "soc.teo.trabalho_classes", "name": "Trabalho assalariado e classes sociais", "aliases": ["Marx", "alienação", "mais-valia", "luta de classes"], "current_taxonomy_match": "Trabalho assalariado e classes sociais" },
+            { "id": "soc.teo.senso_comum", "name": "Senso comum e pensamento científico", "aliases": ["imaginação sociológica", "estranhamento sociológico"], "current_taxonomy_match": "Senso comum e pensamento científico" },
+            { "id": "soc.teo.modernidade", "name": "Modernidade e razão instrumental", "aliases": ["Escola de Frankfurt", "razão instrumental", "Adorno e Horkheimer"], "current_taxonomy_match": "Modernidade e razão instrumental" },
+            { "id": "soc.teo.evolucionismo", "name": "Evolucionismo, darwinismo social e eugenia", "aliases": ["Spencer", "darwinismo social", "eugenia social"], "current_taxonomy_match": "Evolucionismo, darwinismo social e eugenia" }
+          ]
+        },
+        {
+          "id": "soc.cultura",
+          "name": "Cultura e identidade",
+          "source_ref": "guia2026 p. 55–56, Habilidades 4–5",
+          "topics": [
+            { "id": "soc.cul.popular_erudita", "name": "Cultura popular, erudita e de massa", "aliases": ["cultura de massa", "indústria cultural Adorno", "cultura erudita"], "current_taxonomy_match": "Cultura popular, erudita e de massa" },
+            { "id": "soc.cul.dominacao", "name": "Cultura, dominação e distinção social", "aliases": ["Bourdieu", "capital cultural", "habitus", "campo social"], "current_taxonomy_match": "Cultura, dominação e distinção social" },
+            { "id": "soc.cul.relativismo", "name": "Relativismo cultural e multiculturalismo", "aliases": ["etnocentrismo sociológico", "relativismo", "diversidade cultural"], "current_taxonomy_match": "Relativismo cultural e multiculturalismo" },
+            { "id": "soc.cul.racismo", "name": "Racismo e etnocentrismo", "aliases": ["racismo estrutural", "preconceito racial", "discriminação étnica"], "current_taxonomy_match": "Racismo e etnocentrismo" },
+            { "id": "soc.cul.escravidao", "name": "Escravidão e questão racial no Brasil", "aliases": ["escravidão no Brasil", "pós-abolição", "relações raciais"], "current_taxonomy_match": "Escravidão e questão racial no Brasil" },
+            { "id": "soc.cul.pensamento_br", "name": "Pensamento social brasileiro", "aliases": ["Gilberto Freyre", "Sérgio Buarque", "Florestan Fernandes"], "current_taxonomy_match": "Pensamento social brasileiro" }
+          ]
+        },
+        {
+          "id": "soc.comunicacao",
+          "name": "Comunicação, tecnologia e consumo",
+          "source_ref": "guia2026 p. 56, Habilidade 6",
+          "topics": [
+            { "id": "soc.com.industria", "name": "Indústria cultural e meios de comunicação", "aliases": ["televisão e poder", "rádio e sociedade", "jornalismo e opinião"], "current_taxonomy_match": "Indústria cultural e meios de comunicação" },
+            { "id": "soc.com.redes", "name": "Redes sociais, algoritmos e fake news", "aliases": ["bolha digital", "desinformação", "algoritmos e viés"], "current_taxonomy_match": "Redes sociais, algoritmos e fake news" },
+            { "id": "soc.com.consumo", "name": "Consumo, moda e estilos de vida", "aliases": ["consumismo", "moda e distinção social", "lifestyle"], "current_taxonomy_match": "Consumo, moda e estilos de vida" },
+            { "id": "soc.com.obsolescencia", "name": "Obsolescência programada e descarte", "aliases": ["durabilidade de produtos", "descarte e reciclagem", "moda rápida"], "current_taxonomy_match": "Obsolescência programada e descarte" },
+            { "id": "soc.com.trabalho_tecnologia", "name": "Trabalho, tecnologia e novas formas de ocupação", "aliases": ["automação", "desemprego tecnológico", "gig economy"], "current_taxonomy_match": "Trabalho, tecnologia e novas formas de ocupação" },
+            { "id": "soc.com.globalizacao", "name": "Globalização e mundialização da cultura", "aliases": ["globalização cultural", "americanização", "cultura global"], "current_taxonomy_match": "Globalização e mundialização da cultura" }
+          ]
+        },
+        {
+          "id": "soc.politica",
+          "name": "Sociologia política e Estado",
+          "source_ref": "guia2026 p. 57–58, Habilidades 9–10",
+          "topics": [
+            { "id": "soc.pol.estado", "name": "Estado, formas de governo e cidadania", "aliases": ["Estado nacional", "república", "monarquia", "democracia sociologia"], "current_taxonomy_match": "Estado, formas de governo e cidadania" },
+            { "id": "soc.pol.democracia", "name": "Democracia antiga e moderna", "aliases": ["democracia representativa", "democracia direta", "soberania popular"], "current_taxonomy_match": "Democracia antiga e moderna" },
+            { "id": "soc.pol.movimentos", "name": "Movimentos sociais", "aliases": ["feminismo", "movimento LGBTQIA+", "movimento negro", "MST sociologia"], "current_taxonomy_match": "Movimentos sociais" },
+            { "id": "soc.pol.direitos", "name": "Direitos humanos e identidades", "aliases": ["direitos sociais", "cidadania moderna", "identidade e direitos"], "current_taxonomy_match": "Direitos humanos e identidades" },
+            { "id": "soc.pol.patronato", "name": "Patriarcalismo, coronelismo e poder no campo", "aliases": ["coronelismo sociológico", "patriarcalismo", "mandonismo local"], "current_taxonomy_match": "Patriarcalismo, coronelismo e poder no campo" }
+          ]
+        },
+        {
+          "id": "soc.espaco",
+          "name": "Espaço, território e desigualdades",
+          "source_ref": "guia2026 p. 58–60, Habilidades 10–15",
+          "topics": [
+            { "id": "soc.esp.segregacao", "name": "Segregação socioespacial e periferias", "aliases": ["favela sociologia", "gueto", "periferia urbana"], "current_taxonomy_match": "Segregação socioespacial e periferias" },
+            { "id": "soc.esp.cidade", "name": "Direito à cidade e gentrificação", "aliases": ["gentrificação", "espoliação urbana", "mercantilização do espaço"], "current_taxonomy_match": "Direito à cidade e gentrificação" },
+            { "id": "soc.esp.mobilidade", "name": "Mobilidade urbana", "aliases": ["transporte público", "mobilidade e exclusão", "ciclovias"], "current_taxonomy_match": "Mobilidade urbana" },
+            { "id": "soc.esp.desvio", "name": "Desvio e marginalidade", "aliases": ["desvio social", "criminalidade sociológica", "controle social"], "current_taxonomy_match": "Desvio e marginalidade" },
+            { "id": "soc.esp.subculturas", "name": "Subculturas e juventudes", "aliases": ["tribos urbanas", "culturas juvenis", "juventude sociologia"], "current_taxonomy_match": "Subculturas e juventudes" },
+            { "id": "soc.esp.agraria", "name": "Questão agrária e conflitos no campo", "aliases": ["reforma agrária sociologia", "latifúndio", "MST sociologia"], "current_taxonomy_match": "Questão agrária e conflitos no campo" },
+            { "id": "soc.esp.estratificacao", "name": "Estratificação e desigualdade social", "aliases": ["classe social", "mobilidade social", "desigualdade de renda"], "current_taxonomy_match": "Estratificação e desigualdade social" },
+            { "id": "soc.esp.urbanizacao", "name": "Urbanização e problemas urbanos", "aliases": ["urbanização no Brasil", "metropolização", "problemas das cidades"], "current_taxonomy_match": "Urbanização e problemas urbanos" },
+            { "id": "soc.esp.migrações", "name": "Migrações, refugiados e terrorismo", "aliases": ["refugiados sociologia", "xenofobia", "terrorismo e sociedade"], "current_taxonomy_match": "Migrações, refugiados e terrorismo" }
+          ]
+        },
+        {
+          "id": "soc.pesquisa",
+          "name": "Metodologia e pesquisa social",
+          "source_ref": "guia2026 p. 55, Habilidade 3",
+          "topics": [
+            { "id": "soc.pes.metodos", "name": "Métodos e técnicas de pesquisa social", "aliases": ["pesquisa qualitativa", "pesquisa quantitativa", "entrevista sociológica"], "current_taxonomy_match": "Métodos e técnicas de pesquisa social" },
+            { "id": "soc.pes.comunidade", "name": "Comunidade e sociedade", "aliases": ["Gemeinschaft e Gesellschaft", "Tönnies", "comunidade e modernidade"], "current_taxonomy_match": "Comunidade e sociedade" },
+            { "id": "soc.pes.socializacao", "name": "Socialização e instituições", "aliases": ["agentes de socialização", "família e escola", "processo de socialização"], "current_taxonomy_match": "Socialização e instituições" }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -20,6 +20,9 @@ from studai.features.answer_keys.service import (
     parse_answer_key_pdf, source_id_for,
 )
 from studai.features.questions import review as question_review
+from studai.features.classification.taxonomy import (
+    CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, aggregate_content_ids,
+)
 
 SCHEMA_VERSION = 2
 REASONS = {"unknown_content", "calc_error", "misread", "blank"}
@@ -149,7 +152,10 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
                 excluded["duplicate_question"] += 1
                 continue
             seen_questions.add(identity)
-            raw_subject = question.get("materia") or question.get("classificacao", {}).get("materia")
+            human_review = reviewed_states.get(str(number)) or {}
+            classification = dict(question.get("classificacao") or {})
+            raw_subject = (human_review.get("subject") if human_review.get("status") == "reviewed"
+                           else question.get("materia") or classification.get("materia"))
             subject = canonical_subject(raw_subject, subjects) if raw_subject else None
             answer = keys.get(number)
             alternatives = question.get("alternativas") or {}
@@ -159,10 +165,19 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
             if answer not in alternatives:
                 excluded["no_valid_answer_key"] += 1
                 continue
-            topic = str((question.get("classificacao") or {}).get("assunto") or "").strip()
+            if human_review.get("status") == "reviewed" and human_review.get("content_id"):
+                reviewed_content = CONTENT_INDEX.get(str(human_review["content_id"]))
+                if (human_review.get("taxonomy_version") == CONTENT_TAXONOMY_VERSION and reviewed_content
+                        and reviewed_content["is_leaf"] and reviewed_content["subject"] == subject):
+                    classification.update(materia=subject, assunto=reviewed_content["name"],
+                                           conteudo_principal_id=reviewed_content["id"],
+                                           conteudos_relacionados_ids=human_review.get("related_content_ids", []),
+                                           caminho_conteudo=" → ".join(reviewed_content["path"]))
+            topic = str(classification.get("caminho_conteudo") or classification.get("assunto") or "").strip()
             if not topic:
                 topic = "Tópico não informado"
             question_copy = dict(question)
+            question_copy["classificacao"] = classification
             question_copy["_source_dir"] = str(path.parent.resolve())
             shared = shared_texts.get(question.get("texto_id") or "")
             if shared and shared.get("texto"):
@@ -388,9 +403,16 @@ def calculate_metrics(db: sqlite3.Connection, attempt_id: str) -> dict:
     weights = attempt["profile_snapshot"]["pesos"]
     rows = list_questions_for_attempt(db, attempt_id)
     by_subject: dict[str, list[dict]] = defaultdict(list)
+    by_content: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
         if row["answered_at"] is not None:
             by_subject[row["subject"]].append(row)
+            question = json.loads(row["question_json"])
+            classification = question.get("classificacao") or {}
+            assigned = [classification.get("conteudo_principal_id"),
+                       *(classification.get("conteudos_relacionados_ids") or [])]
+            for content_id in aggregate_content_ids([value for value in assigned if value]):
+                by_content[content_id].append(row)
     metrics = {}
     for subject in weights:
         answered = by_subject.get(subject, [])
@@ -403,10 +425,26 @@ def calculate_metrics(db: sqlite3.Connection, attempt_id: str) -> dict:
                             "status": "assessed" if count >= 3 else "insufficient_data"}
     answered_count = sum(x["attempts"] for x in metrics.values())
     correct_count = sum(x["correct"] for x in metrics.values())
+    content_metrics = {}
+    for content_id, content_rows in by_content.items():
+        node = CONTENT_INDEX.get(content_id)
+        if not node:
+            continue
+        count = len(content_rows)
+        correct = sum(int(row["is_correct"] or 0) for row in content_rows)
+        reasons = Counter(row["error_reason"] for row in content_rows if row["error_reason"])
+        content_metrics[content_id] = {
+            "name": node["name"], "path": " → ".join(node["path"]),
+            "depth": len(node["path_ids"]), "attempts": count, "correct": correct,
+            "accuracy": round(correct / count, 4) if count else None,
+            "error_reasons": {reason: reasons.get(reason, 0) for reason in sorted(REASONS)},
+            "status": "assessed" if count >= 3 else "insufficient_data",
+        }
     return {"total_questions": len(rows), "answered": answered_count,
             "correct": correct_count, "incorrect_or_blank": answered_count - correct_count,
             "accuracy": round(correct_count / answered_count, 4) if answered_count else None,
-            "subjects": metrics}
+            "subjects": metrics, "contents": content_metrics,
+            "taxonomy_version": CONTENT_TAXONOMY_VERSION}
 
 
 def validate_analysis(obj: dict, metrics: dict, subjects: list[str]) -> dict:

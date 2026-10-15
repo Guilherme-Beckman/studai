@@ -10,6 +10,9 @@ from unittest.mock import patch
 
 from studai.api import server
 from studai.features.classification.service import DEFAULT_TOPIC_TAXONOMY
+from studai.features.classification.taxonomy import (
+    CONTENT_TAXONOMY_VERSION, DEFAULT_CONTENTS_BY_SUBJECT,
+)
 from studai.features.questions import review
 
 
@@ -22,6 +25,7 @@ class QuestionReviewStorageTests(unittest.TestCase):
         self.exam_json = self.exam_dir / "questoes.classificado.json"
         self.subject = "Biologia"
         self.topic = DEFAULT_TOPIC_TAXONOMY[self.subject][0]
+        self.content = DEFAULT_CONTENTS_BY_SUBJECT[self.subject][0]
         self.data = {"prova": "fuvest-2024-v", "textos_compartilhados": {"1-2": {"texto": "texto base"}},
                      "questoes": [
                          {"numero": 1, "texto_id": "1-2", "enunciado": "ecologia", "revisar": ["low_confidence"],
@@ -38,7 +42,8 @@ class QuestionReviewStorageTests(unittest.TestCase):
 
     def test_review_progress_persists_and_unusable_counts_as_resolved(self):
         result = review.save_review(self.exam_json, 1, {"status": "reviewed", "subject": self.subject,
-                                   "topic": self.topic, "note": "conferida"})
+                                   "topic": self.topic, "content_id": self.content["id"],
+                                   "taxonomy_version": CONTENT_TAXONOMY_VERSION, "note": "conferida"})
         self.assertEqual(result["reviewRequired"], 1)
         self.assertEqual(result["reviewedQuestions"], 1)
         self.assertEqual(result["reviewProgress"], 100)
@@ -53,7 +58,8 @@ class QuestionReviewStorageTests(unittest.TestCase):
 
     def test_only_human_confirmed_usable_questions_enter_rag_dataset(self):
         review.save_review(self.exam_json, 1, {"status": "reviewed", "subject": self.subject,
-                             "topic": self.topic, "note": "confirmada"})
+                             "topic": self.topic, "content_id": self.content["id"],
+                             "taxonomy_version": CONTENT_TAXONOMY_VERSION, "note": "confirmada"})
         rows = review.reviewed_examples(self.root)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["id"], "fuvest-2024-v:q1")
@@ -65,7 +71,8 @@ class QuestionReviewStorageTests(unittest.TestCase):
 
     def test_human_decisions_carry_to_a_new_extraction_directory(self):
         review.save_review(self.exam_json, 1, {"status": "reviewed", "subject": self.subject,
-                             "topic": self.topic, "note": "preservar"})
+                             "topic": self.topic, "content_id": self.content["id"],
+                             "taxonomy_version": CONTENT_TAXONOMY_VERSION, "note": "preservar"})
         new_exam_json = self.root / "reprocessed" / "questoes.json"
         new_exam_json.parent.mkdir()
         new_exam_json.write_text(json.dumps(self.data), encoding="utf-8")
@@ -82,6 +89,7 @@ class QuestionReviewApiTests(unittest.TestCase):
         exam_dir.mkdir(parents=True)
         subject = "Biologia"
         topic = DEFAULT_TOPIC_TAXONOMY[subject][0]
+        content = DEFAULT_CONTENTS_BY_SUBJECT[subject][0]
         data = {"prova": "exam-id", "arquivo_origem": "fuvest2024_prova_V.pdf",
                 "questoes": [{"numero": 1, "enunciado": "texto", "alternativas": {"A": {"texto": "a"}},
                               "revisar": ["classificacao_baixa_confianca"],
@@ -120,12 +128,14 @@ class QuestionReviewApiTests(unittest.TestCase):
         self.assertTrue(detail["questions"][0]["needsReview"])
         self.assertEqual(detail["reviewProgress"]["reviewProgress"], 0)
         saved = self.request("/api/exams/exam-id/questions/1/review", method="PATCH", payload={
-            "status": "reviewed", "subject": "Biologia", "topic": DEFAULT_TOPIC_TAXONOMY["Biologia"][0],
+            "status": "reviewed", "subject": "Biologia", "content_id": DEFAULT_CONTENTS_BY_SUBJECT["Biologia"][0]["id"],
             "note": "revisada"})
         self.assertEqual(saved["reviewProgress"], 100)
         self.assertEqual(saved["ragJobId"], "job123")
         refreshed = self.request("/api/exams/exam-id/questions")
         self.assertEqual(refreshed["questions"][0]["review"]["note"], "revisada")
+        self.assertEqual(refreshed["questions"][0]["review"]["content_id"],
+                         DEFAULT_CONTENTS_BY_SUBJECT["Biologia"][0]["id"])
         listed = self.request("/api/exams")
         self.assertEqual(listed[0]["reviewProgress"], 100)
 
@@ -139,7 +149,8 @@ class QuestionReviewApiTests(unittest.TestCase):
         exam_json = self.processed / "web" / "exam" / "questoes.classificado.json"
         saved = server.question_review.save_review(exam_json, 1, {
             "status": "reviewed", "subject": "Biologia",
-            "topic": DEFAULT_TOPIC_TAXONOMY["Biologia"][0], "note": "persistir mesmo offline"})
+            "topic": DEFAULT_TOPIC_TAXONOMY["Biologia"][0], "content_id": DEFAULT_CONTENTS_BY_SUBJECT["Biologia"][0]["id"],
+            "taxonomy_version": CONTENT_TAXONOMY_VERSION, "note": "persistir mesmo offline"})
         dataset = self.root / "cache" / "fuvest-reviewed.jsonl"
         cache_path = self.root / "cache" / "vectors.sqlite3"
         status_path = self.root / "cache" / "status.json"

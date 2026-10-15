@@ -194,9 +194,10 @@ Configure as chaves Gemini apenas no `.env` local, que é ignorado pelo Git:
 
 ```env
 GEMINI_API_KEYS=CHAVE_GEMINI_1,CHAVE_GEMINI_2
+STUDAI_GEMINI_PARALLEL_REQUESTS=4
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-As variáveis antigas `GEMINI_API_KEY` e `GOOGLE_API_KEY` continuam aceitas. Reinicie `api.py` depois de alterar o `.env`. A interface mostra somente quantas chaves estão configuradas; não exibe seus valores. O catálogo Gemini e os modelos Ollama são consultados pelo backend. A API e a interface são ferramentas de desenvolvimento local e ainda não incluem login.
+Cada chave Gemini aceita até quatro chamadas simultâneas por padrão, inclusive quando só há uma chave. Ajuste `STUDAI_GEMINI_PARALLEL_REQUESTS` para um valor de 1 a 16 conforme os limites de taxa da API. O paralelismo não aumenta a cota do projeto; erros de limite de taxa acionam novas tentativas. As variáveis antigas `GEMINI_API_KEY` e `GOOGLE_API_KEY` continuam aceitas. Reinicie `api.py` depois de alterar o `.env`. A interface mostra somente quantas chaves estão configuradas; não exibe seus valores. O catálogo Gemini e os modelos Ollama são consultados pelo backend. A API e a interface são ferramentas de desenvolvimento local e ainda não incluem login.
 
 Para executar os testes de regressão: `python -m unittest discover -s tests`.

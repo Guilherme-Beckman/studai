@@ -11,11 +11,13 @@ from collections import defaultdict
 from pathlib import Path
 
 from studai.features.classification.service import DEFAULT_TAXONOMY, DEFAULT_TOPIC_TAXONOMY
+from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
 from studai.settings import DEFAULT_DIAGNOSTICS_DB, DEFAULT_QUESTIONS_DIR, SERVICE_ROOT
 
 
 REVIEW_COLUMNS = ("id", "exam", "year", "year_version", "question", "supporting_texts", "alternatives", "images",
-                  "suggested_subject", "suggested_topic", "subject", "topic", "reference_answer", "reference_short_answer",
+                  "suggested_subject", "suggested_topic", "subject", "topic", "content_id", "content_path",
+                  "taxonomy_version", "reference_answer", "reference_short_answer",
                   "grading_guidelines", "source", "source_pdf", "phase", "version", "answer_key", "is_annulled")
 
 
@@ -140,25 +142,37 @@ def import_review(review_csv: Path, output: Path) -> int:
     with review_csv.open("r", encoding="utf-8-sig", newline="") as source, \
             output.open("w", encoding="utf-8", newline="") as destination:
         reader = csv.DictReader(source)
-        required = {"question", "subject", "topic"}
+        required = {"question", "subject"}
         if not required.issubset(reader.fieldnames or []):
-            raise ValueError("CSV precisa conter as colunas question, subject e topic")
+            raise ValueError("CSV precisa conter as colunas question e subject")
         for line, row in enumerate(reader, 2):
             subject, topic = row.get("subject", "").strip(), row.get("topic", "").strip()
             topic = (row.get("topic_canonical") or topic).strip()
-            if not subject or not topic:
-                raise ValueError(f"linha {line}: preencha subject e topic antes de importar")
+            content_id = str(row.get("content_id") or "").strip()
+            if not subject or not (content_id or topic):
+                raise ValueError(f"linha {line}: preencha subject e content_id (ou tópico legado) antes de importar")
             if subject not in DEFAULT_TAXONOMY:
                 raise ValueError(f"linha {line}: subject deve ser uma matéria da taxonomia StudAI; recebido {subject!r}")
-            if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
-                raise ValueError(f"linha {line}: tópico {topic!r} não está na taxonomia de {subject}")
+            if content_id:
+                content = CONTENT_INDEX.get(content_id)
+                if not content or not content["is_leaf"] or content["subject"] != subject:
+                    raise ValueError(f"linha {line}: content_id {content_id!r} não é folha válida de {subject}")
+                topic = content["name"]
+                content_path = " → ".join(content["path"])
+                taxonomy_version = CONTENT_TAXONOMY_VERSION
+            else:
+                if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
+                    raise ValueError(f"linha {line}: tópico {topic!r} não está na taxonomia de {subject}")
+                content_path = ""
+                taxonomy_version = "legacy-flat"
             item = {"id": row.get("id", ""), "exam": row.get("exam") or "USP",
                     "year": row.get("year", ""), "year_version": row.get("year_version", ""),
                     "question": row.get("question", "").strip(),
                     "supporting_texts": row.get("supporting_texts", "").strip(),
                     "alternatives": json.loads(row["alternatives"]) if row.get("alternatives", "").strip() else {},
                     "images": json.loads(row["images"]) if row.get("images", "").strip() else [],
-                    "subject": subject, "topic": topic,
+                    "subject": subject, "topic": topic, "content_id": content_id,
+                    "content_path": content_path, "taxonomy_version": taxonomy_version,
                     "suggested_subject": row.get("suggested_subject", "").strip(),
                     "suggested_topic": row.get("suggested_topic", "").strip(),
                     "reference_answer": row.get("reference_answer", "").strip(),

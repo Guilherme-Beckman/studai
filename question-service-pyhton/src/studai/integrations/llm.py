@@ -218,13 +218,14 @@ class GeminiProvider(Provider):
 class RotatingPoolProvider(Provider):
     """Distributes each request to one free provider lane and retries on another lane."""
 
-    def __init__(self, lanes: list[tuple[str, Provider]], **kwargs):
+    def __init__(self, lanes: list[tuple], **kwargs):
         if not lanes:
             raise ValueError("selecione ao menos um modelo local ou Gemini configurado")
         super().__init__(model="pool", **kwargs)
-        self.lanes = [(str(name), provider) for name, provider in lanes]
+        self.lanes = [(str(lane[0]), lane[1]) for lane in lanes]
+        self._lane_capacities = [max(1, int(lane[2])) if len(lane) > 2 else 1 for lane in lanes]
         self._condition = threading.Condition()
-        self._busy: set[int] = set()
+        self._busy: dict[int, int] = {}
         self._disabled: set[int] = set()
         self._next_lane = 0
         self._thread_state = threading.local()
@@ -232,6 +233,10 @@ class RotatingPoolProvider(Provider):
     @property
     def lane_count(self) -> int:
         return len(self.lanes)
+
+    @property
+    def worker_count(self) -> int:
+        return sum(self._lane_capacities)
 
     @property
     def label(self) -> str:
@@ -257,11 +262,12 @@ class RotatingPoolProvider(Provider):
                               if i not in self._disabled and i not in excluded]
                 if not candidates:
                     return None
-                available = [i for i in candidates if i not in self._busy]
+                available = [i for i in candidates
+                             if self._busy.get(i, 0) < self._lane_capacities[i]]
                 if available:
                     index = next((i for i in available if i >= self._next_lane), available[0])
                     self._next_lane = (index + 1) % len(self.lanes)
-                    self._busy.add(index)
+                    self._busy[index] = self._busy.get(index, 0) + 1
                     return index
                 self._condition.wait()
 
@@ -298,7 +304,11 @@ class RotatingPoolProvider(Provider):
                 excluded.add(index)
             finally:
                 with self._condition:
-                    self._busy.discard(index)
+                    remaining = self._busy.get(index, 1) - 1
+                    if remaining:
+                        self._busy[index] = remaining
+                    else:
+                        self._busy.pop(index, None)
                     self._condition.notify_all()
         raise LLMError("todas as faixas de IA falharam: " + " | ".join(failures))
 

@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from studai.features.classification.rag import ollama_embed
-from studai.features.classification.service import DEFAULT_TOPIC_TAXONOMY
+from studai.features.classification.taxonomy import DEFAULT_CONTENT_TAXONOMY
 from studai.settings import DEFAULT_CLASSIFICATION_CACHE
 
 DEFAULT_TOPIC_EMBEDDING_MODEL = os.environ.get("STUDAI_TOPIC_EMBEDDING_MODEL", "nomic-embed-text")
@@ -19,18 +19,30 @@ DEFAULT_TOPIC_EMBEDDING_CACHE = Path(os.environ.get(
 ))
 
 
-def taxonomy_rows(topics_by_subject: dict[str, list[str]]) -> list[dict[str, str]]:
+def taxonomy_rows(taxonomy: dict) -> list[dict[str, str]]:
+    """Return searchable leaf content; accept the old flat format for callers in migration."""
+    if isinstance(taxonomy, dict) and isinstance(taxonomy.get("subjects"), list):
+        index = taxonomy.get("index") or {}
+        if not index:
+            from studai.features.classification.taxonomy import validate_content_taxonomy
+            index = validate_content_taxonomy(taxonomy)
+        return [{"content_id": node["id"], "subject": node["subject"], "topic": node["name"],
+                 "path": " → ".join(node["path"]), "description": node.get("description", ""),
+                 "aliases": " | ".join(node.get("aliases", []))}
+                for node in index.values() if node["is_leaf"]]
     return [{"subject": subject, "topic": topic}
-            for subject, topics in topics_by_subject.items() for topic in topics]
+            for subject, topics in taxonomy.items() for topic in topics]
 
 
-def taxonomy_digest(topics_by_subject: dict[str, list[str]]) -> str:
-    payload = json.dumps(topics_by_subject, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+def taxonomy_digest(taxonomy: dict) -> str:
+    digest_payload = {key: value for key, value in taxonomy.items() if key != "index"}
+    payload = json.dumps(digest_payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def topic_embedding_text(row: dict[str, str]) -> str:
-    return f"Matéria: {row['subject']}\nTópico: {row['topic']}"
+    return (f"Caminho: {row.get('path') or row['subject'] + ' → ' + row['topic']}\n"
+            f"Descrição: {row.get('description', '')}\nTermos equivalentes: {row.get('aliases', '')}")
 
 
 class TopicEmbeddingIndex:
@@ -43,7 +55,7 @@ class TopicEmbeddingIndex:
         self.base_url = base_url
         self.embed = embed
 
-    def build(self, topics_by_subject: dict[str, list[str]] = DEFAULT_TOPIC_TAXONOMY,
+    def build(self, topics_by_subject: dict = DEFAULT_CONTENT_TAXONOMY,
               *, batch_size: int = 64) -> dict:
         rows = taxonomy_rows(topics_by_subject)
         digest = taxonomy_digest(topics_by_subject)
@@ -77,7 +89,7 @@ class TopicEmbeddingIndex:
                 "model": self.model, "path": str(self.path)}
 
     def rank(self, vector: list[float], *, limit: int = 10,
-             topics_by_subject: dict[str, list[str]] = DEFAULT_TOPIC_TAXONOMY) -> list[dict]:
+             topics_by_subject: dict = DEFAULT_CONTENT_TAXONOMY) -> list[dict]:
         rows = taxonomy_rows(topics_by_subject)
         payload = self._load(taxonomy_digest(topics_by_subject), rows)
         if not payload:

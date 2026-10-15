@@ -39,6 +39,10 @@ from studai.settings import (
     SERVICE_ROOT,
 )
 from studai.features.classification.service import DEFAULT_TAXONOMY, DEFAULT_TOPIC_TAXONOMY
+from studai.features.classification.taxonomy import (
+    CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, canonical_content_id,
+    public_content_options, public_content_taxonomy,
+)
 
 WEB_ROOT = SERVICE_ROOT / "frontend"
 UPLOADS_ROOT = SERVICE_ROOT / "simulados" / "uploads"
@@ -125,16 +129,23 @@ def _read_benchmark_review() -> dict:
     mismatches = 0
     reference_changed = 0
     for index, (gold, result) in enumerate(zip(rows, items)):
-        mismatch = gold.get("subject") != result.get("pred_subject") or gold.get("topic") != result.get("pred_topic")
+        gold_content = gold.get("content_id")
+        predicted_content = result.get("pred_content_id")
+        mismatch = (gold.get("subject") != result.get("pred_subject") or
+                    (gold_content != predicted_content if gold_content else gold.get("topic") != result.get("pred_topic")))
         mismatches += int(mismatch)
         reference_changed += int(gold.get("subject") != result.get("gold_subject") or
                                  gold.get("topic") != result.get("gold_topic"))
         scored_rows.append({"gold_subject": gold.get("subject"), "pred_subject": result.get("pred_subject"),
-                            "gold_topic": gold.get("topic"), "pred_topic": result.get("pred_topic")})
+                            "gold_topic": gold.get("topic"), "pred_topic": result.get("pred_topic"),
+                            "gold_content_id": gold_content, "pred_content_id": predicted_content})
         questions.append({"index": index, "id": gold.get("id", str(index + 1)),
                           "year": gold.get("year"), "question": gold.get("question", ""),
                           "supportingTexts": gold.get("supporting_texts", ""),
                           "subject": gold.get("subject", ""), "topic": gold.get("topic", ""),
+                          "contentId": gold_content, "predictedContentId": predicted_content,
+                          "contentPath": gold.get("content_path") or gold.get("topic", ""),
+                          "predictedContentPath": result.get("pred_content_path") or result.get("pred_topic", ""),
                           "predictedSubject": result.get("pred_subject"),
                           "predictedTopic": result.get("pred_topic"),
                           "seconds": result.get("seconds"), "error": result.get("error"),
@@ -145,19 +156,26 @@ def _read_benchmark_review() -> dict:
     original_metrics = {"subject": report.get("subject"), "topic": report.get("topic")}
     report_view["subject"] = score_classifier(scored_rows, "gold_subject", "pred_subject")
     report_view["topic"] = score_classifier(scored_rows, "gold_topic", "pred_topic")
+    canonical_rows = [row for row in scored_rows if row.get("gold_content_id")]
+    report_view["content"] = score_classifier(canonical_rows, "gold_content_id", "pred_content_id")
     return {"report": report_view, "originalMetrics": original_metrics,
         "questions": questions, "mismatchCount": mismatches,
         "referenceChangedCount": reference_changed,
-        "subjects": list(DEFAULT_TAXONOMY), "topics": DEFAULT_TOPIC_TAXONOMY}
+        "subjects": list(DEFAULT_TAXONOMY), "topics": DEFAULT_TOPIC_TAXONOMY,
+        "contentTree": public_content_taxonomy(), "contents": public_content_options(),
+        "taxonomyVersion": CONTENT_TAXONOMY_VERSION}
 
 
 def _save_benchmark_label(body: dict) -> dict:
     index = int(body.get("index", -1))
     subject = str(body.get("subject") or "").strip()
     topic = str(body.get("topic") or "").strip()
+    content_id = canonical_content_id(str(body.get("content_id") or ""), subject=subject) if body.get("content_id") else None
     if subject not in DEFAULT_TAXONOMY:
         raise ValueError("Selecione uma matéria válida da taxonomia StudAI")
-    if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
+    if content_id:
+        topic = CONTENT_INDEX[content_id]["name"]
+    elif topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
         raise ValueError("Selecione um tópico válido para a matéria escolhida")
     rows = [json.loads(line) for line in BENCHMARK_DATASET.read_text(encoding="utf-8").splitlines() if line.strip()]
     if not 0 <= index < len(rows):
@@ -166,6 +184,9 @@ def _save_benchmark_label(body: dict) -> dict:
     if body.get("id") and body["id"] != row.get("id"):
         raise ValueError("O conjunto foi alterado desde que a revisão foi aberta; atualize a tela")
     row.update(subject=subject, topic=topic, reviewed=True)
+    if content_id:
+        row.update(content_id=content_id, taxonomy_version=CONTENT_TAXONOMY_VERSION,
+                   content_path=" → ".join(CONTENT_INDEX[content_id]["path"]))
     dataset_tmp = BENCHMARK_DATASET.with_suffix(".jsonl.tmp")
     dataset_tmp.write_text("".join(json.dumps(item, ensure_ascii=False) + "\n" for item in rows), encoding="utf-8")
     dataset_tmp.replace(BENCHMARK_DATASET)
@@ -179,6 +200,8 @@ def _save_benchmark_label(body: dict) -> dict:
         if index < len(csv_rows) and csv_rows[index].get("id") == row.get("id"):
             csv_rows[index]["subject"] = subject
             csv_rows[index]["topic"] = topic
+            if "content_id" in fields and content_id:
+                csv_rows[index]["content_id"] = content_id
             if "reviewed" in fields:
                 csv_rows[index]["reviewed"] = "true"
             if "topic_canonical" in fields:
@@ -189,7 +212,7 @@ def _save_benchmark_label(body: dict) -> dict:
                 writer.writeheader()
                 writer.writerows(csv_rows)
             csv_tmp.replace(BENCHMARK_REVIEW_CSV)
-    return {"ok": True, "subject": subject, "topic": topic,
+    return {"ok": True, "subject": subject, "topic": topic, "content_id": content_id,
             "requiresRerun": True, "reviewed": True,
             "message": "Revisão registrada. Execute novamente o benchmark para atualizar as métricas."}
 
@@ -392,10 +415,20 @@ def _pool_provider(payload: dict, *, max_tokens: int = 1600) -> RotatingPoolProv
     for index, key in enumerate(keys if selected_gemini else [], 1):
         gemini_provider = GeminiProvider(model=",".join(selected_gemini), api_key=key,
                                          temperature=0, max_tokens=max_tokens, json_mode=True)
-        lanes.append((f"Gemini chave {index} ({','.join(selected_gemini)})", gemini_provider))
+        try:
+            gemini_parallelism = int(os.environ.get("STUDAI_GEMINI_PARALLEL_REQUESTS", "4"))
+        except ValueError:
+            raise ValueError("STUDAI_GEMINI_PARALLEL_REQUESTS deve ser um inteiro entre 1 e 16") from None
+        if not 1 <= gemini_parallelism <= 16:
+            raise ValueError("STUDAI_GEMINI_PARALLEL_REQUESTS deve ser um inteiro entre 1 e 16")
+        lanes.append((f"Gemini chave {index} ({','.join(selected_gemini)})",
+                      gemini_provider, gemini_parallelism))
     if len(lanes) > 64:
         raise ValueError("o pool pode ter no máximo 64 faixas; reduza as chaves ou os modelos locais")
-    return RotatingPoolProvider(lanes, temperature=0, max_tokens=max_tokens, json_mode=True)
+    provider = RotatingPoolProvider(lanes, temperature=0, max_tokens=max_tokens, json_mode=True)
+    if provider.worker_count > 64:
+        raise ValueError("o pool pode ter no máximo 64 chamadas simultâneas; reduza as faixas ou a concorrência Gemini")
+    return provider
 
 
 def _exam_files() -> list[tuple[dict, Path]]:
@@ -784,7 +817,7 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         raise ValueError("envie um arquivo PDF válido")
     provider = (_pool_provider(payload) if str(payload.get("provider") or "") == "pool"
                 else _provider(payload))
-    workers = provider.lane_count if isinstance(provider, RotatingPoolProvider) else int(payload.get("workers") or 2)
+    workers = provider.worker_count if isinstance(provider, RotatingPoolProvider) else int(payload.get("workers") or 2)
     if not 1 <= workers <= 64:
         raise ValueError("workers deve estar entre 1 e 64")
     if isinstance(provider, classification.OllamaProvider):
@@ -1025,6 +1058,9 @@ class Handler(BaseHTTPRequestHandler):
                                             data, {"questions": human_reviews}),
                                         "subjects": list(DEFAULT_TAXONOMY),
                                         "topics": DEFAULT_TOPIC_TAXONOMY,
+                                        "contentTree": public_content_taxonomy(),
+                                        "contents": public_content_options(),
+                                        "taxonomyVersion": CONTENT_TAXONOMY_VERSION,
                                         "ragStatus": _read_rag_status()})
             match = re.fullmatch(r"/api/exams/([^/]+)/assets/(.+)", path)
             if match:
@@ -1116,7 +1152,13 @@ class Handler(BaseHTTPRequestHandler):
                 topic = str(body.get("topic") or "").strip()
                 if subject not in DEFAULT_TAXONOMY:
                     raise ValueError("selecione uma matéria válida")
-                if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
+                content_id = canonical_content_id(str(body.get("content_id") or ""), subject=subject) \
+                    if body.get("content_id") else None
+                if content_id:
+                    topic = CONTENT_INDEX[content_id]["name"]
+                    values.update(content_id=content_id, taxonomy_version=CONTENT_TAXONOMY_VERSION,
+                                  content_path=" → ".join(CONTENT_INDEX[content_id]["path"]))
+                elif topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
                     raise ValueError("selecione um tópico válido para a matéria")
                 values.update(subject=subject, topic=topic)
             else:

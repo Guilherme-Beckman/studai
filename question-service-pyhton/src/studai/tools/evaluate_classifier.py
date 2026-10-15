@@ -13,6 +13,7 @@ from pathlib import Path
 from studai.features.classification import service as clf
 from studai.features.classification.cache import ClassificationCache
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, LocalExampleRetriever
+from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
 from studai.integrations.llm import make_provider
 from studai.settings import DEFAULT_CLASSIFICATION_CACHE
 
@@ -47,8 +48,14 @@ def load_jsonl(path: Path, *, require_labels: bool = True) -> list[dict]:
         row = json.loads(line)
         if "question" not in row:
             raise ValueError(f"linha {line_no}: question obrigatória")
-        if require_labels and (not row.get("subject") or not row.get("topic")):
-            raise ValueError(f"linha {line_no}: esperado question, subject e topic revisados")
+        if require_labels and (not row.get("subject") or not (row.get("content_id") or row.get("topic"))):
+            raise ValueError(f"linha {line_no}: esperado question, subject e content_id (ou rótulo legado topic)")
+        if row.get("content_id"):
+            content = CONTENT_INDEX.get(str(row["content_id"]))
+            if row.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION:
+                raise ValueError(f"linha {line_no}: taxonomy_version não corresponde à árvore ativa")
+            if not content or not content["is_leaf"] or content["subject"] != row.get("subject"):
+                raise ValueError(f"linha {line_no}: content_id inválido para subject")
         rows.append(row)
     return rows
 
@@ -89,7 +96,7 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                 examples = retriever.retrieve(clf.render_questao(question, None, bool(images)),
                                               exclude_ids={str(row.get("id", ""))},
                                               exclude_year=row.get("year"))
-            candidate_topics = ({str(item["result"].get("topic")) for item in examples}
+            candidate_topics = ({str(item["result"].get("content_id") or item["result"].get("topic")) for item in examples}
                                 if examples else None)
             system = clf.build_system(clf.DEFAULT_TAXONOMY, clf.DEFAULT_TOPIC_TAXONOMY,
                                       candidate_topics)
@@ -123,6 +130,9 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
             usage["calls"] = int(bool(usage))
         outcome = {"gold_subject": row.get("subject"), "pred_subject": result.get("materia"),
                    "gold_topic": row.get("topic"), "pred_topic": result.get("assunto"),
+                   "gold_content_id": row.get("content_id"),
+                   "pred_content_id": result.get("conteudo_principal_id"),
+                   "pred_content_path": result.get("caminho_conteudo"),
                    "seconds": elapsed, "usage": usage, "error": error,
                    "retrieved_examples": result.get("exemplos_referencia", [])}
         return index, row, result, elapsed, error, outcome
@@ -165,8 +175,10 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
     ordered_latencies = sorted(latencies)
     p95 = ordered_latencies[max(0, min(len(ordered_latencies) - 1,
                                       int(0.95 * len(ordered_latencies) + 0.999999) - 1))] if ordered_latencies else 0
-    labeled = [item for item in outcomes if item.get("gold_subject") and item.get("gold_topic")]
-    review_count = sum(item.get("pred_topic") == "REVISAR" for item in outcomes)
+    labeled = [item for item in outcomes if item.get("gold_subject") and
+               (item.get("gold_content_id") or item.get("gold_topic"))]
+    canonical_labeled = [item for item in labeled if item.get("gold_content_id")]
+    review_count = sum(not item.get("pred_content_id") for item in outcomes)
     result = {"dataset": str(dataset), "source": source, "dataset_version": version,
               "provider": provider.label, "created_at": datetime.now(timezone.utc).isoformat(),
               "image_mode": image_mode,
@@ -182,6 +194,8 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
               "labeled_count": len(labeled),
               "subject": score(labeled, "gold_subject", "pred_subject"),
               "topic": score(labeled, "gold_topic", "pred_topic"),
+              "content": score(canonical_labeled, "gold_content_id", "pred_content_id"),
+              "taxonomy_version": clf.CONTENT_TAXONOMY_VERSION,
               "review_rate": review_count / len(outcomes) if outcomes else 0.0,
               "review_count": review_count,
               "prompt_tokens_per_call": (usage_totals["prompt_tokens"] / usage_totals["calls"]

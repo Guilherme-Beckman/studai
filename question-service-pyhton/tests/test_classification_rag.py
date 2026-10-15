@@ -8,6 +8,9 @@ from unittest.mock import patch
 from studai.features.classification.cache import ClassificationCache
 from studai.features.classification.rag import LocalExampleRetriever, index_examples, render_examples
 from studai.features.classification.service import DEFAULT_TOPIC_TAXONOMY, _cache_key
+from studai.features.classification.taxonomy import (
+    CONTENT_TAXONOMY_VERSION, DEFAULT_CONTENTS_BY_SUBJECT,
+)
 from studai.features.classification import service as classification
 from studai.integrations.llm import OllamaProvider
 from studai.tools import benchmark_classifier
@@ -25,13 +28,16 @@ class ClassificationRagTests(unittest.TestCase):
         self.temp.cleanup()
 
     def test_index_uses_reviewed_labels_and_holdout_retrieval_excludes_same_year(self):
-        topic = DEFAULT_TOPIC_TAXONOMY["Física"][0]
+        content = DEFAULT_CONTENTS_BY_SUBJECT["Física"][0]
+        topic = content["name"]
         dataset = self.root / "reviewed.jsonl"
         rows = [
             {"id": "fuvest-2023-q1", "exam": "Fuvest", "year": 2023,
-             "question": "movimento e velocidade", "subject": "Física", "topic": topic, "reviewed": True},
+             "question": "movimento e velocidade", "subject": "Física", "topic": topic,
+             "content_id": content["id"], "taxonomy_version": CONTENT_TAXONOMY_VERSION, "reviewed": True},
             {"id": "fuvest-2024-q1", "exam": "Fuvest", "year": 2024,
-             "question": "força e movimento", "subject": "Física", "topic": topic, "reviewed": True},
+             "question": "força e movimento", "subject": "Física", "topic": topic,
+             "content_id": content["id"], "taxonomy_version": CONTENT_TAXONOMY_VERSION, "reviewed": True},
             {"id": "pending-q", "year": 2025, "question": "sem rótulo revisado",
              "subject": "Física", "topic": topic, "review_status": "pending"},
         ]
@@ -60,7 +66,7 @@ class ClassificationRagTests(unittest.TestCase):
         rendered = render_examples([{"text": "texto da questão", "result": {
             "subject": "Física", "topic": "Mecânica", "reference_answer": "GABARITO_SECRETO_X9"}}])
         self.assertIn("Matéria: Física", rendered)
-        self.assertIn("Tópico: Mecânica", rendered)
+        self.assertIn("Conteúdo: Mecânica", rendered)
         self.assertNotIn("GABARITO_SECRETO_X9", rendered)
 
     def test_cache_identity_changes_when_rag_corpus_changes(self):
@@ -70,14 +76,17 @@ class ClassificationRagTests(unittest.TestCase):
         self.assertEqual(key("corpus-a"), key("corpus-a"))
 
     def test_batch_classifier_includes_retrieved_examples_by_default(self):
-        topic = DEFAULT_TOPIC_TAXONOMY["Física"][0]
+        content = DEFAULT_CONTENTS_BY_SUBJECT["Física"][0]
+        topic = content["name"]
         examples = self.root / "reviewed.jsonl"
         examples.write_text("\n".join(json.dumps(row) for row in [
             {"id": "same-exam-q1", "year": 2024, "exam": "current-exam",
              "question": "movimento e aceleração no mesmo caderno", "subject": "Física", "topic": topic,
+             "content_id": content["id"], "taxonomy_version": CONTENT_TAXONOMY_VERSION,
              "reviewed": True},
             {"id": "other-exam-q1", "year": 2023, "exam": "prior-exam",
              "question": "movimento e aceleração em outro caderno", "subject": "Física", "topic": topic,
+             "content_id": content["id"], "taxonomy_version": CONTENT_TAXONOMY_VERSION,
              "reviewed": True},
         ]), encoding="utf-8")
         questions = self.root / "questions.json"

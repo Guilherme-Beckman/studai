@@ -58,17 +58,24 @@ def _load_reviewed(path: Path) -> list[dict]:
             continue
         if not row.get("id") or not example_text(row).strip():
             continue
-        subject, topic = str(row.get("subject") or "").strip(), str(row.get("topic") or "").strip()
-        if not subject or not topic:
+        subject = str(row.get("subject") or "").strip()
+        content_id = str(row.get("content_id") or "").strip()
+        if not subject or not content_id:
+            # Old topic-only rows stay readable but do not train the canonical classifier.
             continue
-        from studai.features.classification.service import DEFAULT_TAXONOMY, DEFAULT_TOPIC_TAXONOMY
+        from studai.features.classification.service import DEFAULT_TAXONOMY
+        from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
         if subject not in DEFAULT_TAXONOMY:
             raise ValueError(f"linha {line_number}: matéria fora da taxonomia: {subject!r}")
-        if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
-            raise ValueError(f"linha {line_number}: tópico inválido para {subject}: {topic!r}")
-        rows.append({**row, "subject": subject, "topic": topic})
+        content = CONTENT_INDEX.get(content_id)
+        if row.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION:
+            continue
+        if not content or not content["is_leaf"] or content["subject"] != subject:
+            raise ValueError(f"linha {line_number}: content_id inválido para {subject}: {content_id!r}")
+        rows.append({**row, "subject": subject, "content_id": content_id, "topic": content["name"],
+                     "content_path": " → ".join(content["path"])})
     if not rows:
-        raise ValueError("o conjunto não contém exemplos com matéria e tópico revisados")
+        raise ValueError("o conjunto não contém rótulos de conteúdo canônico revisados")
     return rows
 
 
@@ -80,7 +87,7 @@ def index_examples(dataset: Path, cache: ClassificationCache, *, base_url: str,
     source = "rag:" + str(dataset.resolve())
     texts = [example_text(row) for row in rows]
     canonical = [{"id": row["id"], "year": row.get("year"), "exam": row.get("exam"),
-                  "subject": row["subject"], "topic": row["topic"], "text": text}
+                  "subject": row["subject"], "content_id": row["content_id"], "text": text}
                  for row, text in zip(rows, texts)]
     digest = hashlib.sha256(json.dumps({"model": model, "rows": canonical}, sort_keys=True,
                                       ensure_ascii=False).encode()).hexdigest()
@@ -91,7 +98,8 @@ def index_examples(dataset: Path, cache: ClassificationCache, *, base_url: str,
     batch_size = max(1, min(int(batch_size), 128))
     for row, text in zip(rows, texts):
         metadata = {key: row.get(key) for key in
-                    ("subject", "topic", "id", "year", "year_version", "phase", "version", "exam",
+                    ("subject", "topic", "content_id", "taxonomy_version", "content_path",
+                     "id", "year", "year_version", "phase", "version", "exam",
                      "source", "reviewed", "images", "source_pdf", "answer_key", "is_annulled",
                      "reference_answer", "reference_short_answer", "grading_guidelines")}
         metadata["exam"] = metadata.get("exam") or "USP"
@@ -99,7 +107,8 @@ def index_examples(dataset: Path, cache: ClassificationCache, *, base_url: str,
         metadata["dataset_version"] = digest
         previous = source_cache.get(str(row["id"]))
         if previous and previous["text"] == text and all(
-                previous["metadata"].get(key) == metadata.get(key) for key in ("subject", "topic", "exam")):
+                previous["metadata"].get(key) == metadata.get(key)
+                for key in ("subject", "topic", "content_id", "taxonomy_version", "exam")):
             prepared.append((str(row["id"]), text, previous["vector"], metadata))
             reused += 1
         else:
@@ -157,5 +166,6 @@ def render_examples(examples: list[dict]) -> str:
     for index, item in enumerate(examples, 1):
         result = item["result"]
         excerpt = " ".join(item["text"].split())[:700]
-        lines.append(f"{index}. Questão semelhante: {excerpt}\n   Matéria: {result['subject']} · Tópico: {result['topic']}")
+        label = result.get("content_path") or result.get("topic") or result.get("content_id")
+        lines.append(f"{index}. Questão semelhante: {excerpt}\n   Matéria: {result['subject']} · Conteúdo: {label}")
     return "\n\n".join(lines)

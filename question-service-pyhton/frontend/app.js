@@ -275,7 +275,7 @@ function renderReviewQuestion(examId, question, sharedTexts) {
   const canReprocess = unusable || (!reviewed && ["alternativas_incompletas", "alternativa_vazia", "enunciado_vazio", "glifo_estranho", "formula_matematica"].some(reason => reprocessReasons.has(reason)));
   const classification = question.classificacao || {};
   const subject = reviewed ? review.subject : (question.materia || classification.materia || "Não classificada");
-  const topic = reviewed ? review.topic : (classification.assunto || "Tópico não definido");
+  const topic = reviewed ? (review.content_path || review.topic) : (classification.caminho_conteudo || classification.assunto || "Tópico não definido");
   const confidence = Number.isFinite(Number(classification.confianca)) ? `${Math.round(Number(classification.confianca) * 100)}%` : "—";
   const shared = question.texto_id != null ? sharedTexts[String(question.texto_id)] : null;
   const sharedText = typeof shared === "string" ? shared : shared?.texto;
@@ -283,7 +283,7 @@ function renderReviewQuestion(examId, question, sharedTexts) {
   const options = Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b));
   const reasons = (question.reviewReasons || []).map(reason => `<span class="review-reason-tag">${escapeHtml(reviewReasonLabel(reason))}</span>`).join("");
   const state = unusable ? `<span class="badge review-unusable">Inutilizável</span>` : reviewed ? `<span class="badge">Revisada</span>` : needsReview ? `<span class="badge pending">Precisa revisar</span>` : `<span class="badge">Sem pendências</span>`;
-  const panel = needsReview ? `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar classificação</strong><span>Confirme ou corrija os rótulos usados nos exemplos locais.</span></div><div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}" required><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${review.subject === item || (!review.subject && item === classification.materia) ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><label>Tópico<select data-review-topic="${number}" required><option value="">Selecione uma matéria primeiro</option></select></label></div><label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label><div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar revisão</button><button class="button button-danger" type="button" data-mark-unusable="${number}">Marcar como inutilizável</button></div></form>` : "";
+  const panel = needsReview ? `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar classificação</strong><span>Confirme matéria e conteúdo principal; o caminho mostra a posição na árvore.</span></div><div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}" required><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${review.subject === item || (!review.subject && item === classification.materia) ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><label>Conteúdo principal<select data-review-topic="${number}" required><option value="">Selecione uma matéria primeiro</option></select></label></div><label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label><div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar revisão</button><button class="button button-danger" type="button" data-mark-unusable="${number}">Marcar como inutilizável</button></div></form>` : "";
   const imagePaths = question.figuras_enunciado || [];
   const display = questionDisplayState(question);
   const hasInlineImages = imagePaths.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
@@ -302,8 +302,8 @@ function refreshReviewTopic(number, selectedTopic = "") {
   const subjectSelect = $(`[data-review-subject="${number}"]`);
   const topicSelect = $(`[data-review-topic="${number}"]`);
   if (!subjectSelect || !topicSelect) return;
-  const topics = currentExamReview.topics?.[subjectSelect.value] || [];
-  topicSelect.innerHTML = `<option value="">Selecione</option>` + topics.map(topic => `<option value="${escapeHtml(topic)}" ${topic === selectedTopic ? "selected" : ""}>${escapeHtml(topic)}</option>`).join("");
+  const contents = currentExamReview.contents?.[subjectSelect.value] || [];
+  topicSelect.innerHTML = `<option value="">Selecione</option>` + contents.map(content => `<option value="${escapeHtml(content.id)}" ${content.id === selectedTopic ? "selected" : ""}>${escapeHtml(content.path)}</option>`).join("");
 }
 
 function bindExamReviewActions() {
@@ -317,14 +317,15 @@ function bindExamReviewActions() {
     const number = button.dataset.toggleReview;
     const form = $(`[data-review-form="${number}"]`, workspace);
     form.classList.toggle("hidden");
-    refreshReviewTopic(number, currentExamReview.questions.find(q => String(q.numero) === number)?.review?.topic || "");
+    const question = currentExamReview.questions.find(q => String(q.numero) === number);
+    refreshReviewTopic(number, question?.review?.content_id || question?.classificacao?.conteudo_principal_id || "");
   }));
   $$('[data-review-subject]', workspace).forEach(select => select.addEventListener("change", () => refreshReviewTopic(select.dataset.reviewSubject)));
   $$('[data-review-form]', workspace).forEach(form => form.addEventListener("submit", event => {
     event.preventDefault();
     const number = form.dataset.reviewForm;
     saveQuestionReview(number, { status: "reviewed", subject: $(`[data-review-subject="${number}"]`, form).value,
-      topic: $(`[data-review-topic="${number}"]`, form).value, note: $(`[data-review-note="${number}"]`, form).value });
+      content_id: $(`[data-review-topic="${number}"]`, form).value, note: $(`[data-review-note="${number}"]`, form).value });
   }));
   $$('[data-mark-unusable]', workspace).forEach(button => button.addEventListener("click", () => {
     const number = button.dataset.markUnusable;
@@ -784,7 +785,9 @@ function renderMetrics(metrics) {
   if (!metrics) return "";
   const accuracy = metrics.accuracy == null ? "—" : `${Math.round(metrics.accuracy * 100)}%`;
   const rows = Object.entries(metrics.subjects || {}).map(([subject, row]) => `<tr><td>${escapeHtml(subject)}</td><td>${row.attempts}</td><td>${row.correct}</td><td>${row.accuracy == null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>${row.status === "assessed" ? "Avaliada" : "Poucos dados"}</td></tr>`).join("");
-  return `<div class="result-grid"><div class="metric-card"><span>Acertos</span><strong>${metrics.correct}/${metrics.answered}</strong></div><div class="metric-card"><span>Desempenho geral</span><strong>${accuracy}</strong></div><div class="metric-card"><span>Questões</span><strong>${metrics.total_questions}</strong></div><div class="metric-card"><span>Em branco/incorretas</span><strong>${metrics.incorrect_or_blank}</strong></div></div><table class="subject-table"><thead><tr><th>Matéria</th><th>Tentativas</th><th>Acertos</th><th>Desempenho</th><th>Situação</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const contentRows = Object.values(metrics.contents || {}).sort((a, b) => a.path.localeCompare(b.path, "pt-BR")).map(row => `<tr><td>${escapeHtml(row.path)}</td><td>${row.attempts}</td><td>${row.correct}</td><td>${row.accuracy == null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>${row.status === "assessed" ? "Avaliado" : "Poucos dados"}</td></tr>`).join("");
+  const contentTable = contentRows ? `<h3>Desempenho por conteúdo</h3><p class="muted">As áreas da árvore somam as questões relacionadas aos conteúdos descendentes.</p><table class="subject-table"><thead><tr><th>Matéria e caminho do conteúdo</th><th>Tentativas</th><th>Acertos</th><th>Desempenho</th><th>Situação</th></tr></thead><tbody>${contentRows}</tbody></table>` : "";
+  return `<div class="result-grid"><div class="metric-card"><span>Acertos</span><strong>${metrics.correct}/${metrics.answered}</strong></div><div class="metric-card"><span>Desempenho geral</span><strong>${accuracy}</strong></div><div class="metric-card"><span>Questões</span><strong>${metrics.total_questions}</strong></div><div class="metric-card"><span>Em branco/incorretas</span><strong>${metrics.incorrect_or_blank}</strong></div></div><table class="subject-table"><thead><tr><th>Matéria</th><th>Tentativas</th><th>Acertos</th><th>Desempenho</th><th>Situação</th></tr></thead><tbody>${rows}</tbody></table>${contentTable}`;
 }
 
 function renderAnalysis(analysis, error) {

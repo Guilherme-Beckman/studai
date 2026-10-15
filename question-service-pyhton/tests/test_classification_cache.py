@@ -107,7 +107,7 @@ class ClassificationCacheTests(unittest.TestCase):
         self.assertEqual(export_review(candidates, csv_path, limit=6), 6)
         reviewed = csv_path.read_text(encoding="utf-8-sig")
         self.assertIn("suggested_subject", reviewed)
-        with self.assertRaisesRegex(ValueError, "preencha subject e topic"):
+        with self.assertRaisesRegex(ValueError, "preencha subject e content_id"):
             import_review(csv_path, self.root / "reviewed.jsonl")
         with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
             rows_csv = list(csv.DictReader(file))

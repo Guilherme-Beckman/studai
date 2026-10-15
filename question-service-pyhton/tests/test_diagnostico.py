@@ -6,6 +6,7 @@ from pathlib import Path
 import pymupdf
 
 import diagnostico_core as core
+from studai.features.classification.taxonomy import CONTENT_INDEX
 
 
 class ScriptedProvider:
@@ -151,6 +152,26 @@ class DiagnosticTests(unittest.TestCase):
                 "subject": next(s for s, row in metrics["subjects"].items() if row["attempts"] == 2),
                 "action": "review", "reason_code": "misread", "rationale": "r",
                 "exit_criterion": "8 de 10"}]}, metrics, list(self.profile["pesos"]))
+
+    def test_content_metrics_roll_up_to_ancestors(self):
+        attempt = self.make_attempt()
+        row = next(row for row in core.list_questions_for_attempt(self.db, attempt["id"])
+                   if row["subject"] == "Matemática")
+        content_id = next(identity for identity, node in CONTENT_INDEX.items()
+                          if node["subject"] == "Matemática" and node["is_leaf"])
+        stored = self.db.execute("SELECT question_json FROM attempt_questions WHERE attempt_id=? AND ordinal=?",
+                                 (attempt["id"], row["ordinal"])).fetchone()[0]
+        question_data = json.loads(stored)
+        question_data["classificacao"] = {"conteudo_principal_id": content_id,
+                                          "conteudos_relacionados_ids": []}
+        self.db.execute("UPDATE attempt_questions SET question_json=? WHERE attempt_id=? AND ordinal=?",
+                        (json.dumps(question_data), attempt["id"], row["ordinal"]))
+        core.record_response(self.db, attempt["id"], row["ordinal"], "A")
+        metrics = core.calculate_metrics(self.db, attempt["id"])
+        self.assertEqual(metrics["contents"][content_id]["attempts"], 1)
+        for ancestor_id in CONTENT_INDEX[content_id]["path_ids"][:-1]:
+            if ancestor_id in CONTENT_INDEX:
+                self.assertEqual(metrics["contents"][ancestor_id]["attempts"], 1)
 
     def test_llm_summary_cannot_override_low_data_status(self):
         metrics = {"subjects": {

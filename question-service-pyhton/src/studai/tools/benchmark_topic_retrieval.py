@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from studai.features.classification.rag import ollama_embed
-from studai.features.classification.service import DEFAULT_TOPIC_TAXONOMY
+from studai.features.classification.taxonomy import (
+    CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, DEFAULT_CONTENT_TAXONOMY,
+)
 from studai.features.classification.topic_embeddings import (
     DEFAULT_TOPIC_EMBEDDING_CACHE, DEFAULT_TOPIC_EMBEDDING_MODEL,
     TopicEmbeddingIndex,
@@ -31,9 +33,10 @@ def measure(dataset: Path, *, base_url: str, model: str, cache_path: Path,
             output: Path, report_path: Path | None = None,
             ks: tuple[int, ...] = (5, 10, 15, 20)) -> dict:
     rows = [json.loads(line) for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()]
-    rows = [row for row in rows if row.get("subject") and row.get("topic")]
+    rows = [row for row in rows if row.get("subject") and row.get("content_id")
+            and row.get("taxonomy_version") == CONTENT_TAXONOMY_VERSION]
     if not rows:
-        raise ValueError("O dataset não contém questões revisadas com matéria e tópico.")
+        raise ValueError("O dataset não contém questões revisadas com content_id da taxonomia ativa.")
     index = TopicEmbeddingIndex(cache_path, model=model, base_url=base_url)
     build = index.build()
     vectors = ollama_embed([question_text(row) for row in rows], base_url=base_url, model=model)
@@ -44,18 +47,20 @@ def measure(dataset: Path, *, base_url: str, model: str, cache_path: Path,
     items = []
     for row, vector in zip(rows, vectors):
         ranked = index.rank(vector, limit=max(ks))
-        gold = {"subject": row["subject"], "topic": row["topic"]}
+        gold = {"subject": row["subject"], "content_id": row["content_id"]}
         rank = next((number for number, candidate in enumerate(ranked, 1)
-                     if candidate["subject"] == gold["subject"] and candidate["topic"] == gold["topic"]), None)
+                     if candidate.get("content_id") == gold["content_id"]), None)
         for k in ks:
             hits[k] += int(rank is not None and rank <= k)
-        item = {"id": row.get("id"), "subject": gold["subject"], "topic": gold["topic"],
+        item = {"id": row.get("id"), "subject": gold["subject"], "content_id": gold["content_id"],
+                "content_path": " → ".join(CONTENT_INDEX[gold["content_id"]]["path"]),
                 "gold_rank": rank, "top_candidates": ranked[:min(5, max(ks))]}
         items.append(item)
         if rank is None or rank > max(ks):
             misses.append(item)
     report = {"created_at": datetime.now(timezone.utc).isoformat(), "dataset": str(dataset),
-              "labeled_questions": len(rows), "taxonomy_topics": sum(map(len, DEFAULT_TOPIC_TAXONOMY.values())),
+              "labeled_questions": len(rows), "taxonomy_topics": sum(1 for node in DEFAULT_CONTENT_TAXONOMY["index"].values()
+                                                                      if node["is_leaf"]),
               "embedding_model": model, "embedding_endpoint": base_url, "cache": build,
               "recall_at_k": {str(k): {"hits": hits[k], "total": len(rows), "recall": hits[k] / len(rows)}
                               for k in ks},

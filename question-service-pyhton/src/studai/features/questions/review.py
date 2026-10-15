@@ -85,6 +85,10 @@ def save_review(exam_json: Path, question_number: int, value: dict) -> dict:
         "status": value["status"],
         "subject": value.get("subject"),
         "topic": value.get("topic"),
+        "content_id": value.get("content_id"),
+        "taxonomy_version": value.get("taxonomy_version"),
+        "content_path": value.get("content_path"),
+        "related_content_ids": value.get("related_content_ids") or [],
         "note": str(value.get("note") or "").strip(),
     }
     states = reviews.setdefault("questions", {})
@@ -119,7 +123,13 @@ def reviewed_examples(root: Path) -> list[dict]:
         for question in data.get("questoes", []):
             number = question.get("numero")
             review = reviews.get(str(number)) or {}
-            if review.get("status") != "reviewed" or not review.get("subject") or not review.get("topic"):
+            if (review.get("status") != "reviewed" or not review.get("subject")
+                    or not review.get("content_id")):
+                continue
+            from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
+            content = CONTENT_INDEX.get(str(review["content_id"]))
+            if (review.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION or not content
+                    or not content["is_leaf"] or content["subject"] != review["subject"]):
                 continue
             support = shared.get(str(question.get("texto_id") or ""), {})
             if isinstance(support, str):
@@ -135,7 +145,9 @@ def reviewed_examples(root: Path) -> list[dict]:
                 "question": question.get("enunciado") or "",
                 "supporting_texts": support.get("texto") or "",
                 "alternatives": alternatives,
-                "subject": review["subject"], "topic": review["topic"],
+                "subject": review["subject"], "topic": content["name"],
+                "content_id": content["id"], "content_path": " → ".join(content["path"]),
+                "taxonomy_version": CONTENT_TAXONOMY_VERSION,
                 "reviewed": True, "review_status": "reviewed",
                 "source": "fuvest_local", "note": review.get("note") or "",
             })

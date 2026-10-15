@@ -68,9 +68,15 @@ PYTHONPATH=src python -m studai.tools.evaluate_classifier \
 
 `ClassificationCache` expõe armazenamento de exemplos revisados e busca cosseno por vetor. O vetor é serializado em SQLite para manter a interface substituível e evitar nova dependência obrigatória. A inserção deve ser feita somente após confirmação humana; a busca ainda não altera automaticamente o resultado da classificação.
 
-## Taxonomia fechada de tópicos
+## Árvore canônica de conteúdos
 
-`src/studai/features/classification/topic_taxonomy.json` contém a taxonomia por matéria (477 tópicos em 13 matérias), ampliada a partir do guia Fuvest 2026 fornecido para esta revisão. Os 88 tópicos anteriores foram mantidos. A lista de leituras obrigatórias usa uma categoria geral para não ficar presa às obras de um único ano. Alguns tópicos complementam o guia com conteúdos cobrados historicamente; como a parte final de Sociologia do material estava incompleta, esse trecho também recebeu complementação editorial. O classificador pede um tópico dessa lista e valida que pertença à matéria escolhida. Se não houver opção adequada, devolve `REVISAR` com confiança reduzida e marca a questão para revisão. É possível fornecer outra taxonomia pelo CLI com `--topicos arquivo.json`. Mudanças na taxonomia invalidam resultados antigos do cache. A matéria aparece como `Arte`; diagnósticos ainda aceitam dados legados que usam `Artes`.
+`src/studai/features/classification/content_taxonomy.json` é a árvore hierárquica versionada para classificação. Cada matéria, área, conteúdo e subconteúdo possui ID estável, nome, descrição e referência de fonte; folhas também podem ter sinônimos. Um caminho pode, por exemplo, distinguir `Matemática → Trigonometria → Identidades trigonométricas → Arco duplo`. A proposta-base cobre as 13 matérias atuais e preserva como folhas os tópicos do catálogo anterior, agrupados em áreas. O catálogo plano `topic_taxonomy.json` continua disponível para compatibilidade e consulta.
+
+O programa oficial FUVEST é a fonte editorial principal. A árvore registra edição, seção, páginas e URL nos nós. Algumas folhas mais granulares são desdobramentos editoriais de objetos oficiais mais amplos; elas não devem ser confundidas com citações literais do programa. A proposta editorial independente do Antigravity será revisada antes de ser incorporada.
+
+As novas classificações usam `conteudo_principal_id` e `conteudos_relacionados_ids`, ambos IDs de folhas da árvore. A API e a interface também fornecem `caminho_conteudo` e caminhos completos para revisão. Diagnósticos agregam os acertos e erros aos nós ancestrais, permitindo alternar entre visão ampla e subconteúdo. Índices de embeddings incluem ID, caminho, descrição e sinônimos, e exemplos de RAG só são aceitos para a versão atual da árvore.
+
+Registros anteriores continuam legíveis com seus rótulos de tópico, mas não são convertidos automaticamente para IDs novos. Refaça a classificação ou revise a questão para atribuir um rótulo canônico. Versões da taxonomia ficam gravadas junto aos novos rótulos; resultados de benchmarks antigos continuam identificados pela estrutura anterior.
 
 ## Cache e Ollama
 
@@ -89,7 +95,7 @@ PYTHONPATH=src python -m studai.tools.index_classification_examples \
   --base-url http://localhost:11434
 ```
 
-O comando valida matéria e tópico contra a taxonomia antes de gravar. Uma indexação seguinte substitui apenas os vetores daquele arquivo. O processamento normal usa RAG automaticamente se houver índice para o modelo configurado; `classifier.py --no-rag` executa o baseline sem exemplos. Use `--embedding-model` para mudar o modelo local. As mudanças no corpus entram na chave do cache de classificação.
+O comando valida matéria e ID de conteúdo contra a árvore antes de gravar. Linhas sem ID canônico e versão atual são ignoradas, preservando exemplos antigos sem tratá-los como rótulos da nova árvore. Uma indexação seguinte substitui apenas os vetores daquele arquivo. O processamento normal usa RAG automaticamente se houver índice para o modelo configurado; `classifier.py --no-rag` executa o baseline sem exemplos. Use `--embedding-model` para mudar o modelo local. As mudanças no corpus e na árvore entram na chave do cache de classificação.
 
 Para uma comparação A/B, rode o benchmark numa amostra curta nos dois computadores e aumente o limite depois de validar a configuração:
 
