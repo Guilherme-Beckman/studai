@@ -48,15 +48,18 @@ class ContentTaxonomyTests(unittest.TestCase):
                 "conteudo_principal_id": primary, "conteudos_relacionados_ids": [], "confianca": 0.9},
                 service.DEFAULT_TAXONOMY, content_taxonomy=DEFAULT_CONTENT_TAXONOMY)
 
-    def test_every_math_leaf_is_a_subcontent_four_levels_deep(self):
-        math_leaves = [node for node in CONTENT_INDEX.values()
-                       if node["subject"] == "Matemática" and node["is_leaf"]]
-        self.assertGreater(len(math_leaves), 150)
-        for node in math_leaves:
-            self.assertEqual(node.get("level"), "subcontent", node["id"])
-            self.assertEqual(len(node["path"]), 4, node["id"])
-            self.assertEqual(stage_one_id(node["id"]), node["path_ids"][2])
-        self.assertFalse(any(node["subject"] == "Matemática" and node["is_leaf"] for node in STAGE_ONE_OPTIONS))
+    def test_deepened_subjects_have_only_subcontent_leaves_four_levels_deep(self):
+        for subject in ("Matemática", "Física"):
+            leaves = [node for node in CONTENT_INDEX.values()
+                      if node["subject"] == subject and node["is_leaf"]]
+            self.assertGreater(len(leaves), 150, subject)
+            for node in leaves:
+                self.assertEqual(node.get("level"), "subcontent", node["id"])
+                self.assertEqual(len(node["path"]), 4, node["id"])
+                self.assertEqual(stage_one_id(node["id"]), node["path_ids"][2])
+            self.assertFalse(any(node["subject"] == subject and node["is_leaf"] for node in STAGE_ONE_OPTIONS))
+        self.assertEqual(content_path("fisica.ondas-sonoras-e-nivel-de-intensidade.efeito-doppler"),
+                         "Física → Ondas e óptica → Ondas sonoras e nível de intensidade → Efeito Doppler")
 
     def test_refinable_content_is_accepted_only_when_allowed(self):
         parent = "matematica.content.trigonometria-no-triangulo"

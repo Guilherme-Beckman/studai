@@ -43,12 +43,13 @@ Base: `src/studai/features/classification/content_taxonomy.json`, `taxonomy.py`.
 - [ ] Auditar e integrar a proposta editorial `docs/fuvest-taxonomy-proposal.json` (fontes oficiais, IDs estáveis, granularidade)
 - [ ] Mapear os rótulos legados (classificações antigas) para os IDs canônicos, com um relatório do que ficou sem correspondência
 - [~] Garantir que as folhas sejam específicas o suficiente para o diagnóstico: árvore com 4 níveis, matéria → área → conteúdo → subconteúdo (em andamento: Claude, `feature/classification/hierarchical-taxonomy`)
-  - [x] Matemática: 189 subconteúdos (`level: "subcontent"`), Trigonometria sem grupos redundantes, versão `fuvest-2027.v2` (2026-10-15)
-  - [ ] Física
+  - [x] Matemática: 189 subconteúdos (`level: "subcontent"`), Trigonometria sem grupos redundantes, versão `fuvest-2027.v2` (commit cebcec1, 2026-10-15)
+  - [x] Física: 177 subconteúdos, versão `fuvest-2027.v3` (2026-10-15)
   - [ ] Química
   - [ ] Biologia
   - [ ] Demais matérias (Humanas, Linguagens)
-  - [ ] Revisão editorial humana dos subconteúdos de Matemática
+  - [ ] Revisão editorial humana dos subconteúdos de Matemática e Física
+  - [ ] Física: avaliar mover "Leis da termodinâmica e máquinas térmicas" da área Mecânica para Termologia e termodinâmica
 - [x] Classificação em duas etapas: 1ª etapa escolhe o conteúdo e a 2ª refina entre os subconteúdos; se não houver subconteúdo confiável, a questão fica com `subconteudo_pendente` para revisão (2026-10-15)
 - [ ] Medir a acurácia do classificador em duas etapas com as questões revisadas (`docs/benchmarks/`) e reconstruir o índice de embeddings de tópicos
 - [ ] Manter `tests/test_content_taxonomy.py` cobrindo a estrutura (IDs únicos, caminhos válidos, fontes presentes)
@@ -116,4 +117,5 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 |---|---|---|---|
 | 2026-10-15 | — / `feature/classification/hierarchical-taxonomy` | Taxonomia canônica hierárquica | fb01893 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Criado este TODO.md | 19957a1 |
-| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Matemática aprofundada até subconteúdos; classificador em duas etapas | — |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Matemática aprofundada até subconteúdos; classificador em duas etapas | cebcec1 |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Física aprofundada até subconteúdos | — |
