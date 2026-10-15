@@ -98,6 +98,8 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
 - [x] Medir o roteamento hierárquico contra o modo plano (`--limit 10`, qwen3.5:4b): 2,8× mais rápido (76 s contra 212 s por questão), conteúdo da 1ª etapa 50% contra 20%; ver `docs/benchmarks/two-stage-routing.md` (2026-10-15)
 - [x] Ordenar o processamento local por etapa (`STUDAI_STAGE_ORDER=1`, `classify_stage_major`): implementado e medido, sem ganho (483 s contra 496 s em 10 questões), porque o Ollama 0.40 já reaproveita o prompt de sistema entre etapas alternadas. A flag fica desligada; ver `docs/benchmarks/two-stage-routing.md` (commit cf44202, 2026-10-15)
 - [ ] Pôr o enunciado antes das instruções de cada etapa, para que as etapas 2 e 3 reaproveitem do cache os cerca de 10 s de leitura da questão (exige benchmark de acurácia)
+  - [x] Implementado atrás da flag `STUDAI_QUESTION_FIRST=1` (`stage_messages`): system genérico único, questão + exemplos no início da mensagem e o bloco `<etapa>` no fim; `PROMPT_VERSION` vira `v9-question-first` (2026-10-15)
+  - [ ] Medir com e sem a flag (`evaluate_classifier --limit 10`, questões ainda fora do cache) e decidir se vira padrão
 - [ ] Melhorar regras e descrições de Inglês × Língua Portuguesa × Literatura (canções e poemas confundem a matéria)
 - [x] Medir recall por matéria: top-15 de 92,7% (qwen3-embedding) e 82,9% (bge-m3), abaixo de 98%, então o pré-filtro **não** foi ativado (2026-10-15)
 - [ ] Testar o backend Vulkan do Ollama na iGPU AMD e medir com `evaluate_classifier --limit 10`

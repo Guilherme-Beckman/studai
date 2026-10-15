@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from studai.features.classification.taxonomy import (
     CONTENT_INDEX, DEFAULT_CONTENTS_BY_SUBJECT, DEFAULT_CONTENT_TAXONOMY, STAGE_ONE_OPTIONS,
@@ -125,6 +126,51 @@ class ContentTaxonomyTests(unittest.TestCase):
         self.assertIn("Lei dos senos", refine_system)
         flat_system = service.build_system(service.DEFAULT_TAXONOMY)
         self.assertLess(len(subject_system) + len(content_system), len(flat_system) / 4)
+
+    def test_question_first_layout_shares_system_and_question_prefix_across_stages(self):
+        parent = "matematica.content.trigonometria-no-triangulo"
+        leaf = "matematica.trigonometria-no-triangulo.lei-dos-senos"
+        provider = ScriptedProvider([
+            {"materia": "Matemática", "materias_secundarias": [], "confianca": 0.95},
+            {"conteudo_principal_id": parent, "conteudos_relacionados_ids": [], "confianca": 0.8},
+            {"subconteudo_id": leaf, "confianca": 0.7}])
+        question = {"numero": 1, "enunciado": "Num triângulo, sen A / a = ...", "alternativas": {}}
+        examples = [{"text": "Exemplo de trigonometria",
+                     "result": {"subject": "Matemática", "content_id": parent}}]
+        with mock.patch.object(service, "QUESTION_FIRST", True):
+            result = service.classify_routed(provider, question, None, service.DEFAULT_TAXONOMY, [], examples)
+        self.assertEqual(result["conteudo_principal_id"], leaf)
+        self.assertEqual(set(provider.systems), {service.SHARED_STAGE_SYSTEM})
+        prefix = service.render_questao(question, None, False) + "\n\n" + service.render_examples(examples)
+        subject_user, content_user, refine_user = provider.users
+        for user in provider.users:
+            self.assertTrue(user.startswith(prefix + "\n\n<etapa>\n"))
+            self.assertTrue(user.endswith("</etapa>"))
+        self.assertIn("identifica a matéria", subject_user)
+        self.assertIn(f"[id={parent}]", content_user)
+        self.assertIn("Lei dos senos", refine_user)
+        self.assertNotIn("Lei dos senos", content_user)
+
+    def test_question_first_retry_keeps_question_prefix(self):
+        provider = ScriptedProvider([
+            {"materia": "Astrologia", "materias_secundarias": [], "confianca": 0.9},
+            {"materia": "Física", "materias_secundarias": [], "confianca": 0.9},
+            {"conteudo_principal_id": "REVISAR", "conteudos_relacionados_ids": [], "confianca": 0.2}])
+        question = {"numero": 2, "enunciado": "Um pêndulo oscila...", "alternativas": {}}
+        with mock.patch.object(service, "QUESTION_FIRST", True):
+            service.classify_routed(provider, question, None, service.DEFAULT_TAXONOMY, [])
+        first, retry, _ = provider.users
+        self.assertTrue(retry.startswith(first))
+        self.assertIn("resposta anterior foi inválida", retry[len(first):])
+
+    def test_question_first_works_with_demo_provider(self):
+        from studai.integrations.llm import DemoProvider
+        question = {"numero": 3, "enunciado": "Calcule a probabilidade de um triângulo...", "alternativas": {}}
+        with mock.patch.object(service, "QUESTION_FIRST", True):
+            result = service.classify_routed(DemoProvider(model="demo"), question, None,
+                                             service.DEFAULT_TAXONOMY, [])
+        self.assertEqual(result["materia"], "Matemática")
+        self.assertTrue(result["conteudo_principal_id"].startswith("matematica."))
 
     def test_routed_classifier_falls_back_to_secondary_subject(self):
         content = "fisica.content.movimento-harmonico-simples"
@@ -299,6 +345,7 @@ class ScriptedProvider(Provider):
     def __init__(self, answers):
         self.answers = list(answers)
         self.systems = []
+        self.users = []
 
     @property
     def label(self) -> str:
@@ -306,6 +353,7 @@ class ScriptedProvider(Provider):
 
     def complete(self, system, user, images=None):
         self.systems.append(system)
+        self.users.append(user)
         return json.dumps(self.answers.pop(0), ensure_ascii=False)
 
 
