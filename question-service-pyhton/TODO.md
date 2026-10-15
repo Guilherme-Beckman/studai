@@ -53,6 +53,11 @@ Base: `src/studai/features/classification/content_taxonomy.json`, `taxonomy.py`.
   - [ ] Biologia: avaliar conteúdos próprios para vírus, reinos e grupos vegetais (hoje são subconteúdos de "Filogenia e classificação")
 - [x] Classificação em duas etapas: 1ª etapa escolhe o conteúdo e a 2ª refina entre os subconteúdos; se não houver subconteúdo confiável, a questão fica com `subconteudo_pendente` para revisão (2026-10-15)
 - [ ] Medir a acurácia do classificador em duas etapas com as questões revisadas (`docs/benchmarks/`) e reconstruir o índice de embeddings de tópicos
+  - [x] `evaluate_classifier.py` mede a 1ª etapa (`content_stage1`) e o refinamento (`refinement`) (2026-10-15)
+  - [ ] Rodar depois da nova rodada de revisão humana; o rótulo de subconteúdo ainda não tem gabarito
+    ```bash
+    PYTHONPATH=src .venv/bin/python -m studai.tools.evaluate_classifier simulados/cache/reviewed-topic-eval.jsonl --provider ollama --model qwen3.5:4b --output simulados/cache/two-stage-qwen3.5-4b.json --timeout 180
+    ```
 - [ ] Manter `tests/test_content_taxonomy.py` cobrindo a estrutura (IDs únicos, caminhos válidos, fontes presentes)
 
 ## Fase 2 — Revisão de questões → fonte de verdade
@@ -122,4 +127,5 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Física aprofundada até subconteúdos | 3bc0cdf |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Química aprofundada até subconteúdos | 1818d83 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Biologia aprofundada até subconteúdos | 1d27818 |
-| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Humanas e Linguagens aprofundadas até subconteúdos (9 matérias) | — |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Humanas e Linguagens aprofundadas até subconteúdos (9 matérias) | c767bbd |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Avaliador mede 1ª etapa e refinamento; benchmark adiado para depois da revisão humana | — |

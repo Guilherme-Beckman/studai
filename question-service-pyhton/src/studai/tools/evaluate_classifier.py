@@ -13,7 +13,9 @@ from pathlib import Path
 from studai.features.classification import service as clf
 from studai.features.classification.cache import ClassificationCache
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, LocalExampleRetriever
-from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
+from studai.features.classification.taxonomy import (
+    CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, canonical_content_id, stage_one_id,
+)
 from studai.integrations.llm import make_provider
 from studai.settings import DEFAULT_CLASSIFICATION_CACHE
 
@@ -38,6 +40,16 @@ def score(rows: list[dict], gold_key: str, pred_key: str) -> dict:
     return {"accuracy": correct / len(rows) if rows else 0.0,
             "macro_f1": statistics.mean(item["f1"] for item in per_label.values()) if per_label else 0.0,
             "per_label": per_label}
+
+
+def gold_stage_one_id(row: dict) -> str | None:
+    """Content the first step should choose; legacy topic names resolve to their content."""
+    if row.get("content_id"):
+        return stage_one_id(str(row["content_id"]))
+    if row.get("topic") and row.get("subject"):
+        identity = canonical_content_id(str(row["topic"]), subject=row["subject"], allow_refinable=True)
+        return stage_one_id(identity) if identity else None
+    return None
 
 
 def load_jsonl(path: Path, *, require_labels: bool = True) -> list[dict]:
@@ -133,6 +145,10 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                    "gold_content_id": row.get("content_id"),
                    "pred_content_id": result.get("conteudo_principal_id"),
                    "pred_content_path": result.get("caminho_conteudo"),
+                   "gold_stage1_id": gold_stage_one_id(row),
+                   "pred_stage1_id": (result.get("conteudo_etapa1_id")
+                                      or stage_one_id(str(result.get("conteudo_principal_id") or ""))),
+                   "subcontent_pending": bool(result.get("subconteudo_pendente")),
                    "seconds": elapsed, "usage": usage, "error": error,
                    "retrieved_examples": result.get("exemplos_referencia", [])}
         return index, row, result, elapsed, error, outcome
@@ -179,6 +195,8 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                (item.get("gold_content_id") or item.get("gold_topic"))]
     canonical_labeled = [item for item in labeled if item.get("gold_content_id")]
     review_count = sum(not item.get("pred_content_id") for item in outcomes)
+    stage_one_labeled = [item for item in labeled if item.get("gold_stage1_id")]
+    refined = [item for item in outcomes if item.get("pred_content_id") and not item.get("error")]
     result = {"dataset": str(dataset), "source": source, "dataset_version": version,
               "provider": provider.label, "created_at": datetime.now(timezone.utc).isoformat(),
               "image_mode": image_mode,
@@ -195,6 +213,10 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
               "subject": score(labeled, "gold_subject", "pred_subject"),
               "topic": score(labeled, "gold_topic", "pred_topic"),
               "content": score(canonical_labeled, "gold_content_id", "pred_content_id"),
+              "content_stage1": score(stage_one_labeled, "gold_stage1_id", "pred_stage1_id"),
+              "refinement": {"classified": len(refined),
+                             "subcontent_chosen": sum(not item["subcontent_pending"] for item in refined),
+                             "subcontent_pending": sum(item["subcontent_pending"] for item in refined)},
               "taxonomy_version": clf.CONTENT_TAXONOMY_VERSION,
               "review_rate": review_count / len(outcomes) if outcomes else 0.0,
               "review_count": review_count,
@@ -242,7 +264,8 @@ def main() -> None:
                       image_mode=args.images, limit=args.limit, request_attempts=args.http_attempts,
                       workers=args.workers, rag=args.rag, embedding_model=args.embedding_model,
                       rag_examples=args.rag_examples, allow_unlabeled=args.allow_unlabeled)
-    print(json.dumps({key: result[key] for key in ("count", "subject", "topic", "latency_seconds",
+    print(json.dumps({key: result[key] for key in ("count", "subject", "content_stage1", "refinement",
+                                                   "latency_seconds",
                                                    "invalid_json_or_classification", "attempts", "hosts")},
                      ensure_ascii=False, indent=2))
 
