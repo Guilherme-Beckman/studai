@@ -343,18 +343,22 @@ def _ai_options() -> dict:
 
 def _pool_provider(payload: dict, *, max_tokens: int = 1600) -> RotatingPoolProvider:
     load_dotenv(SERVICE_ROOT / ".env")
-    options = _ai_options()
     split_models = lambda value: list(dict.fromkeys(
         part.strip() for part in re.split(r"[,;\n]", str(value or "")) if part.strip()))
-    selected_ollama = split_models(payload.get("ollamaModels"))
+    use_ollama = str(payload.get("useOllama", "true")).strip().casefold() not in {"false", "0", "no", "off"}
+    selected_ollama = split_models(payload.get("ollamaModels")) if use_ollama else []
     selected_gemini = split_models(payload.get("geminiModels"))
+    keys = _gemini_api_keys()
+    if use_ollama:
+        options = _ai_options()
+    else:
+        options = {"ollamaModels": [], "geminiModels": _available_gemini_models(keys)}
     if len(selected_ollama) > 2:
         raise ValueError("selecione no máximo dois modelos Ollama")
     if any(model not in options["ollamaModels"] for model in selected_ollama):
         raise ValueError("um dos modelos Ollama selecionados não está instalado ou disponível")
     if any(model not in options["geminiModels"] for model in selected_gemini):
         raise ValueError("um dos modelos Gemini selecionados não está disponível para as chaves configuradas")
-    keys = _gemini_api_keys()
     if selected_gemini and not keys:
         raise ValueError("configure GEMINI_API_KEYS no arquivo .env para usar Gemini")
     if not selected_ollama and not selected_gemini:

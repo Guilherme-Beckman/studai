@@ -550,9 +550,23 @@ function setMultiSelectOptions(select, values, selectedValues = []) {
 async function setupAIOptions() {
   const status = $("#ai-options-status");
   const geminiStatus = $("#gemini-key-status");
+  const useOllama = $("#process-use-ollama");
+  const localSelect = $("#process-ollama-models");
+  const threadsInput = $("#process-ollama-threads");
+  let loadedOptions = null;
+  const updateStatus = () => {
+    if (!loadedOptions) return;
+    status.textContent = `${useOllama.checked ? (loadedOptions.ollamaAvailable ? `${loadedOptions.ollamaModels.length} modelo(s) Ollama ativo(s)` : "Ollama não encontrado") : "Ollama desativado"} · ${loadedOptions.geminiConfigured ? `${loadedOptions.geminiKeyCount} chave(s) Gemini configurada(s)` : "Gemini sem chaves configuradas"}`;
+  };
+  const updateOllamaControls = () => {
+    localSelect.disabled = !useOllama.checked || !localSelect.options.length || !localSelect.options[0].value;
+    threadsInput.disabled = !useOllama.checked;
+    updateStatus();
+  };
+  useOllama.addEventListener("change", updateOllamaControls);
   try {
     const options = await api("/api/ai/options");
-    const localSelect = $("#process-ollama-models");
+    loadedOptions = options;
     const geminiSelect = $("#process-gemini-models");
     const oldLocal = new Set([...localSelect.selectedOptions].map(option => option.value));
     const oldGemini = new Set([...geminiSelect.selectedOptions].map(option => option.value));
@@ -564,8 +578,8 @@ async function setupAIOptions() {
     setMultiSelectOptions(localSelect, options.ollamaModels, localSelection.slice(0, 2));
     setMultiSelectOptions(geminiSelect, options.geminiModels, geminiSelection);
     geminiSelect.disabled = !options.geminiConfigured || !options.geminiModels.length;
-    localSelect.disabled = !options.ollamaModels.length;
-    status.textContent = `${options.ollamaAvailable ? `${options.ollamaModels.length} modelo(s) Ollama` : "Ollama não encontrado"} · ${options.geminiConfigured ? `${options.geminiKeyCount} chave(s) Gemini configurada(s)` : "Gemini sem chaves configuradas"}`;
+    updateOllamaControls();
+    updateStatus();
     geminiStatus.textContent = options.geminiConfigured
       ? `${options.geminiKeyCount} chave(s) no backend · nenhum segredo é exibido aqui.`
       : "Adicione GEMINI_API_KEYS ao .env local para ativar o Gemini.";
@@ -590,9 +604,13 @@ function providerConfig(prefix) {
 }
 
 function processConfig() {
-  const ollamaModels = [...$("#process-ollama-models").selectedOptions].map(option => option.value).filter(Boolean);
+  const useOllama = $("#process-use-ollama").checked;
+  const ollamaModels = useOllama
+    ? [...$("#process-ollama-models").selectedOptions].map(option => option.value).filter(Boolean)
+    : [];
   if (ollamaModels.length > 2) throw new Error("Selecione no máximo dois modelos Ollama.");
   return {
+    useOllama,
     ollamaModels,
     geminiModels: [...$("#process-gemini-models").selectedOptions].map(option => option.value).filter(Boolean),
     ollamaThreads: $("#process-ollama-threads").value || "0",
@@ -640,6 +658,7 @@ async function processPdf(event) {
 
 async function submitSavedProcess(record, signal) {
   const query = new URLSearchParams({ filename: record.filename, provider: "pool", clientJobId: record.jobId,
+    useOllama: String(record.config.useOllama !== false),
     ollamaModels: (record.config.ollamaModels || []).join(","), geminiModels: (record.config.geminiModels || []).join(","),
     ollamaThreads: record.config.ollamaThreads || "0" });
   if (record.images) query.set("images", "sempre");

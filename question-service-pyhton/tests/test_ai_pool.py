@@ -161,6 +161,25 @@ class AIPoolTests(unittest.TestCase):
                 server.SERVICE_ROOT = original_root
                 server.AI_OPTIONS_CACHE = original_cache
 
+    def test_pool_can_disable_ollama_without_discovering_or_calling_it(self):
+        original_root = server.SERVICE_ROOT
+        with tempfile.TemporaryDirectory() as temp:
+            server.SERVICE_ROOT = Path(temp)
+            try:
+                gemini = StubProvider("gemini-3.8-flash")
+                with patch.object(server, "_ai_options", side_effect=AssertionError("Ollama discovery called")), \
+                     patch.object(server, "_gemini_api_keys", return_value=["test-key"]), \
+                     patch.object(server, "_available_gemini_models", return_value=["gemini-3.8-flash"]), \
+                     patch.object(server, "_ollama_models", side_effect=AssertionError("Ollama queried")), \
+                     patch.object(server, "make_provider", side_effect=AssertionError("Ollama provider created")), \
+                     patch("studai.api.server.GeminiProvider", return_value=gemini):
+                    pool = server._pool_provider({"useOllama": "false", "ollamaModels": "local-a",
+                                                  "geminiModels": "gemini-3.8-flash"})
+                self.assertEqual(pool.lane_count, 1)
+                self.assertIn("Gemini", pool.label)
+            finally:
+                server.SERVICE_ROOT = original_root
+
 
 if __name__ == "__main__":
     unittest.main()
