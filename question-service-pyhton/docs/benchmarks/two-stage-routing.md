@@ -105,7 +105,7 @@ As predições foram idênticas nos dois modos, questão a questão.
 
 ### Conclusões
 
-- **Sem ganho: a flag fica desligada.** Os dois modos empataram (a diferença de 2,6% está dentro do ruído). O runner llama.cpp do Ollama 0.40 guarda vários prompts num cache em RAM e procura o de maior prefixo comum (`srv load: looking for better prompt` no log). Por isso o prompt de sistema já vem do cache mesmo com as etapas alternadas. O `cached n_tokens = 128` da medição anterior não se repetiu.
+- **Sem ganho: a flag foi removida** (o código fica no commit cf44202). Os dois modos empataram (a diferença de 2,6% está dentro do ruído). O runner llama.cpp do Ollama 0.40 guarda vários prompts num cache em RAM e procura o de maior prefixo comum (`srv load: looking for better prompt` no log). Por isso o prompt de sistema já vem do cache mesmo com as etapas alternadas. O `cached n_tokens = 128` da medição anterior não se repetiu.
 - **O que ainda custa é o texto da questão.** Cada etapa relê o enunciado (cerca de 520 a 1 020 tokens, uns 10 s) depois de um prompt de sistema diferente. Por isso a ordem não importa. Para economizar aqui, a questão teria de vir antes das instruções de cada etapa, de modo que as etapas 2 e 3 reaproveitassem o enunciado. Isso muda os prompts e precisa de um benchmark de acurácia.
 - **O subconteúdo saiu quase de graça nas duas rodadas,** porque estas 10 questões já tinham rodado antes e o prompt completo estava no cache. Com questões novas, o subconteúdo volta a custar cerca de 13 s de prefill (ver a tabela de custo por etapa acima). A comparação entre os modos continua justa, mas os tempos absolutos ficaram abaixo dos 76 s da primeira medição por causa disso.
 
@@ -144,7 +144,7 @@ Para checar só a acurácia com um modelo maior, rodamos as 41 questões com `ge
 
 ### Conclusões
 
-- **Sem ganho de tempo: a flag fica desligada.** Com a questão na frente, cada questão ficou 26% mais lenta (85 s contra 68 s). A questão não veio do cache em nenhuma etapa, e o prompt de sistema da etapa de conteúdo, que antes vinha do cache, deixou de vir.
+- **Sem ganho de tempo: a flag foi removida** (o código fica no commit f2430e2). Com a questão na frente, cada questão ficou 26% mais lenta (85 s contra 68 s). A questão não veio do cache em nenhuma etapa, e o prompt de sistema da etapa de conteúdo, que antes vinha do cache, deixou de vir.
 - **Por quê: o qwen3.5 é um modelo híbrido (camadas recorrentes).** O llama.cpp não consegue cortar o cache de um modelo assim num ponto qualquer. Ele só retoma de *checkpoints*, e o log mostra onde eles ficam: a 4 tokens do fim do prompt e a mais 1 020 tokens antes disso (ex.: prompt de 1 524 tokens → checkpoints em 1 520 e 500). A posição depende do tamanho do prompt, não do fim da questão nem da divisão em mensagens, por isso a variante com 2 mensagens também não ajudou. Um prompt só é reaproveitado se algum checkpoint de um prompt anterior cair dentro do prefixo comum.
 - **Isso explica as medições anteriores.** O "prompt de sistema do conteúdo vem do cache" acontecia porque o checkpoint a 1 024 tokens do fim de uma chamada de conteúdo caía dentro do prompt de sistema longo da matéria. O subconteúdo "quase de graça" vinha do checkpoint a 4 tokens do fim de um prompt idêntico já rodado. Com o system genérico curto (cerca de 130 tokens), nenhum checkpoint cai no prefixo comum.
 - **A acurácia não piorou.** O conteúdo da 1ª etapa acertou 8 contra 6 no qwen e 14 contra 14 no Gemini, mas a amostra é pequena demais para concluir que melhorou.

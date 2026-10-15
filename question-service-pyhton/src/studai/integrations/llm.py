@@ -494,14 +494,12 @@ class MockProvider(Provider):
     }
 
     def complete(self, system, user, images=None):
-        # Com o enunciado antes das instruções, as opções da etapa vêm em <etapa> no fim da mensagem.
-        question, _, stage = user.partition("<etapa>")
-        low = " " + question.lower() + " "
+        low = " " + user.lower() + " "
         scores = {m: sum(low.count(k) for k in ks) for m, ks in self.KW.items()}
         best = max(scores, key=scores.get)
         mat = best if scores[best] else "Língua Portuguesa"
         topic_map = {}
-        for line in (system + "\n" + stage).splitlines():
+        for line in system.splitlines():
             if line.startswith("TAXONOMIA_TOPICOS_JSON:"):
                 try:
                     topic_map = json.loads(line.split(":", 1)[1].strip())
