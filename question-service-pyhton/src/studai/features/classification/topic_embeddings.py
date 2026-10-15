@@ -31,10 +31,10 @@ def taxonomy_rows(taxonomy: dict, level: str = "leaf") -> list[dict[str, str]]:
             from studai.features.classification.taxonomy import validate_content_taxonomy
             index = validate_content_taxonomy(taxonomy)
         if level == "stage1":
-            nodes = [node for node in index.values()
-                     if node["refinable"] or (node["is_leaf"] and node.get("level") != "subcontent")]
+            from studai.features.classification.taxonomy import is_stage_one_option
+            nodes = [node for node in index.values() if is_stage_one_option(node)]
         elif level == "leaf":
-            nodes = [node for node in index.values() if node["is_leaf"]]
+            nodes = [node for node in index.values() if node["is_leaf"] and not node.get("deprecated")]
         else:
             raise ValueError("level deve ser 'leaf' ou 'stage1'")
         rows = []

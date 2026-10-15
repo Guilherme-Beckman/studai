@@ -90,15 +90,28 @@ CONTENT_TAXONOMY_VERSION = str(DEFAULT_CONTENT_TAXONOMY["version"])
 CONTENT_INDEX: dict[str, dict[str, Any]] = DEFAULT_CONTENT_TAXONOMY["index"]
 DEFAULT_SUBJECT_IDS = {subject["name"]: subject["id"]
                        for subject in DEFAULT_CONTENT_TAXONOMY["subjects"]}
+def live_id(content_id: str) -> str:
+    """Follow ``replaced_by`` from deprecated nodes; old labels keep their ID valid."""
+    seen = set()
+    while content_id in CONTENT_INDEX and CONTENT_INDEX[content_id].get("deprecated") \
+            and content_id not in seen:
+        seen.add(content_id)
+        content_id = CONTENT_INDEX[content_id].get("replaced_by") or content_id
+    return content_id
+
+
 DEFAULT_CONTENTS_BY_SUBJECT = {
     subject["name"]: [node for node in CONTENT_INDEX.values()
-                      if node["subject_id"] == subject["id"] and node["is_leaf"]]
+                      if node["subject_id"] == subject["id"] and node["is_leaf"]
+                      and not node.get("deprecated")]
     for subject in DEFAULT_CONTENT_TAXONOMY["subjects"]
 }
 
 
 def is_stage_one_option(node: dict[str, Any]) -> bool:
     """Options listed in the first classification step: refinable contents and plain leaves."""
+    if node.get("deprecated"):
+        return False
     return node["refinable"] or (node["is_leaf"] and node.get("level") != "subcontent")
 
 
@@ -107,7 +120,7 @@ STAGE_ONE_OPTIONS = [node for node in CONTENT_INDEX.values() if is_stage_one_opt
 
 def stage_one_id(content_id: str) -> str | None:
     """Map a leaf or stage-one option to the option the first step must choose."""
-    node = CONTENT_INDEX.get(content_id)
+    node = CONTENT_INDEX.get(live_id(content_id))
     if not node:
         return None
     if is_stage_one_option(node):
@@ -132,7 +145,8 @@ def refinement_options(content_id: str) -> list[dict[str, Any]]:
     node = CONTENT_INDEX.get(content_id)
     if not node or not node["refinable"]:
         return []
-    return [CONTENT_INDEX[child["id"]] for child in node.get("children") or []]
+    return [CONTENT_INDEX[child["id"]] for child in node.get("children") or []
+            if not child.get("deprecated")]
 
 
 def content_path(content_id: str) -> str | None:
@@ -167,12 +181,15 @@ def canonical_content_id(value: str, *, subject: str | None = None,
                 and (subject is None or node["subject"] == subject))
 
     if value in CONTENT_INDEX:
+        value = live_id(value)
         return value if accepted(CONTENT_INDEX[value]) else None
     folded = value.strip().casefold()
-    matches = [node["id"] for node in CONTENT_INDEX.values()
-               if accepted(node)
-               and (node["name"].casefold() == folded
-                    or any(alias.casefold() == folded for alias in node.get("aliases", [])))]
+    named = [node["id"] for node in CONTENT_INDEX.values()
+             if node["name"].casefold() == folded
+             or any(alias.casefold() == folded for alias in node.get("aliases", []))]
+    # Um nome obsoleto resolve para o substituto; só conta se não houver ambiguidade.
+    matches = {live_id(identity) for identity in named}
+    matches = [identity for identity in matches if accepted(CONTENT_INDEX[identity])]
     return matches[0] if len(matches) == 1 else None
 
 

@@ -1,0 +1,12 @@
+{
+  "description": "Correspondências manuais rótulo legado (matéria → tópico) → ID canônico da taxonomia. Usado por legacy_mapping.py quando a correspondência exata é ambígua ou inexistente. Nos casos abaixo um conteúdo e um de seus subconteúdos têm o mesmo nome; o rótulo legado (catálogo de tópicos sem subconteúdos) não escolheu subconteúdo, então aponta para o conteúdo (opção da 1ª etapa), que a 2ª etapa pode refinar.",
+  "taxonomy_version": "fuvest-2027.v6",
+  "mappings": {
+    "Biologia": {"Herança ligada ao X": "biologia.content.heranca-ligada-ao-x"},
+    "Física": {"Transformação adiabática": "fisica.content.transformacao-adiabatica"},
+    "Geografia": {"Meio técnico-científico-informacional": "geografia.content.meio-tecnico-cientifico-informacional"},
+    "Inglês": {"Expressões idiomáticas": "ingles.content.expressoes-idiomaticas"},
+    "Matemática": {"Inequações logarítmicas": "matematica.content.inequacoes-logaritmicas"},
+    "Sociologia": {"Cultura popular, erudita e de massa": "sociologia.content.cultura-popular-erudita-e-de-massa"}
+  }
+}

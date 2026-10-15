@@ -25,7 +25,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 
 | # | Fase | Status | Feitos/Total |
 |---|---|---|---|
-| 1 | Taxonomia | em andamento | 3/7 |
+| 1 | Taxonomia | em andamento | 6/7 |
 | 2 | Revisão de questões → fonte de verdade | pendente | 0/7 |
 | 3 | Questões mal recortadas | pendente | 0/5 |
 | 4 | Reorganização e otimização (código + IA) | em andamento | 4/13 |
@@ -40,17 +40,18 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 Base: `src/studai/features/classification/content_taxonomy.json`, `taxonomy.py`.
 
 - [x] Árvore canônica hierárquica integrada ao classificador, revisão, RAG/embeddings, API, frontend e diagnósticos (commit fb01893, 2026-10-15)
-- [ ] Auditar e integrar a proposta editorial `docs/fuvest-taxonomy-proposal.json` (fontes oficiais, IDs estáveis, granularidade)
-- [ ] Mapear os rótulos legados (classificações antigas) para os IDs canônicos, com um relatório do que ficou sem correspondência
+- [x] Auditar e integrar a proposta editorial `docs/fuvest-taxonomy-proposal.json` (fontes oficiais, IDs estáveis, granularidade): versão `fuvest-2027.v7`, fontes com página do guia 2026 e relatório por matéria em [`docs/taxonomy-review-v7.md`](docs/taxonomy-review-v7.md) (2026-10-15)
+- [x] Mapear os rótulos legados (classificações antigas) para os IDs canônicos, com um relatório do que ficou sem correspondência: `legacy_mapping.py`, CLI `studai.tools.map_legacy_labels`, relatório [`docs/legacy-label-mapping.md`](docs/legacy-label-mapping.md); 477 de 478 rótulos mapeados, só "REVISAR" sem correspondência; nenhum registro reescrito (2026-10-15)
 - [x] Garantir que as folhas sejam específicas o suficiente para o diagnóstico: árvore com 4 níveis em todas as 13 matérias, matéria → área → conteúdo → subconteúdo, com 1.457 subconteúdos (2026-10-15)
   - [x] Matemática: 189 subconteúdos (`level: "subcontent"`), Trigonometria sem grupos redundantes, versão `fuvest-2027.v2` (commit cebcec1, 2026-10-15)
   - [x] Física: 177 subconteúdos, versão `fuvest-2027.v3` (commit 3bc0cdf, 2026-10-15)
   - [x] Química: 164 subconteúdos, versão `fuvest-2027.v4` (commit 1818d83, 2026-10-15)
   - [x] Biologia: 203 subconteúdos, versão `fuvest-2027.v5` (commit 1d27818, 2026-10-15)
   - [x] Humanas e Linguagens, versão `fuvest-2027.v6` (2026-10-15): História 177, Geografia 122, Filosofia 72, Sociologia 81, Língua Portuguesa 88, Literatura 63, Inglês 40, Arte 42, Educação Física 39
-  - [ ] Revisão editorial humana dos subconteúdos de todas as matérias (gerados editorialmente, marcados com `editorial_detail: true`)
-  - [ ] Física: avaliar mover "Leis da termodinâmica e máquinas térmicas" da área Mecânica para Termologia e termodinâmica
-  - [ ] Biologia: avaliar conteúdos próprios para vírus, reinos e grupos vegetais (hoje são subconteúdos de "Filogenia e classificação")
+  - [x] Passada editorial por IA em todas as 13 matérias (`fuvest-2027.v7`): 1.457 → 1.703 subconteúdos ativos, 5 nós marcados `deprecated` com `replaced_by` (2026-10-15)
+  - [ ] Revisão editorial humana dos subconteúdos de todas as matérias (gerados editorialmente, marcados com `editorial_detail: true`); dúvidas por matéria em [`docs/taxonomy-review-v7.md`](docs/taxonomy-review-v7.md)
+  - [x] Física: "Leis da termodinâmica e máquinas térmicas" movida da área Mecânica para Termologia e termodinâmica (v7)
+  - [x] Biologia: "Vírus" e "Bactérias, protistas e fungos" viraram conteúdos próprios; grupos vegetais ficaram em "Adaptações das plantas ao ambiente terrestre" (v7)
 - [x] Classificação em duas etapas: 1ª etapa escolhe o conteúdo e a 2ª refina entre os subconteúdos; se não houver subconteúdo confiável, a questão fica com `subconteudo_pendente` para revisão (2026-10-15)
 - [ ] Medir a acurácia do classificador em duas etapas com as questões revisadas (`docs/benchmarks/`) e reconstruir o índice de embeddings de tópicos
   - [x] `evaluate_classifier.py` mede a 1ª etapa (`content_stage1`) e o refinamento (`refinement`) (2026-10-15)
@@ -58,7 +59,7 @@ Base: `src/studai/features/classification/content_taxonomy.json`, `taxonomy.py`.
     ```bash
     PYTHONPATH=src .venv/bin/python -m studai.tools.evaluate_classifier simulados/cache/reviewed-topic-eval.jsonl --provider ollama --model qwen3.5:4b --output simulados/cache/two-stage-qwen3.5-4b.json --timeout 180
     ```
-- [ ] Manter `tests/test_content_taxonomy.py` cobrindo a estrutura (IDs únicos, caminhos válidos, fontes presentes)
+- [x] Manter `tests/test_content_taxonomy.py` cobrindo a estrutura (IDs únicos, caminhos válidos, fontes presentes, aliases sem colisão, nós `deprecated`) (2026-10-15)
 
 ## Fase 2 — Revisão de questões → fonte de verdade
 
@@ -148,3 +149,4 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Ordem por etapa no Ollama local (flag `STUDAI_STAGE_ORDER`), medida sem ganho | cf44202 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Enunciado antes das instruções (flag `STUDAI_QUESTION_FIRST`), medido 26% mais lento no qwen3.5 | f2430e2 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Remoção das flags `STUDAI_STAGE_ORDER` e `STUDAI_QUESTION_FIRST`, que não deram ganho | — |
+| 2026-10-15 | Claude (agentes em paralelo) / `feature/classification/hierarchical-taxonomy` | Taxonomia `fuvest-2027.v7`: proposta integrada, passada editorial nas 13 matérias, nós `deprecated`, mapeamento de rótulos legados, testes de estrutura | — |

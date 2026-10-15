@@ -41,11 +41,18 @@
 - **Próximo:** medir a acurácia do classificador em duas etapas, reconstruir o índice de embeddings de tópicos e revisar editorialmente os subconteúdos.
 - **Última atualização:** 2026-10-15
 
+## Claude — taxonomia v7 (agentes em paralelo)
+
+- **Branch:** `feature/classification/hierarchical-taxonomy`
+- **Feito:** proposta do Antigravity auditada e integrada matéria a matéria; passada editorial nas 13 matérias (1.703 subconteúdos ativos); versão `fuvest-2027.v7`. Nós substituídos ficam com `deprecated: true` e `replaced_by`, e `taxonomy.py` resolve o ID ou nome antigo para o substituto. Mapeamento de rótulos legados em `docs/legacy-label-mapping.md`. Relatório e dúvidas por matéria em `docs/taxonomy-review-v7.md`.
+- **Próximo:** revisão humana das dúvidas listadas; reconstruir o índice de embeddings de tópicos; medir o classificador em duas etapas depois da revisão.
+- **Última atualização:** 2026-10-15
+
 ## Decisões cross-agent pendentes
 
 | Decisão | Levantada por | Impacto |
 |---|---|---|
-| Revisar e integrar a proposta editorial do Antigravity quando ela estiver pronta | ChatGPT | conteúdo e fontes da árvore canônica |
+| ~~Revisar e integrar a proposta editorial do Antigravity~~ — feito na v7 | ChatGPT | conteúdo e fontes da árvore canônica |
 
 ## Regra de coordenação
 
