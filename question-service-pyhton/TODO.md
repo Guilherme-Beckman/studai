@@ -25,7 +25,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 
 | # | Fase | Status | Feitos/Total |
 |---|---|---|---|
-| 1 | Taxonomia | em andamento | 2/7 |
+| 1 | Taxonomia | em andamento | 3/7 |
 | 2 | Revisão de questões → fonte de verdade | pendente | 0/7 |
 | 3 | Questões mal recortadas | pendente | 0/5 |
 | 4 | Reorganização e otimização (código + IA) | pendente | 0/5 |
@@ -42,13 +42,13 @@ Base: `src/studai/features/classification/content_taxonomy.json`, `taxonomy.py`.
 - [x] Árvore canônica hierárquica integrada ao classificador, revisão, RAG/embeddings, API, frontend e diagnósticos (commit fb01893, 2026-10-15)
 - [ ] Auditar e integrar a proposta editorial `docs/fuvest-taxonomy-proposal.json` (fontes oficiais, IDs estáveis, granularidade)
 - [ ] Mapear os rótulos legados (classificações antigas) para os IDs canônicos, com um relatório do que ficou sem correspondência
-- [~] Garantir que as folhas sejam específicas o suficiente para o diagnóstico: árvore com 4 níveis, matéria → área → conteúdo → subconteúdo (em andamento: Claude, `feature/classification/hierarchical-taxonomy`)
+- [x] Garantir que as folhas sejam específicas o suficiente para o diagnóstico: árvore com 4 níveis em todas as 13 matérias, matéria → área → conteúdo → subconteúdo, com 1.457 subconteúdos (2026-10-15)
   - [x] Matemática: 189 subconteúdos (`level: "subcontent"`), Trigonometria sem grupos redundantes, versão `fuvest-2027.v2` (commit cebcec1, 2026-10-15)
   - [x] Física: 177 subconteúdos, versão `fuvest-2027.v3` (commit 3bc0cdf, 2026-10-15)
   - [x] Química: 164 subconteúdos, versão `fuvest-2027.v4` (commit 1818d83, 2026-10-15)
-  - [x] Biologia: 203 subconteúdos, versão `fuvest-2027.v5` (2026-10-15)
-  - [ ] Demais matérias (Humanas, Linguagens)
-  - [ ] Revisão editorial humana dos subconteúdos de Matemática, Física, Química e Biologia
+  - [x] Biologia: 203 subconteúdos, versão `fuvest-2027.v5` (commit 1d27818, 2026-10-15)
+  - [x] Humanas e Linguagens, versão `fuvest-2027.v6` (2026-10-15): História 177, Geografia 122, Filosofia 72, Sociologia 81, Língua Portuguesa 88, Literatura 63, Inglês 40, Arte 42, Educação Física 39
+  - [ ] Revisão editorial humana dos subconteúdos de todas as matérias (gerados editorialmente, marcados com `editorial_detail: true`)
   - [ ] Física: avaliar mover "Leis da termodinâmica e máquinas térmicas" da área Mecânica para Termologia e termodinâmica
   - [ ] Biologia: avaliar conteúdos próprios para vírus, reinos e grupos vegetais (hoje são subconteúdos de "Filogenia e classificação")
 - [x] Classificação em duas etapas: 1ª etapa escolhe o conteúdo e a 2ª refina entre os subconteúdos; se não houver subconteúdo confiável, a questão fica com `subconteudo_pendente` para revisão (2026-10-15)
@@ -121,4 +121,5 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Matemática aprofundada até subconteúdos; classificador em duas etapas | cebcec1 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Física aprofundada até subconteúdos | 3bc0cdf |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Química aprofundada até subconteúdos | 1818d83 |
-| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Biologia aprofundada até subconteúdos | — |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Biologia aprofundada até subconteúdos | 1d27818 |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Humanas e Linguagens aprofundadas até subconteúdos (9 matérias) | — |

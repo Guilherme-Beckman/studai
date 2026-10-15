@@ -37,8 +37,8 @@
 
 - **Branch:** `feature/classification/hierarchical-taxonomy`
 - **Domínio:** `classification`
-- **Feito:** Matemática (cebcec1), Física (3bc0cdf), Química (1818d83) e Biologia ganharam um 4º nível (subconteúdos com `level: "subcontent"`), e a taxonomia passou para `fuvest-2027.v5`. O classificador agora trabalha em duas etapas (`refine_one` em `service.py`). Os IDs de conteúdo dessas matérias continuam válidos, como nós que podem ser refinados.
-- **Próximo:** aplicar o mesmo padrão às outras matérias, começando pelas de Humanas e Linguagens.
+- **Feito:** todas as 13 matérias ganharam um 4º nível, com 1.457 subconteúdos (`level: "subcontent"`), e a taxonomia passou para `fuvest-2027.v6`. O classificador agora trabalha em duas etapas (`refine_one` em `service.py`). Os IDs de conteúdo continuam válidos, como nós que podem ser refinados.
+- **Próximo:** medir a acurácia do classificador em duas etapas, reconstruir o índice de embeddings de tópicos e revisar editorialmente os subconteúdos.
 - **Última atualização:** 2026-10-15
 
 ## Decisões cross-agent pendentes
