@@ -47,7 +47,7 @@ class TopicEmbeddingIndex:
               *, batch_size: int = 64) -> dict:
         rows = taxonomy_rows(topics_by_subject)
         digest = taxonomy_digest(topics_by_subject)
-        cached = self._load(digest)
+        cached = self._load(digest, rows)
         cached_vectors = cached.get("vectors", []) if cached else []
         if cached and len(cached_vectors) == len(rows):
             return {"cached": True, "count": len(rows), "taxonomy_hash": digest,
@@ -78,7 +78,8 @@ class TopicEmbeddingIndex:
 
     def rank(self, vector: list[float], *, limit: int = 10,
              topics_by_subject: dict[str, list[str]] = DEFAULT_TOPIC_TAXONOMY) -> list[dict]:
-        payload = self._load(taxonomy_digest(topics_by_subject))
+        rows = taxonomy_rows(topics_by_subject)
+        payload = self._load(taxonomy_digest(topics_by_subject), rows)
         if not payload:
             raise ValueError("Índice de embeddings ausente ou incompatível; execute build() primeiro.")
         query_norm = math.sqrt(sum(value * value for value in vector))
@@ -93,12 +94,25 @@ class TopicEmbeddingIndex:
             ranked.append({**row, "score": similarity})
         return sorted(ranked, key=lambda row: row["score"], reverse=True)[:max(0, int(limit))]
 
-    def _load(self, digest: str) -> dict | None:
+    def _load(self, digest: str, expected_topics: list[dict[str, str]]) -> dict | None:
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
+        if not isinstance(payload, dict):
+            return None
         if payload.get("model") != self.model or payload.get("taxonomy_hash") != digest:
+            return None
+        vectors = payload.get("vectors")
+        if payload.get("topics") != expected_topics or not isinstance(vectors, list) or len(vectors) != len(expected_topics):
+            return None
+        dimensions = set()
+        for vector in vectors:
+            if not isinstance(vector, list) or not vector or any(
+                    not isinstance(value, (int, float)) or not math.isfinite(value) for value in vector):
+                return None
+            dimensions.add(len(vector))
+        if len(dimensions) != 1:
             return None
         return payload
 

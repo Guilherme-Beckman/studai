@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -35,6 +36,23 @@ class TopicEmbeddingTests(unittest.TestCase):
             index.build(taxonomy)
             self.assertEqual(index.rank([0.9, 0.1], limit=2, topics_by_subject=taxonomy)[0]["topic"],
                              "Mecânica")
+
+    def test_cache_rebuilds_when_topic_order_no_longer_matches_vectors(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "topic-vectors.json"
+            embed = Mock(return_value=[[1.0, 0.0], [0.0, 1.0]])
+            taxonomy = {"Física": ["Mecânica", "Óptica"]}
+            index = TopicEmbeddingIndex(path, model="embed", embed=embed)
+            index.build(taxonomy)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["topics"].reverse()
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "ausente ou incompatível"):
+                index.rank([1.0, 0.0], topics_by_subject=taxonomy)
+            result = index.build(taxonomy)
+            self.assertFalse(result["cached"])
+            self.assertEqual(embed.call_count, 2)
 
 
 if __name__ == "__main__":
