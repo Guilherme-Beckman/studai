@@ -86,38 +86,28 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                                       limit=rag_examples) if cache else None)
     wall_started = time.monotonic()
 
-    def classify(index, row):
+    def prepare(index, row):
         question = {"enunciado": row["question"], "numero": index,
                     "nota": row.get("supporting_texts", ""),
                     "alternativas": {str(k): {"texto": v} for k, v in (row.get("alternatives") or {}).items()},
                     "revisar": []}
-        started = time.monotonic()
-        usage_history = getattr(getattr(provider, "_thread_state", None), "usage_history", [])
-        usage_history_start = len(usage_history)
         images = []
         if image_mode != "nunca" and row.get("images"):
             for image_path in row["images"][:4]:
                 resolved = (dataset.parent / image_path).resolve()
                 if dataset.parent.resolve() in resolved.parents and resolved.is_file():
                     images.append(resolved.read_bytes())
-        try:
-            examples = []
-            if retriever:
-                # Holdout por ano impede que a validação veja exemplos do mesmo ciclo de prova.
-                examples = retriever.retrieve(clf.render_questao(question, None, bool(images)),
-                                              exclude_ids={str(row.get("id", ""))},
-                                              exclude_year=row.get("year"))
-            candidate_topics = ({str(item["result"].get("content_id") or item["result"].get("topic")) for item in examples}
-                                if examples else None)
-            result = clf.classify_question(provider, question, None, clf.DEFAULT_TAXONOMY, images,
-                                           clf.DEFAULT_TOPIC_TAXONOMY, examples, candidate_topics)
-            error = None
-        except Exception as exc:
-            result, error = {}, str(exc)
-        elapsed = time.monotonic() - started
-        thread_state = getattr(provider, "_thread_state", None)
-        usage_history = getattr(thread_state, "usage_history", [])
-        request_usages = usage_history[usage_history_start:]
+        examples = []
+        if retriever:
+            # Holdout por ano impede que a validação veja exemplos do mesmo ciclo de prova.
+            examples = retriever.retrieve(clf.render_questao(question, None, bool(images)),
+                                          exclude_ids={str(row.get("id", ""))},
+                                          exclude_year=row.get("year"))
+        candidate_topics = ({str(item["result"].get("content_id") or item["result"].get("topic")) for item in examples}
+                            if examples else None)
+        return question, images, examples, candidate_topics
+
+    def build_outcome(row, result, elapsed, error, request_usages, last_usage=None):
         if request_usages:
             usage = {key: sum(int(request.get(key, 0)) for request in request_usages)
                      for key in USAGE_KEYS}
@@ -140,42 +130,95 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                     for key in ("prompt_tokens", "completion_tokens", "eval_duration_ns"):
                         host_row[key] += int(request.get(key, 0))
         else:
-            usage = dict(getattr(thread_state, "usage", {}) or {})
+            usage = dict(last_usage or {})
             usage["calls"] = int(bool(usage))
-        outcome = {"gold_subject": row.get("subject"), "pred_subject": result.get("materia"),
-                   "gold_topic": row.get("topic"), "pred_topic": result.get("assunto"),
-                   "gold_content_id": row.get("content_id"),
-                   "pred_content_id": result.get("conteudo_principal_id"),
-                   "pred_content_path": result.get("caminho_conteudo"),
-                   "gold_stage1_id": gold_stage_one_id(row),
-                   "pred_stage1_id": (result.get("conteudo_etapa1_id")
-                                      or stage_one_id(str(result.get("conteudo_principal_id") or ""))),
-                   "subcontent_pending": bool(result.get("subconteudo_pendente")),
-                   "seconds": elapsed, "usage": usage, "error": error,
-                   "retrieved_examples": result.get("exemplos_referencia", [])}
+        return {"gold_subject": row.get("subject"), "pred_subject": result.get("materia"),
+                "gold_topic": row.get("topic"), "pred_topic": result.get("assunto"),
+                "gold_content_id": row.get("content_id"),
+                "pred_content_id": result.get("conteudo_principal_id"),
+                "pred_content_path": result.get("caminho_conteudo"),
+                "gold_stage1_id": gold_stage_one_id(row),
+                "pred_stage1_id": (result.get("conteudo_etapa1_id")
+                                   or stage_one_id(str(result.get("conteudo_principal_id") or ""))),
+                "subcontent_pending": bool(result.get("subconteudo_pendente")),
+                "seconds": elapsed, "usage": usage, "error": error,
+                "retrieved_examples": result.get("exemplos_referencia", [])}
+
+    def classify(index, row):
+        started = time.monotonic()
+        usage_history = getattr(getattr(provider, "_thread_state", None), "usage_history", [])
+        usage_history_start = len(usage_history)
+        try:
+            question, images, examples, candidate_topics = prepare(index, row)
+            result = clf.classify_question(provider, question, None, clf.DEFAULT_TAXONOMY, images,
+                                           clf.DEFAULT_TOPIC_TAXONOMY, examples, candidate_topics)
+            error = None
+        except Exception as exc:
+            result, error = {}, str(exc)
+        elapsed = time.monotonic() - started
+        thread_state = getattr(provider, "_thread_state", None)
+        request_usages = getattr(thread_state, "usage_history", [])[usage_history_start:]
+        outcome = build_outcome(row, result, elapsed, error, request_usages,
+                                getattr(thread_state, "usage", None))
         return index, row, result, elapsed, error, outcome
+
+    def classify_by_stage(shard):
+        """Stage-major order (STUDAI_STAGE_ORDER=1): seconds are the question's own request time."""
+        finished, items, rows = [], [], {}
+        for index, row in shard:
+            if cancelled and cancelled():
+                raise InterruptedError("Benchmark cancelado pelo usuário")
+            try:
+                question, images, examples, candidate_topics = prepare(index, row)
+            except Exception as exc:
+                finished.append((index, row, {}, 0.0, str(exc), build_outcome(row, {}, 0.0, str(exc), [])))
+                continue
+            rows[index] = row
+            items.append({"key": index, "question": question, "images": images, "examples": examples,
+                          "candidate_topics": candidate_topics})
+
+        def on_done(index, result, usages, seconds):
+            error = str(result) if isinstance(result, Exception) else None
+            result = {} if error else result
+            finished.append((index, rows[index], result, seconds, error,
+                             build_outcome(rows[index], result, seconds, error, usages)))
+        clf.classify_stage_major(provider, items, clf.DEFAULT_TAXONOMY, on_done=on_done, cancel_check=cancelled)
+        return finished
 
     outcomes = [None] * len(data)
     latencies = [0.0] * len(data)
     invalid = 0
     attempts = 0
+    completed = 0
+
+    def report(index, row, result, elapsed, error, outcome):
+        nonlocal invalid, attempts, completed
+        completed += 1
+        outcomes[index - 1] = outcome
+        latencies[index - 1] = elapsed
+        invalid += int(error is not None)
+        attempts += int(result.get("tentativas", 2))
+        label = "falha" if error else f"{result.get('materia')} / {result.get('assunto')}"
+        print(f"[{index}/{len(data)}] {row.get('id', index)} · {elapsed:.1f}s · {label}", flush=True)
+        if progress:
+            progress({"completed": completed, "total": len(data), "question": row.get("id", index),
+                      "seconds": elapsed, "error": error})
+
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="benchmark-question") as pool:
-        futures = {pool.submit(classify, index, row): index for index, row in enumerate(data, 1)}
-        for completed, future in enumerate(as_completed(futures), 1):
-            if cancelled and cancelled():
-                for pending in futures:
-                    pending.cancel()
-                raise InterruptedError("Benchmark cancelado pelo usuário")
-            index, row, result, elapsed, error, outcome = future.result()
-            outcomes[index - 1] = outcome
-            latencies[index - 1] = elapsed
-            invalid += int(error is not None)
-            attempts += int(result.get("tentativas", 2))
-            label = "falha" if error else f"{result.get('materia')} / {result.get('assunto')}"
-            print(f"[{index}/{len(data)}] {row.get('id', index)} · {elapsed:.1f}s · {label}", flush=True)
-            if progress:
-                progress({"completed": completed, "total": len(data), "question": row.get("id", index),
-                          "seconds": elapsed, "error": error})
+        if clf.uses_stage_order(provider):
+            indexed = list(enumerate(data, 1))
+            shards = [indexed[offset::workers] for offset in range(workers)]
+            for future in as_completed([pool.submit(classify_by_stage, shard) for shard in shards if shard]):
+                for finished in sorted(future.result(), key=lambda entry: entry[0]):
+                    report(*finished)
+        else:
+            futures = {pool.submit(classify, index, row): index for index, row in enumerate(data, 1)}
+            for future in as_completed(futures):
+                if cancelled and cancelled():
+                    for pending in futures:
+                        pending.cancel()
+                    raise InterruptedError("Benchmark cancelado pelo usuário")
+                report(*future.result())
     usage_totals = {key: sum(int(item.get("usage", {}).get(key, 0)) for item in outcomes)
                     for key in (*USAGE_KEYS, "calls")}
     stages: dict[str, dict] = {}
