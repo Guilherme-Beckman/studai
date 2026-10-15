@@ -28,7 +28,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 1 | Taxonomia | em andamento | 3/7 |
 | 2 | Revisão de questões → fonte de verdade | pendente | 0/7 |
 | 3 | Questões mal recortadas | pendente | 0/5 |
-| 4 | Reorganização e otimização (código + IA) | em andamento | 1/7 |
+| 4 | Reorganização e otimização (código + IA) | em andamento | 3/9 |
 | 5 | Diagnóstico inicial | pendente | 0/5 |
 | 6 | Revisão espaçada / "O que estudar hoje" | pendente | 0/6 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
@@ -95,8 +95,10 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
   - [x] Pool: faixas grátis Groq e Hugging Face via `.env`, limite de RPM por faixa, pausa até a meia-noite em cota diária, pool compartilhado entre uploads simultâneos
   - [x] Lotes para nuvem (`STUDAI_CLASSIFY_BATCH`): várias questões por request em cada etapa
   - [x] `benchmark_topic_retrieval --per-subject`: recall dos conteúdos por embeddings dentro da matéria
-- [ ] Medir o roteamento hierárquico contra o modo plano (`--limit 10`, qwen3.5:4b) e registrar em `docs/benchmarks/two-stage-routing.md`
-- [ ] Medir recall por matéria com `bge-m3` (Hugging Face, via `ollama pull bge-m3`) e com `qwen3-embedding:0.6b`; ativar o pré-filtro de conteúdos só com recall@k ≥ 98%
+- [x] Medir o roteamento hierárquico contra o modo plano (`--limit 10`, qwen3.5:4b): 2,8× mais rápido (76 s contra 212 s por questão), conteúdo da 1ª etapa 50% contra 20%; ver `docs/benchmarks/two-stage-routing.md` (2026-10-15)
+- [ ] Ordenar o processamento local por etapa (todas as matérias, depois os conteúdos por matéria) para o Ollama reaproveitar o prefixo do prompt; hoje só 128 tokens vêm do cache em cada chamada
+- [ ] Melhorar regras e descrições de Inglês × Língua Portuguesa × Literatura (canções e poemas confundem a matéria)
+- [x] Medir recall por matéria: top-15 de 92,7% (qwen3-embedding) e 82,9% (bge-m3), abaixo de 98%, então o pré-filtro **não** foi ativado (2026-10-15)
 - [ ] Testar o backend Vulkan do Ollama na iGPU AMD e medir com `evaluate_classifier --limit 10`
 - [ ] Depois de mais revisões: classificador leve de matéria (regressão logística/SetFit sobre embeddings bge-m3, revisões + BLUEX) para substituir a 1ª chamada quando a confiança for alta
 
@@ -139,4 +141,5 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Biologia aprofundada até subconteúdos | 1d27818 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Humanas e Linguagens aprofundadas até subconteúdos (9 matérias) | c767bbd |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Avaliador mede 1ª etapa e refinamento; benchmark adiado para depois da revisão humana | — |
-| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Roteamento hierárquico, faixas grátis com cota no pool, lotes para nuvem, medições por etapa | — |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Roteamento hierárquico, faixas grátis com cota no pool, lotes para nuvem, medições por etapa | 3af7324 |
+| 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Benchmark hierárquico vs plano e recall de embeddings por matéria | — |

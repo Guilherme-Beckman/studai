@@ -1,0 +1,2373 @@
+{
+  "created_at": "2026-10-15T21:55:13.059742+00:00",
+  "dataset": "simulados/cache/reviewed-topic-eval.jsonl",
+  "mode": "per_subject_stage1",
+  "labeled_questions": 41,
+  "embedding_model": "bge-m3",
+  "embedding_endpoint": "http://localhost:11434",
+  "cache": {
+    "cached": false,
+    "count": 476,
+    "taxonomy_hash": "bdf701be1895b9e30de8413a66a043ec2e8f3de749a4d12271a9d2e72d733a56",
+    "model": "bge-m3",
+    "path": "/home/beckman/projects/studai/backend-studai/question-service-pyhton/simulados/cache/topic-embeddings-stage1-bge-m3.json"
+  },
+  "recall_at_k": {
+    "3": {
+      "hits": 21,
+      "total": 41,
+      "recall": 0.5121951219512195
+    },
+    "5": {
+      "hits": 25,
+      "total": 41,
+      "recall": 0.6097560975609756
+    },
+    "8": {
+      "hits": 30,
+      "total": 41,
+      "recall": 0.7317073170731707
+    },
+    "10": {
+      "hits": 33,
+      "total": 41,
+      "recall": 0.8048780487804879
+    },
+    "15": {
+      "hits": 34,
+      "total": 41,
+      "recall": 0.8292682926829268
+    }
+  },
+  "by_subject": {
+    "Matemática": {
+      "total": 16,
+      "options": 49,
+      "3": 7,
+      "5": 9,
+      "8": 11,
+      "10": 13,
+      "15": 13
+    },
+    "Física": {
+      "total": 7,
+      "options": 53,
+      "3": 6,
+      "5": 6,
+      "8": 7,
+      "10": 7,
+      "15": 7
+    },
+    "Literatura": {
+      "total": 4,
+      "options": 26,
+      "3": 2,
+      "5": 2,
+      "8": 2,
+      "10": 2,
+      "15": 3
+    },
+    "Língua Portuguesa": {
+      "total": 6,
+      "options": 36,
+      "3": 1,
+      "5": 2,
+      "8": 3,
+      "10": 3,
+      "15": 3
+    },
+    "Inglês": {
+      "total": 1,
+      "options": 19,
+      "3": 1,
+      "5": 1,
+      "8": 1,
+      "10": 1,
+      "15": 1
+    },
+    "Química": {
+      "total": 3,
+      "options": 45,
+      "3": 1,
+      "5": 1,
+      "8": 2,
+      "10": 3,
+      "15": 3
+    },
+    "Geografia": {
+      "total": 2,
+      "options": 42,
+      "3": 1,
+      "5": 2,
+      "8": 2,
+      "10": 2,
+      "15": 2
+    },
+    "História": {
+      "total": 2,
+      "options": 55,
+      "3": 2,
+      "5": 2,
+      "8": 2,
+      "10": 2,
+      "15": 2
+    }
+  },
+  "items": [
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q16",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.razoes-proporcoes-e-grandezas-proporcionais",
+      "content_path": "Matemática → Números, medidas e proporcionalidade → Razões, proporções e grandezas proporcionais",
+      "gold_rank": 6,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.porcentagem",
+          "subject": "Matemática",
+          "topic": "Porcentagem",
+          "path": "Matemática → Números, medidas e proporcionalidade → Porcentagem",
+          "description": "Conteúdo de Matemática: Porcentagem.",
+          "aliases": "Cálculo de porcentagens | Aumentos e descontos | Variações sucessivas | Pontos percentuais",
+          "score": 0.4563106375537867
+        },
+        {
+          "content_id": "matematica.content.prismas-e-cilindros",
+          "subject": "Matemática",
+          "topic": "Prismas e cilindros",
+          "path": "Matemática → Geometria e medidas → Prismas e cilindros",
+          "description": "Conteúdo de Matemática: Prismas e cilindros.",
+          "aliases": "Prismas | Paralelepípedo e cubo | Cilindro | Princípio de Cavalieri",
+          "score": 0.45399237235301687
+        },
+        {
+          "content_id": "matematica.content.planificacoes-e-vistas-ortogonais",
+          "subject": "Matemática",
+          "topic": "Planificações e vistas ortogonais",
+          "path": "Matemática → Geometria e medidas → Planificações e vistas ortogonais",
+          "description": "Conteúdo de Matemática: Planificações e vistas ortogonais.",
+          "aliases": "Planificação de sólidos | Vistas ortogonais e projeções | Menor caminho em superfícies",
+          "score": 0.4506674849406064
+        },
+        {
+          "content_id": "matematica.content.equacao-da-reta",
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "path": "Matemática → Geometria e medidas → Equação da reta",
+          "description": "Conteúdo de Matemática: Equação da reta.",
+          "aliases": "Equações da reta | Coeficiente angular | Distância de ponto a reta | Interseção e ângulo entre retas | Inequações e regiões do plano",
+          "score": 0.45027351542319816
+        },
+        {
+          "content_id": "matematica.content.funcoes-definidas-por-partes",
+          "subject": "Matemática",
+          "topic": "Funções definidas por partes",
+          "path": "Matemática → Álgebra, funções e sequências → Funções definidas por partes",
+          "description": "Conteúdo de Matemática: Funções definidas por partes.",
+          "aliases": "Leitura e construção de gráficos por partes | Aplicações em tarifas e impostos",
+          "score": 0.4469628975660322
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q17",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.plano-cartesiano-e-distancia-entre-pontos",
+      "content_path": "Matemática → Geometria e medidas → Plano cartesiano e distância entre pontos",
+      "gold_rank": 2,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.circunferencia-no-plano-cartesiano",
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+          "description": "Conteúdo de Matemática: Circunferência no plano cartesiano.",
+          "aliases": "Equação da circunferência | Posições relativas | Cônicas",
+          "score": 0.5279836840531918
+        },
+        {
+          "content_id": "matematica.content.plano-cartesiano-e-distancia-entre-pontos",
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "path": "Matemática → Geometria e medidas → Plano cartesiano e distância entre pontos",
+          "description": "Conteúdo de Matemática: Plano cartesiano e distância entre pontos.",
+          "aliases": "Distância entre dois pontos | Ponto médio e baricentro | Área de triângulo por coordenadas",
+          "score": 0.5135016318022599
+        },
+        {
+          "content_id": "matematica.content.equacao-da-reta",
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "path": "Matemática → Geometria e medidas → Equação da reta",
+          "description": "Conteúdo de Matemática: Equação da reta.",
+          "aliases": "Equações da reta | Coeficiente angular | Distância de ponto a reta | Interseção e ângulo entre retas | Inequações e regiões do plano",
+          "score": 0.49069810081831033
+        },
+        {
+          "content_id": "matematica.content.poligonos-e-circunferencia",
+          "subject": "Matemática",
+          "topic": "Polígonos e circunferência",
+          "path": "Matemática → Geometria e medidas → Polígonos e circunferência",
+          "description": "Conteúdo de Matemática: Polígonos e circunferência.",
+          "aliases": "Ângulos em polígonos | Polígonos regulares | Ângulos na circunferência | Comprimento da circunferência e arcos | Quadriláteros notáveis",
+          "score": 0.48881098434304104
+        },
+        {
+          "content_id": "matematica.content.medidas-de-dispersao",
+          "subject": "Matemática",
+          "topic": "Medidas de dispersão",
+          "path": "Matemática → Contagem, probabilidade e estatística → Medidas de dispersão",
+          "description": "Conteúdo de Matemática: Medidas de dispersão.",
+          "aliases": "Amplitude | Variância e desvio padrão | Desvio médio e coeficiente de variação",
+          "score": 0.48066514872054417
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q18",
+      "subject": "Física",
+      "stage1_id": "fisica.content.impulso-momento-linear-e-colisoes",
+      "content_path": "Física → Mecânica → Impulso, momento linear e colisões",
+      "gold_rank": 1,
+      "subject_options": 53,
+      "top_candidates": [
+        {
+          "content_id": "fisica.content.impulso-momento-linear-e-colisoes",
+          "subject": "Física",
+          "topic": "Impulso, momento linear e colisões",
+          "path": "Física → Mecânica → Impulso, momento linear e colisões",
+          "description": "Conteúdo de Física: Impulso, momento linear e colisões.",
+          "aliases": "Impulso e teorema do impulso | Conservação do momento linear | Colisões elásticas e inelásticas | Colisões bidimensionais",
+          "score": 0.4091983970604861
+        },
+        {
+          "content_id": "fisica.content.equilibrio-e-torque",
+          "subject": "Física",
+          "topic": "Equilíbrio e torque",
+          "path": "Física → Mecânica → Equilíbrio e torque",
+          "description": "Conteúdo de Física: Equilíbrio e torque.",
+          "aliases": "Equilíbrio do ponto material | Momento de uma força (torque) | Equilíbrio do corpo extenso | Alavancas e máquinas simples | Centro de massa",
+          "score": 0.39332933258570374
+        },
+        {
+          "content_id": "fisica.content.interferencia-de-ondas",
+          "subject": "Física",
+          "topic": "Interferência de ondas",
+          "path": "Física → Ondas e óptica → Interferência de ondas",
+          "description": "Conteúdo de Física: Interferência de ondas.",
+          "aliases": "Interferência construtiva e destrutiva | Experimento de Young | Difração | Polarização",
+          "score": 0.3875262883252734
+        },
+        {
+          "content_id": "fisica.content.hidrostatica-e-empuxo",
+          "subject": "Física",
+          "topic": "Hidrostática e empuxo",
+          "path": "Física → Mecânica → Hidrostática e empuxo",
+          "description": "Conteúdo de Física: Hidrostática e empuxo.",
+          "aliases": "Densidade e pressão | Teorema de Stevin | Princípio de Pascal | Empuxo e princípio de Arquimedes | Hidrodinâmica básica",
+          "score": 0.38589010474428426
+        },
+        {
+          "content_id": "fisica.content.lei-de-coulomb",
+          "subject": "Física",
+          "topic": "Lei de Coulomb",
+          "path": "Física → Eletricidade e magnetismo → Lei de Coulomb",
+          "description": "Conteúdo de Física: Lei de Coulomb.",
+          "aliases": "Carga elétrica e eletrização | Força eletrostática entre cargas",
+          "score": 0.3817258769472589
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q19",
+      "subject": "Física",
+      "stage1_id": "fisica.content.efeito-fotoeletrico-e-quantizacao-da-energia",
+      "content_path": "Física → Física moderna → Efeito fotoelétrico e quantização da energia",
+      "gold_rank": 1,
+      "subject_options": 53,
+      "top_candidates": [
+        {
+          "content_id": "fisica.content.efeito-fotoeletrico-e-quantizacao-da-energia",
+          "subject": "Física",
+          "topic": "Efeito fotoelétrico e quantização da energia",
+          "path": "Física → Física moderna → Efeito fotoelétrico e quantização da energia",
+          "description": "Conteúdo de Física: Efeito fotoelétrico e quantização da energia.",
+          "aliases": "Fóton e quantização | Efeito fotoelétrico | Radiação do corpo negro",
+          "score": 0.536997205327734
+        },
+        {
+          "content_id": "fisica.content.espectro-eletromagnetico",
+          "subject": "Física",
+          "topic": "Espectro eletromagnético",
+          "path": "Física → Ondas e óptica → Espectro eletromagnético",
+          "description": "Conteúdo de Física: Espectro eletromagnético.",
+          "aliases": "Faixas do espectro | Relação entre frequência, comprimento de onda e energia | Aplicações tecnológicas e biológicas",
+          "score": 0.5184700602625717
+        },
+        {
+          "content_id": "fisica.content.interferencia-de-ondas",
+          "subject": "Física",
+          "topic": "Interferência de ondas",
+          "path": "Física → Ondas e óptica → Interferência de ondas",
+          "description": "Conteúdo de Física: Interferência de ondas.",
+          "aliases": "Interferência construtiva e destrutiva | Experimento de Young | Difração | Polarização",
+          "score": 0.515989409362183
+        },
+        {
+          "content_id": "fisica.content.ondas-sonoras-e-nivel-de-intensidade",
+          "subject": "Física",
+          "topic": "Ondas sonoras e nível de intensidade",
+          "path": "Física → Ondas e óptica → Ondas sonoras e nível de intensidade",
+          "description": "Conteúdo de Física: Ondas sonoras e nível de intensidade.",
+          "aliases": "Propriedades do som | Nível de intensidade sonora | Efeito Doppler | Velocidade do som e eco",
+          "score": 0.500785132941597
+        },
+        {
+          "content_id": "fisica.content.intensidade-de-ondas-eletromagneticas",
+          "subject": "Física",
+          "topic": "Intensidade de ondas eletromagnéticas",
+          "path": "Física → Ondas e óptica → Intensidade de ondas eletromagnéticas",
+          "description": "Conteúdo de Física: Intensidade de ondas eletromagnéticas.",
+          "aliases": "Intensidade e potência de ondas | Lei do inverso do quadrado",
+          "score": 0.4987279681552182
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q22",
+      "subject": "Física",
+      "stage1_id": "fisica.content.refracao-da-luz-e-lentes",
+      "content_path": "Física → Ondas e óptica → Refração da luz e lentes",
+      "gold_rank": 1,
+      "subject_options": 53,
+      "top_candidates": [
+        {
+          "content_id": "fisica.content.refracao-da-luz-e-lentes",
+          "subject": "Física",
+          "topic": "Refração da luz e lentes",
+          "path": "Física → Ondas e óptica → Refração da luz e lentes",
+          "description": "Conteúdo de Física: Refração da luz e lentes.",
+          "aliases": "Índice de refração e lei de Snell | Reflexão total e fibras ópticas | Dispersão e prismas | Lentes esféricas | Óptica da visão e instrumentos",
+          "score": 0.609069910482016
+        },
+        {
+          "content_id": "fisica.content.reflexao-da-luz-e-espelhos-planos",
+          "subject": "Física",
+          "topic": "Reflexão da luz e espelhos planos",
+          "path": "Física → Ondas e óptica → Reflexão da luz e espelhos planos",
+          "description": "Conteúdo de Física: Reflexão da luz e espelhos planos.",
+          "aliases": "Princípios da óptica geométrica | Leis da reflexão | Imagens em espelhos planos | Cor dos corpos",
+          "score": 0.5553249408787294
+        },
+        {
+          "content_id": "fisica.content.transmissao-de-calor",
+          "subject": "Física",
+          "topic": "Transmissão de calor",
+          "path": "Física → Termologia e termodinâmica → Transmissão de calor",
+          "description": "Conteúdo de Física: Transmissão de calor.",
+          "aliases": "Condução térmica | Convecção | Radiação térmica | Isolamento térmico",
+          "score": 0.5047788667232913
+        },
+        {
+          "content_id": "fisica.content.semicondutores-transistores-e-circuitos-integrados",
+          "subject": "Física",
+          "topic": "Semicondutores, transistores e circuitos integrados",
+          "path": "Física → Eletricidade e magnetismo → Semicondutores, transistores e circuitos integrados",
+          "description": "Conteúdo de Física: Semicondutores, transistores e circuitos integrados.",
+          "aliases": "Semicondutores e dopagem | Diodos e LEDs | Transistores e circuitos integrados",
+          "score": 0.5030501517001532
+        },
+        {
+          "content_id": "fisica.content.ressonancia-em-tubos-sonoros",
+          "subject": "Física",
+          "topic": "Ressonância em tubos sonoros",
+          "path": "Física → Ondas e óptica → Ressonância em tubos sonoros",
+          "description": "Conteúdo de Física: Ressonância em tubos sonoros.",
+          "aliases": "Tubos abertos e fechados | Ressonância",
+          "score": 0.4873073134478169
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q33",
+      "subject": "Física",
+      "stage1_id": "fisica.content.cinematica-escalar",
+      "content_path": "Física → Mecânica → Cinemática escalar",
+      "gold_rank": 8,
+      "subject_options": 53,
+      "top_candidates": [
+        {
+          "content_id": "fisica.content.atrito-e-plano-inclinado",
+          "subject": "Física",
+          "topic": "Atrito e plano inclinado",
+          "path": "Física → Mecânica → Atrito e plano inclinado",
+          "description": "Conteúdo de Física: Atrito e plano inclinado.",
+          "aliases": "Atrito estático e cinético | Plano inclinado sem atrito | Plano inclinado com atrito | Resistência do ar e velocidade terminal",
+          "score": 0.45077469288697514
+        },
+        {
+          "content_id": "fisica.content.gravitacao-e-leis-de-kepler",
+          "subject": "Física",
+          "topic": "Gravitação e leis de Kepler",
+          "path": "Física → Mecânica → Gravitação e leis de Kepler",
+          "description": "Conteúdo de Física: Gravitação e leis de Kepler.",
+          "aliases": "Leis de Kepler | Lei da gravitação universal | Campo gravitacional e gravidade em planetas | Satélites e órbitas circulares | Imponderabilidade e peso aparente",
+          "score": 0.4472947703261893
+        },
+        {
+          "content_id": "fisica.content.movimento-circular",
+          "subject": "Física",
+          "topic": "Movimento circular",
+          "path": "Física → Mecânica → Movimento circular",
+          "description": "Conteúdo de Física: Movimento circular.",
+          "aliases": "Movimento circular uniforme | Força centrípeta | Transmissão de movimento circular",
+          "score": 0.42861481542086494
+        },
+        {
+          "content_id": "fisica.content.dinamica-de-foguetes",
+          "subject": "Física",
+          "topic": "Dinâmica de foguetes",
+          "path": "Física → Mecânica → Dinâmica de foguetes",
+          "description": "Conteúdo de Física: Dinâmica de foguetes.",
+          "aliases": "Propulsão por reação | Velocidade de escape e órbitas",
+          "score": 0.4196333380900917
+        },
+        {
+          "content_id": "fisica.content.equilibrio-e-torque",
+          "subject": "Física",
+          "topic": "Equilíbrio e torque",
+          "path": "Física → Mecânica → Equilíbrio e torque",
+          "description": "Conteúdo de Física: Equilíbrio e torque.",
+          "aliases": "Equilíbrio do ponto material | Momento de uma força (torque) | Equilíbrio do corpo extenso | Alavancas e máquinas simples | Centro de massa",
+          "score": 0.4171247220274074
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q37",
+      "subject": "Literatura",
+      "stage1_id": "literatura.content.conteudo-de-leitura-obrigatoria",
+      "content_path": "Literatura → Gêneros, formas e leitura literária → Conteúdo de leitura obrigatória",
+      "gold_rank": 13,
+      "subject_options": 26,
+      "top_candidates": [
+        {
+          "content_id": "literatura.content.modernismo-poesia-de-30",
+          "subject": "Literatura",
+          "topic": "Modernismo: poesia de 30",
+          "path": "Literatura → Períodos e movimentos literários → Modernismo: poesia de 30",
+          "description": "Conteúdo de Literatura: Modernismo: poesia de 30.",
+          "aliases": "Drummond, Bandeira e Murilo Mendes | Cecília Meireles e Vinicius de Moraes",
+          "score": 0.4707116163244737
+        },
+        {
+          "content_id": "literatura.content.romantismo-poesia",
+          "subject": "Literatura",
+          "topic": "Romantismo: poesia",
+          "path": "Literatura → Períodos e movimentos literários → Romantismo: poesia",
+          "description": "Conteúdo de Literatura: Romantismo: poesia.",
+          "aliases": "Primeira geração romântica | Segunda geração (ultrarromantismo) | Terceira geração (condoreira)",
+          "score": 0.4673450775247077
+        },
+        {
+          "content_id": "literatura.content.poesia-de-mario-de-andrade",
+          "subject": "Literatura",
+          "topic": "Poesia de Mário de Andrade",
+          "path": "Literatura → Outros conteúdos programáticos → Poesia de Mário de Andrade",
+          "description": "Conteúdo de Literatura: Poesia de Mário de Andrade.",
+          "aliases": "Pauliceia desvairada | Lirismo e projeto nacional",
+          "score": 0.4603753543654232
+        },
+        {
+          "content_id": "literatura.content.ruth-guimaraes-agua-funda",
+          "subject": "Literatura",
+          "topic": "Ruth Guimarães: Água funda",
+          "path": "Literatura → Autores e obras → Ruth Guimarães: Água funda",
+          "description": "Conteúdo de Literatura: Ruth Guimarães: Água funda.",
+          "aliases": "Água funda: enredo e espaço | Oralidade e cultura popular",
+          "score": 0.4459043197418686
+        },
+        {
+          "content_id": "literatura.content.trovadorismo-e-humanismo",
+          "subject": "Literatura",
+          "topic": "Trovadorismo e Humanismo",
+          "path": "Literatura → Períodos e movimentos literários → Trovadorismo e Humanismo",
+          "description": "Conteúdo de Literatura: Trovadorismo e Humanismo.",
+          "aliases": "Cantigas trovadorescas | Gil Vicente e o teatro humanista",
+          "score": 0.44539217844272844
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q38",
+      "subject": "Língua Portuguesa",
+      "stage1_id": "lingua-portuguesa.content.sentido-denotativo-e-conotativo",
+      "content_path": "Língua Portuguesa → Semântica e recursos expressivos → Sentido denotativo e conotativo",
+      "gold_rank": 16,
+      "subject_options": 36,
+      "top_candidates": [
+        {
+          "content_id": "lingua-portuguesa.content.metafora-e-personificacao",
+          "subject": "Língua Portuguesa",
+          "topic": "Metáfora e personificação",
+          "path": "Língua Portuguesa → Semântica e recursos expressivos → Metáfora e personificação",
+          "description": "Conteúdo de Língua Portuguesa: Metáfora e personificação.",
+          "aliases": "Metáfora e comparação | Personificação e sinestesia | Antítese e paradoxo",
+          "score": 0.499742530574656
+        },
+        {
+          "content_id": "lingua-portuguesa.content.parafrase-e-sinonimia",
+          "subject": "Língua Portuguesa",
+          "topic": "Paráfrase e sinonímia",
+          "path": "Língua Portuguesa → Texto, discurso e argumentação → Paráfrase e sinonímia",
+          "description": "Conteúdo de Língua Portuguesa: Paráfrase e sinonímia.",
+          "aliases": "Reescrita com manutenção de sentido | Sinonímia contextual",
+          "score": 0.4726398276678333
+        },
+        {
+          "content_id": "lingua-portuguesa.content.ironia-metonimia-e-hiperbole",
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "path": "Língua Portuguesa → Semântica e recursos expressivos → Ironia, metonímia e hipérbole",
+          "description": "Conteúdo de Língua Portuguesa: Ironia, metonímia e hipérbole.",
+          "aliases": "Ironia | Metonímia | Hipérbole e eufemismo",
+          "score": 0.46973158187442104
+        },
+        {
+          "content_id": "lingua-portuguesa.content.polissemia-e-ambiguidade",
+          "subject": "Língua Portuguesa",
+          "topic": "Polissemia e ambiguidade",
+          "path": "Língua Portuguesa → Semântica e recursos expressivos → Polissemia e ambiguidade",
+          "description": "Conteúdo de Língua Portuguesa: Polissemia e ambiguidade.",
+          "aliases": "Polissemia | Ambiguidade | Homonímia e paronímia",
+          "score": 0.4638793760666258
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cancao",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: canção",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: canção",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: canção.",
+          "aliases": "Letra e contexto | Recursos poéticos na canção",
+          "score": 0.4593274064810338
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q41",
+      "subject": "Inglês",
+      "stage1_id": "ingles.content.interpretacao-de-texto-em-ingles",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Interpretação de texto em inglês",
+      "gold_rank": 2,
+      "subject_options": 19,
+      "top_candidates": [
+        {
+          "content_id": "ingles.content.inferencia-de-sentido-em-ingles",
+          "subject": "Inglês",
+          "topic": "Inferência de sentido em inglês",
+          "path": "Inglês → Leitura, compreensão e gêneros → Inferência de sentido em inglês",
+          "description": "Conteúdo de Inglês: Inferência de sentido em inglês.",
+          "aliases": "Inferência pelo contexto | Implícitos e intenção do autor",
+          "score": 0.45379948752651544
+        },
+        {
+          "content_id": "ingles.content.interpretacao-de-texto-em-ingles",
+          "subject": "Inglês",
+          "topic": "Interpretação de texto em inglês",
+          "path": "Inglês → Leitura, compreensão e gêneros → Interpretação de texto em inglês",
+          "description": "Conteúdo de Inglês: Interpretação de texto em inglês.",
+          "aliases": "Ideia principal e detalhes | Localização de informações | Propósito e público do texto",
+          "score": 0.44263555281043215
+        },
+        {
+          "content_id": "ingles.content.tempos-verbais-e-marcadores-de-tempo",
+          "subject": "Inglês",
+          "topic": "Tempos verbais e marcadores de tempo",
+          "path": "Inglês → Gramática em contexto → Tempos verbais e marcadores de tempo",
+          "description": "Conteúdo de Inglês: Tempos verbais e marcadores de tempo.",
+          "aliases": "Presentes e passados | Futuro e condicionais | Voz passiva em inglês",
+          "score": 0.4292704867610153
+        },
+        {
+          "content_id": "ingles.content.expressoes-idiomaticas",
+          "subject": "Inglês",
+          "topic": "Expressões idiomáticas",
+          "path": "Inglês → Vocabulário e construção de sentido → Expressões idiomáticas",
+          "description": "Conteúdo de Inglês: Expressões idiomáticas.",
+          "aliases": "Expressões idiomáticas | Colocações e expressões fixas",
+          "score": 0.42387679134898437
+        },
+        {
+          "content_id": "ingles.content.phrasal-verbs",
+          "subject": "Inglês",
+          "topic": "Phrasal verbs",
+          "path": "Inglês → Vocabulário e construção de sentido → Phrasal verbs",
+          "description": "Conteúdo de Inglês: Phrasal verbs.",
+          "aliases": "Phrasal verbs comuns | Phrasal verbs em contexto",
+          "score": 0.4064586200693003
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q42",
+      "subject": "Língua Portuguesa",
+      "stage1_id": "lingua-portuguesa.content.interpretacao-de-texto-cancao",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: canção",
+      "gold_rank": 2,
+      "subject_options": 36,
+      "top_candidates": [
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cronica",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: crônica",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: crônica",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: crônica.",
+          "aliases": "Características da crônica | Humor e reflexão na crônica",
+          "score": 0.46517275244059647
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cancao",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: canção",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: canção",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: canção.",
+          "aliases": "Letra e contexto | Recursos poéticos na canção",
+          "score": 0.4619583286248463
+        },
+        {
+          "content_id": "lingua-portuguesa.content.producao-textual-dissertacao-e-argumentacao",
+          "subject": "Língua Portuguesa",
+          "topic": "Produção textual: dissertação e argumentação",
+          "path": "Língua Portuguesa → Texto, discurso e argumentação → Produção textual: dissertação e argumentação",
+          "description": "Conteúdo de Língua Portuguesa: Produção textual: dissertação e argumentação.",
+          "aliases": "Estrutura da dissertação | Construção de argumentos",
+          "score": 0.4541613284702484
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-artigo-de-opiniao",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: artigo de opinião",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: artigo de opinião",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: artigo de opinião.",
+          "aliases": "Tese e argumentos | Estratégias argumentativas no artigo de opinião",
+          "score": 0.45191297055238383
+        },
+        {
+          "content_id": "lingua-portuguesa.content.funcoes-da-linguagem",
+          "subject": "Língua Portuguesa",
+          "topic": "Funções da linguagem",
+          "path": "Língua Portuguesa → Outros conteúdos programáticos → Funções da linguagem",
+          "description": "Conteúdo de Língua Portuguesa: Funções da linguagem.",
+          "aliases": "Funções referencial, emotiva e apelativa | Funções poética, fática e metalinguística",
+          "score": 0.4462303400629823
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q43",
+      "subject": "Literatura",
+      "stage1_id": "literatura.content.modernismo-poesia-de-30",
+      "content_path": "Literatura → Períodos e movimentos literários → Modernismo: poesia de 30",
+      "gold_rank": 1,
+      "subject_options": 26,
+      "top_candidates": [
+        {
+          "content_id": "literatura.content.modernismo-poesia-de-30",
+          "subject": "Literatura",
+          "topic": "Modernismo: poesia de 30",
+          "path": "Literatura → Períodos e movimentos literários → Modernismo: poesia de 30",
+          "description": "Conteúdo de Literatura: Modernismo: poesia de 30.",
+          "aliases": "Drummond, Bandeira e Murilo Mendes | Cecília Meireles e Vinicius de Moraes",
+          "score": 0.6204938226546419
+        },
+        {
+          "content_id": "literatura.content.poesia-de-mario-de-andrade",
+          "subject": "Literatura",
+          "topic": "Poesia de Mário de Andrade",
+          "path": "Literatura → Outros conteúdos programáticos → Poesia de Mário de Andrade",
+          "description": "Conteúdo de Literatura: Poesia de Mário de Andrade.",
+          "aliases": "Pauliceia desvairada | Lirismo e projeto nacional",
+          "score": 0.5846587019526565
+        },
+        {
+          "content_id": "literatura.content.modernismo-prosa-de-30",
+          "subject": "Literatura",
+          "topic": "Modernismo: prosa de 30",
+          "path": "Literatura → Períodos e movimentos literários → Modernismo: prosa de 30",
+          "description": "Conteúdo de Literatura: Modernismo: prosa de 30.",
+          "aliases": "Romance regionalista de 30 | Romance urbano e intimista",
+          "score": 0.5806729820637798
+        },
+        {
+          "content_id": "literatura.content.modernismo-primeira-geracao",
+          "subject": "Literatura",
+          "topic": "Modernismo: primeira geração",
+          "path": "Literatura → Períodos e movimentos literários → Modernismo: primeira geração",
+          "description": "Conteúdo de Literatura: Modernismo: primeira geração.",
+          "aliases": "Semana de Arte Moderna | Oswald e Mário de Andrade | Manuel Bandeira modernista",
+          "score": 0.5644380678905161
+        },
+        {
+          "content_id": "literatura.content.pre-modernismo",
+          "subject": "Literatura",
+          "topic": "Pré-Modernismo",
+          "path": "Literatura → Períodos e movimentos literários → Pré-Modernismo",
+          "description": "Conteúdo de Literatura: Pré-Modernismo.",
+          "aliases": "Euclides da Cunha e Os sertões | Lima Barreto e Monteiro Lobato | Augusto dos Anjos",
+          "score": 0.5527996012468966
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q52",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.ciclo-trigonometrico-e-funcoes-trigonometricas",
+      "content_path": "Matemática → Trigonometria → Ciclo trigonométrico e funções trigonométricas",
+      "gold_rank": 2,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.medidas-de-dispersao",
+          "subject": "Matemática",
+          "topic": "Medidas de dispersão",
+          "path": "Matemática → Contagem, probabilidade e estatística → Medidas de dispersão",
+          "description": "Conteúdo de Matemática: Medidas de dispersão.",
+          "aliases": "Amplitude | Variância e desvio padrão | Desvio médio e coeficiente de variação",
+          "score": 0.485015785428535
+        },
+        {
+          "content_id": "matematica.content.ciclo-trigonometrico-e-funcoes-trigonometricas",
+          "subject": "Matemática",
+          "topic": "Ciclo trigonométrico e funções trigonométricas",
+          "path": "Matemática → Trigonometria → Ciclo trigonométrico e funções trigonométricas",
+          "description": "Relações no ciclo e funções trigonométricas periódicas.",
+          "aliases": "Radianos e arcos no ciclo | Seno, cosseno e tangente no ciclo | Gráficos das funções trigonométricas | Fenômenos periódicos | Secante, cossecante e cotangente",
+          "score": 0.48147876920474864
+        },
+        {
+          "content_id": "matematica.content.trigonometria-no-triangulo",
+          "subject": "Matemática",
+          "topic": "Trigonometria no triângulo",
+          "path": "Matemática → Trigonometria → Trigonometria no triângulo",
+          "description": "Seno, cosseno e tangente em triângulos, conforme o programa.",
+          "aliases": "Razões trigonométricas no triângulo retângulo | Ângulos notáveis | Lei dos senos | Lei dos cossenos | Área com seno",
+          "score": 0.4549625787085129
+        },
+        {
+          "content_id": "matematica.content.funcoes-trigonometricas-inversas",
+          "subject": "Matemática",
+          "topic": "Funções trigonométricas inversas",
+          "path": "Matemática → Álgebra, funções e sequências → Funções trigonométricas inversas",
+          "description": "Conteúdo de Matemática: Funções trigonométricas inversas.",
+          "aliases": "Arco seno, arco cosseno e arco tangente | Equações com funções inversas",
+          "score": 0.44839516708874205
+        },
+        {
+          "content_id": "matematica.content.amostragem-e-pesquisas",
+          "subject": "Matemática",
+          "topic": "Amostragem e pesquisas",
+          "path": "Matemática → Números, medidas e proporcionalidade → Amostragem e pesquisas",
+          "description": "Conteúdo de Matemática: Amostragem e pesquisas.",
+          "aliases": "População e amostra | Tipos de amostragem | Vieses e planejamento de pesquisas",
+          "score": 0.440426140013197
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q59",
+      "subject": "Física",
+      "stage1_id": "fisica.content.calorimetria-e-mudancas-de-fase",
+      "content_path": "Física → Termologia e termodinâmica → Calorimetria e mudanças de fase",
+      "gold_rank": 2,
+      "subject_options": 53,
+      "top_candidates": [
+        {
+          "content_id": "fisica.content.termometria-e-dilatacao-termica",
+          "subject": "Física",
+          "topic": "Termometria e dilatação térmica",
+          "path": "Física → Termologia e termodinâmica → Termometria e dilatação térmica",
+          "description": "Conteúdo de Física: Termometria e dilatação térmica.",
+          "aliases": "Escalas termométricas | Dilatação linear, superficial e volumétrica | Dilatação dos líquidos e anomalia da água",
+          "score": 0.5261017921774347
+        },
+        {
+          "content_id": "fisica.content.calorimetria-e-mudancas-de-fase",
+          "subject": "Física",
+          "topic": "Calorimetria e mudanças de fase",
+          "path": "Física → Termologia e termodinâmica → Calorimetria e mudanças de fase",
+          "description": "Conteúdo de Física: Calorimetria e mudanças de fase.",
+          "aliases": "Calor sensível | Calor latente e mudanças de estado | Trocas de calor e equilíbrio térmico | Diagrama de fases",
+          "score": 0.4896254223401559
+        },
+        {
+          "content_id": "fisica.content.lei-de-coulomb",
+          "subject": "Física",
+          "topic": "Lei de Coulomb",
+          "path": "Física → Eletricidade e magnetismo → Lei de Coulomb",
+          "description": "Conteúdo de Física: Lei de Coulomb.",
+          "aliases": "Carga elétrica e eletrização | Força eletrostática entre cargas",
+          "score": 0.4726269237756809
+        },
+        {
+          "content_id": "fisica.content.corrente-eletrica",
+          "subject": "Física",
+          "topic": "Corrente elétrica",
+          "path": "Física → Eletricidade e magnetismo → Corrente elétrica",
+          "description": "Conteúdo de Física: Corrente elétrica.",
+          "aliases": "Intensidade de corrente | Corrente contínua e alternada | Efeitos da corrente elétrica",
+          "score": 0.463358536909832
+        },
+        {
+          "content_id": "fisica.content.transmissao-de-calor",
+          "subject": "Física",
+          "topic": "Transmissão de calor",
+          "path": "Física → Termologia e termodinâmica → Transmissão de calor",
+          "description": "Conteúdo de Física: Transmissão de calor.",
+          "aliases": "Condução térmica | Convecção | Radiação térmica | Isolamento térmico",
+          "score": 0.46035274793475967
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q60",
+      "subject": "Química",
+      "stage1_id": "quimica.content.protecao-catodica-e-corrosao",
+      "content_path": "Química → Eletroquímica e oxirredução → Proteção catódica e corrosão",
+      "gold_rank": 10,
+      "subject_options": 45,
+      "top_candidates": [
+        {
+          "content_id": "quimica.content.mol-massa-molar-e-constante-de-avogadro",
+          "subject": "Química",
+          "topic": "Mol, massa molar e constante de Avogadro",
+          "path": "Química → Transformações e quantificação → Mol, massa molar e constante de Avogadro",
+          "description": "Conteúdo de Química: Mol, massa molar e constante de Avogadro.",
+          "aliases": "Massa atômica e massa molecular | Mol e constante de Avogadro | Massa molar e conversões",
+          "score": 0.5655462539827568
+        },
+        {
+          "content_id": "quimica.content.leis-ponderais-e-conservacao-da-massa",
+          "subject": "Química",
+          "topic": "Leis ponderais e conservação da massa",
+          "path": "Química → Transformações e quantificação → Leis ponderais e conservação da massa",
+          "description": "Conteúdo de Química: Leis ponderais e conservação da massa.",
+          "aliases": "Lei de Lavoisier | Lei de Proust | Lei volumétrica de Gay-Lussac",
+          "score": 0.5238232424196979
+        },
+        {
+          "content_id": "quimica.content.tabela-periodica-e-propriedades-periodicas",
+          "subject": "Química",
+          "topic": "Tabela periódica e propriedades periódicas",
+          "path": "Química → Matéria, estrutura e propriedades → Tabela periódica e propriedades periódicas",
+          "description": "Conteúdo de Química: Tabela periódica e propriedades periódicas.",
+          "aliases": "Organização da tabela periódica | Raio atômico e iônico | Energia de ionização e afinidade eletrônica | Eletronegatividade e caráter metálico | Famílias e elementos representativos",
+          "score": 0.5097768168164077
+        },
+        {
+          "content_id": "quimica.content.composicao-percentual-em-massa",
+          "subject": "Química",
+          "topic": "Composição percentual em massa",
+          "path": "Química → Transformações e quantificação → Composição percentual em massa",
+          "description": "Conteúdo de Química: Composição percentual em massa.",
+          "aliases": "Fórmula percentual | Fórmulas mínima e molecular",
+          "score": 0.5068028317875246
+        },
+        {
+          "content_id": "quimica.content.producao-industrial-de-compostos-inorganicos",
+          "subject": "Química",
+          "topic": "Produção industrial de compostos inorgânicos",
+          "path": "Química → Química, indústria e ambiente → Produção industrial de compostos inorgânicos",
+          "description": "Conteúdo de Química: Produção industrial de compostos inorgânicos.",
+          "aliases": "Síntese da amônia | Ácido sulfúrico e ácido nítrico | Metalurgia e siderurgia | Cal, cimento e vidro",
+          "score": 0.5015844022410502
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q69",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.funcoes-modulares",
+      "content_path": "Matemática → Álgebra, funções e sequências → Funções modulares",
+      "gold_rank": 21,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.funcoes-exponenciais",
+          "subject": "Matemática",
+          "topic": "Funções exponenciais",
+          "path": "Matemática → Álgebra, funções e sequências → Funções exponenciais",
+          "description": "Conteúdo de Matemática: Funções exponenciais.",
+          "aliases": "Função exponencial e gráfico | Equações exponenciais | Inequações exponenciais | Crescimento e decaimento exponencial",
+          "score": 0.4610511669105876
+        },
+        {
+          "content_id": "matematica.content.circunferencia-no-plano-cartesiano",
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+          "description": "Conteúdo de Matemática: Circunferência no plano cartesiano.",
+          "aliases": "Equação da circunferência | Posições relativas | Cônicas",
+          "score": 0.44208605455648553
+        },
+        {
+          "content_id": "matematica.content.planificacoes-e-vistas-ortogonais",
+          "subject": "Matemática",
+          "topic": "Planificações e vistas ortogonais",
+          "path": "Matemática → Geometria e medidas → Planificações e vistas ortogonais",
+          "description": "Conteúdo de Matemática: Planificações e vistas ortogonais.",
+          "aliases": "Planificação de sólidos | Vistas ortogonais e projeções | Menor caminho em superfícies",
+          "score": 0.433633917165279
+        },
+        {
+          "content_id": "matematica.content.funcoes-afins",
+          "subject": "Matemática",
+          "topic": "Funções afins",
+          "path": "Matemática → Álgebra, funções e sequências → Funções afins",
+          "description": "Conteúdo de Matemática: Funções afins.",
+          "aliases": "Lei e gráfico da função afim | Raiz e estudo do sinal | Inequações do 1º grau | Modelagem com funções afins",
+          "score": 0.42779956981896167
+        },
+        {
+          "content_id": "matematica.content.graficos-tabelas-e-infograficos",
+          "subject": "Matemática",
+          "topic": "Gráficos, tabelas e infográficos",
+          "path": "Matemática → Contagem, probabilidade e estatística → Gráficos, tabelas e infográficos",
+          "description": "Conteúdo de Matemática: Gráficos, tabelas e infográficos.",
+          "aliases": "Leitura de gráficos | Tabelas e distribuições de frequência | Histogramas | Infográficos e escalas enganosas",
+          "score": 0.4237173699644941
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q70",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.progressoes-aritmeticas",
+      "content_path": "Matemática → Álgebra, funções e sequências → Progressões aritméticas",
+      "gold_rank": 1,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.progressoes-aritmeticas",
+          "subject": "Matemática",
+          "topic": "Progressões aritméticas",
+          "path": "Matemática → Álgebra, funções e sequências → Progressões aritméticas",
+          "description": "Conteúdo de Matemática: Progressões aritméticas.",
+          "aliases": "Termo geral da PA | Soma dos termos da PA | PA e funções afins",
+          "score": 0.5236079479691909
+        },
+        {
+          "content_id": "matematica.content.conjuntos-numericos-e-operacoes",
+          "subject": "Matemática",
+          "topic": "Conjuntos numéricos e operações",
+          "path": "Matemática → Números, medidas e proporcionalidade → Conjuntos numéricos e operações",
+          "description": "Conteúdo de Matemática: Conjuntos numéricos e operações.",
+          "aliases": "Operações com conjuntos | Naturais, inteiros e racionais | Irracionais e reais | Potenciação e radiciação numérica | Valor absoluto e ordem",
+          "score": 0.4772137424066204
+        },
+        {
+          "content_id": "matematica.content.progressoes-geometricas",
+          "subject": "Matemática",
+          "topic": "Progressões geométricas",
+          "path": "Matemática → Álgebra, funções e sequências → Progressões geométricas",
+          "description": "Conteúdo de Matemática: Progressões geométricas.",
+          "aliases": "Termo geral da PG | Soma finita da PG | Soma infinita da PG | PG e funções exponenciais",
+          "score": 0.475981492634132
+        },
+        {
+          "content_id": "matematica.content.razoes-proporcoes-e-grandezas-proporcionais",
+          "subject": "Matemática",
+          "topic": "Razões, proporções e grandezas proporcionais",
+          "path": "Matemática → Números, medidas e proporcionalidade → Razões, proporções e grandezas proporcionais",
+          "description": "Conteúdo de Matemática: Razões, proporções e grandezas proporcionais.",
+          "aliases": "Razões e proporções | Grandezas diretamente proporcionais | Grandezas inversamente proporcionais | Regra de três composta | Médias e misturas",
+          "score": 0.47574851229407195
+        },
+        {
+          "content_id": "matematica.content.funcoes-racionais",
+          "subject": "Matemática",
+          "topic": "Funções racionais",
+          "path": "Matemática → Álgebra, funções e sequências → Funções racionais",
+          "description": "Conteúdo de Matemática: Funções racionais.",
+          "aliases": "Domínio e assíntotas | Inequações quociente | Proporcionalidade inversa (hipérbole)",
+          "score": 0.47296478224070404
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q75",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.cones-troncos-e-esferas",
+      "content_path": "Matemática → Geometria e medidas → Cones, troncos e esferas",
+      "gold_rank": 9,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.circunferencia-no-plano-cartesiano",
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+          "description": "Conteúdo de Matemática: Circunferência no plano cartesiano.",
+          "aliases": "Equação da circunferência | Posições relativas | Cônicas",
+          "score": 0.48945693074034824
+        },
+        {
+          "content_id": "matematica.content.poligonos-e-circunferencia",
+          "subject": "Matemática",
+          "topic": "Polígonos e circunferência",
+          "path": "Matemática → Geometria e medidas → Polígonos e circunferência",
+          "description": "Conteúdo de Matemática: Polígonos e circunferência.",
+          "aliases": "Ângulos em polígonos | Polígonos regulares | Ângulos na circunferência | Comprimento da circunferência e arcos | Quadriláteros notáveis",
+          "score": 0.4836105238020739
+        },
+        {
+          "content_id": "matematica.content.prismas-e-cilindros",
+          "subject": "Matemática",
+          "topic": "Prismas e cilindros",
+          "path": "Matemática → Geometria e medidas → Prismas e cilindros",
+          "description": "Conteúdo de Matemática: Prismas e cilindros.",
+          "aliases": "Prismas | Paralelepípedo e cubo | Cilindro | Princípio de Cavalieri",
+          "score": 0.4703665473954028
+        },
+        {
+          "content_id": "matematica.content.volume-de-piramides",
+          "subject": "Matemática",
+          "topic": "Volume de pirâmides",
+          "path": "Matemática → Geometria e medidas → Volume de pirâmides",
+          "description": "Conteúdo de Matemática: Volume de pirâmides.",
+          "aliases": "Elementos da pirâmide | Área e volume da pirâmide | Tetraedro regular",
+          "score": 0.4640019793906614
+        },
+        {
+          "content_id": "matematica.content.medidas-de-dispersao",
+          "subject": "Matemática",
+          "topic": "Medidas de dispersão",
+          "path": "Matemática → Contagem, probabilidade e estatística → Medidas de dispersão",
+          "description": "Conteúdo de Matemática: Medidas de dispersão.",
+          "aliases": "Amplitude | Variância e desvio padrão | Desvio médio e coeficiente de variação",
+          "score": 0.4400939962863383
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q76",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.prismas-e-cilindros",
+      "content_path": "Matemática → Geometria e medidas → Prismas e cilindros",
+      "gold_rank": 2,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.poligonos-e-circunferencia",
+          "subject": "Matemática",
+          "topic": "Polígonos e circunferência",
+          "path": "Matemática → Geometria e medidas → Polígonos e circunferência",
+          "description": "Conteúdo de Matemática: Polígonos e circunferência.",
+          "aliases": "Ângulos em polígonos | Polígonos regulares | Ângulos na circunferência | Comprimento da circunferência e arcos | Quadriláteros notáveis",
+          "score": 0.5738233391129205
+        },
+        {
+          "content_id": "matematica.content.prismas-e-cilindros",
+          "subject": "Matemática",
+          "topic": "Prismas e cilindros",
+          "path": "Matemática → Geometria e medidas → Prismas e cilindros",
+          "description": "Conteúdo de Matemática: Prismas e cilindros.",
+          "aliases": "Prismas | Paralelepípedo e cubo | Cilindro | Princípio de Cavalieri",
+          "score": 0.5696720657756938
+        },
+        {
+          "content_id": "matematica.content.volume-de-piramides",
+          "subject": "Matemática",
+          "topic": "Volume de pirâmides",
+          "path": "Matemática → Geometria e medidas → Volume de pirâmides",
+          "description": "Conteúdo de Matemática: Volume de pirâmides.",
+          "aliases": "Elementos da pirâmide | Área e volume da pirâmide | Tetraedro regular",
+          "score": 0.5470113577316522
+        },
+        {
+          "content_id": "matematica.content.poliedros-e-inscricao-de-solidos",
+          "subject": "Matemática",
+          "topic": "Poliedros e inscrição de sólidos",
+          "path": "Matemática → Geometria e medidas → Poliedros e inscrição de sólidos",
+          "description": "Conteúdo de Matemática: Poliedros e inscrição de sólidos.",
+          "aliases": "Relação de Euler | Poliedros regulares | Inscrição e circunscrição de sólidos | Posições relativas no espaço",
+          "score": 0.5210985215934951
+        },
+        {
+          "content_id": "matematica.content.circunferencia-no-plano-cartesiano",
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+          "description": "Conteúdo de Matemática: Circunferência no plano cartesiano.",
+          "aliases": "Equação da circunferência | Posições relativas | Cônicas",
+          "score": 0.49631567439100477
+        }
+      ]
+    },
+    {
+      "id": "fuvest2025_primeira_fase_prova_V1-f512449b47ac:q77",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.circunferencia-no-plano-cartesiano",
+      "content_path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+      "gold_rank": 1,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.circunferencia-no-plano-cartesiano",
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+          "description": "Conteúdo de Matemática: Circunferência no plano cartesiano.",
+          "aliases": "Equação da circunferência | Posições relativas | Cônicas",
+          "score": 0.6348509442664152
+        },
+        {
+          "content_id": "matematica.content.poligonos-e-circunferencia",
+          "subject": "Matemática",
+          "topic": "Polígonos e circunferência",
+          "path": "Matemática → Geometria e medidas → Polígonos e circunferência",
+          "description": "Conteúdo de Matemática: Polígonos e circunferência.",
+          "aliases": "Ângulos em polígonos | Polígonos regulares | Ângulos na circunferência | Comprimento da circunferência e arcos | Quadriláteros notáveis",
+          "score": 0.5734578703791434
+        },
+        {
+          "content_id": "matematica.content.equacao-da-reta",
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "path": "Matemática → Geometria e medidas → Equação da reta",
+          "description": "Conteúdo de Matemática: Equação da reta.",
+          "aliases": "Equações da reta | Coeficiente angular | Distância de ponto a reta | Interseção e ângulo entre retas | Inequações e regiões do plano",
+          "score": 0.5604881610654431
+        },
+        {
+          "content_id": "matematica.content.cones-troncos-e-esferas",
+          "subject": "Matemática",
+          "topic": "Cones, troncos e esferas",
+          "path": "Matemática → Geometria e medidas → Cones, troncos e esferas",
+          "description": "Conteúdo de Matemática: Cones, troncos e esferas.",
+          "aliases": "Cone | Tronco de cone e de pirâmide | Esfera | Sólidos de revolução",
+          "score": 0.535690597797543
+        },
+        {
+          "content_id": "matematica.content.plano-cartesiano-e-distancia-entre-pontos",
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "path": "Matemática → Geometria e medidas → Plano cartesiano e distância entre pontos",
+          "description": "Conteúdo de Matemática: Plano cartesiano e distância entre pontos.",
+          "aliases": "Distância entre dois pontos | Ponto médio e baricentro | Área de triângulo por coordenadas",
+          "score": 0.5284215388377195
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q1",
+      "subject": "Língua Portuguesa",
+      "stage1_id": "lingua-portuguesa.content.parafrase-e-sinonimia",
+      "content_path": "Língua Portuguesa → Texto, discurso e argumentação → Paráfrase e sinonímia",
+      "gold_rank": 17,
+      "subject_options": 36,
+      "top_candidates": [
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cancao",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: canção",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: canção",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: canção.",
+          "aliases": "Letra e contexto | Recursos poéticos na canção",
+          "score": 0.40695767140346
+        },
+        {
+          "content_id": "lingua-portuguesa.content.parcialidade-em-textos-noticiosos",
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Parcialidade em textos noticiosos",
+          "description": "Conteúdo de Língua Portuguesa: Parcialidade em textos noticiosos.",
+          "aliases": "Escolhas lexicais e enquadramento | Imparcialidade e objetividade",
+          "score": 0.39481667938668386
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-tirinha",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: tirinha",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: tirinha",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: tirinha.",
+          "aliases": "Sequência narrativa e humor | Recursos dos quadrinhos",
+          "score": 0.3886986428093664
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cronica",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: crônica",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: crônica",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: crônica.",
+          "aliases": "Características da crônica | Humor e reflexão na crônica",
+          "score": 0.38569967541589933
+        },
+        {
+          "content_id": "lingua-portuguesa.content.ironia-metonimia-e-hiperbole",
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "path": "Língua Portuguesa → Semântica e recursos expressivos → Ironia, metonímia e hipérbole",
+          "description": "Conteúdo de Língua Portuguesa: Ironia, metonímia e hipérbole.",
+          "aliases": "Ironia | Metonímia | Hipérbole e eufemismo",
+          "score": 0.38449815045633307
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q2",
+      "subject": "Língua Portuguesa",
+      "stage1_id": "lingua-portuguesa.content.interpretacao-de-texto-publicidade",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: publicidade",
+      "gold_rank": 20,
+      "subject_options": 36,
+      "top_candidates": [
+        {
+          "content_id": "lingua-portuguesa.content.ironia-metonimia-e-hiperbole",
+          "subject": "Língua Portuguesa",
+          "topic": "Ironia, metonímia e hipérbole",
+          "path": "Língua Portuguesa → Semântica e recursos expressivos → Ironia, metonímia e hipérbole",
+          "description": "Conteúdo de Língua Portuguesa: Ironia, metonímia e hipérbole.",
+          "aliases": "Ironia | Metonímia | Hipérbole e eufemismo",
+          "score": 0.4214173357941186
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cancao",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: canção",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: canção",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: canção.",
+          "aliases": "Letra e contexto | Recursos poéticos na canção",
+          "score": 0.41119770999386834
+        },
+        {
+          "content_id": "lingua-portuguesa.content.metafora-e-personificacao",
+          "subject": "Língua Portuguesa",
+          "topic": "Metáfora e personificação",
+          "path": "Língua Portuguesa → Semântica e recursos expressivos → Metáfora e personificação",
+          "description": "Conteúdo de Língua Portuguesa: Metáfora e personificação.",
+          "aliases": "Metáfora e comparação | Personificação e sinestesia | Antítese e paradoxo",
+          "score": 0.39947199807757977
+        },
+        {
+          "content_id": "lingua-portuguesa.content.variacao-linguistica-e-preconceito-linguistico",
+          "subject": "Língua Portuguesa",
+          "topic": "Variação linguística e preconceito linguístico",
+          "path": "Língua Portuguesa → Gramática e funcionamento da língua → Variação linguística e preconceito linguístico",
+          "description": "Conteúdo de Língua Portuguesa: Variação linguística e preconceito linguístico.",
+          "aliases": "Tipos de variação | Preconceito linguístico | Registro formal e informal",
+          "score": 0.3956934517903571
+        },
+        {
+          "content_id": "lingua-portuguesa.content.parcialidade-em-textos-noticiosos",
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Parcialidade em textos noticiosos",
+          "description": "Conteúdo de Língua Portuguesa: Parcialidade em textos noticiosos.",
+          "aliases": "Escolhas lexicais e enquadramento | Imparcialidade e objetividade",
+          "score": 0.38808866502615935
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q3",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.analise-combinatoria",
+      "content_path": "Matemática → Contagem, probabilidade e estatística → Análise combinatória",
+      "gold_rank": 8,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.amostragem-e-pesquisas",
+          "subject": "Matemática",
+          "topic": "Amostragem e pesquisas",
+          "path": "Matemática → Números, medidas e proporcionalidade → Amostragem e pesquisas",
+          "description": "Conteúdo de Matemática: Amostragem e pesquisas.",
+          "aliases": "População e amostra | Tipos de amostragem | Vieses e planejamento de pesquisas",
+          "score": 0.41101504810320766
+        },
+        {
+          "content_id": "matematica.content.conjuntos-numericos-e-operacoes",
+          "subject": "Matemática",
+          "topic": "Conjuntos numéricos e operações",
+          "path": "Matemática → Números, medidas e proporcionalidade → Conjuntos numéricos e operações",
+          "description": "Conteúdo de Matemática: Conjuntos numéricos e operações.",
+          "aliases": "Operações com conjuntos | Naturais, inteiros e racionais | Irracionais e reais | Potenciação e radiciação numérica | Valor absoluto e ordem",
+          "score": 0.3978198242871494
+        },
+        {
+          "content_id": "matematica.content.porcentagem",
+          "subject": "Matemática",
+          "topic": "Porcentagem",
+          "path": "Matemática → Números, medidas e proporcionalidade → Porcentagem",
+          "description": "Conteúdo de Matemática: Porcentagem.",
+          "aliases": "Cálculo de porcentagens | Aumentos e descontos | Variações sucessivas | Pontos percentuais",
+          "score": 0.39257521495403885
+        },
+        {
+          "content_id": "matematica.content.probabilidade",
+          "subject": "Matemática",
+          "topic": "Probabilidade",
+          "path": "Matemática → Contagem, probabilidade e estatística → Probabilidade",
+          "description": "Conteúdo de Matemática: Probabilidade.",
+          "aliases": "Espaço amostral e eventos | Probabilidade clássica | União e evento complementar | Probabilidade geométrica | Distribuição binomial",
+          "score": 0.3908984241573554
+        },
+        {
+          "content_id": "matematica.content.identidades-e-equacoes-trigonometricas",
+          "subject": "Matemática",
+          "topic": "Identidades e equações trigonométricas",
+          "path": "Matemática → Trigonometria → Identidades e equações trigonométricas",
+          "description": "Identidades e equações envolvendo funções trigonométricas.",
+          "aliases": "Relação fundamental e relações derivadas | Adição e subtração de arcos | Arco duplo | Arco metade | Transformação em produto | Equações trigonométricas | Inequações trigonométricas",
+          "score": 0.3849703271235043
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q4",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.logaritmos-e-funcoes-logaritmicas",
+      "content_path": "Matemática → Álgebra, funções e sequências → Logaritmos e funções logarítmicas",
+      "gold_rank": 39,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.probabilidade",
+          "subject": "Matemática",
+          "topic": "Probabilidade",
+          "path": "Matemática → Contagem, probabilidade e estatística → Probabilidade",
+          "description": "Conteúdo de Matemática: Probabilidade.",
+          "aliases": "Espaço amostral e eventos | Probabilidade clássica | União e evento complementar | Probabilidade geométrica | Distribuição binomial",
+          "score": 0.5380234417635412
+        },
+        {
+          "content_id": "matematica.content.analise-combinatoria",
+          "subject": "Matemática",
+          "topic": "Análise combinatória",
+          "path": "Matemática → Contagem, probabilidade e estatística → Análise combinatória",
+          "description": "Conteúdo de Matemática: Análise combinatória.",
+          "aliases": "Princípio fundamental da contagem | Permutações | Arranjos | Combinações | Binômio de Newton e triângulo de Pascal | Princípio da casa dos pombos e inclusão-exclusão",
+          "score": 0.5154715689018791
+        },
+        {
+          "content_id": "matematica.content.probabilidade-condicional-e-independencia",
+          "subject": "Matemática",
+          "topic": "Probabilidade condicional e independência",
+          "path": "Matemática → Contagem, probabilidade e estatística → Probabilidade condicional e independência",
+          "description": "Conteúdo de Matemática: Probabilidade condicional e independência.",
+          "aliases": "Probabilidade condicional | Eventos independentes | Árvores de probabilidade e Bayes",
+          "score": 0.4942360169153167
+        },
+        {
+          "content_id": "matematica.content.porcentagem",
+          "subject": "Matemática",
+          "topic": "Porcentagem",
+          "path": "Matemática → Números, medidas e proporcionalidade → Porcentagem",
+          "description": "Conteúdo de Matemática: Porcentagem.",
+          "aliases": "Cálculo de porcentagens | Aumentos e descontos | Variações sucessivas | Pontos percentuais",
+          "score": 0.4884407578811986
+        },
+        {
+          "content_id": "matematica.content.amostragem-e-pesquisas",
+          "subject": "Matemática",
+          "topic": "Amostragem e pesquisas",
+          "path": "Matemática → Números, medidas e proporcionalidade → Amostragem e pesquisas",
+          "description": "Conteúdo de Matemática: Amostragem e pesquisas.",
+          "aliases": "População e amostra | Tipos de amostragem | Vieses e planejamento de pesquisas",
+          "score": 0.48300814532512926
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q5",
+      "subject": "Química",
+      "stage1_id": "quimica.content.ligacoes-ionica-e-metalica",
+      "content_path": "Química → Matéria, estrutura e propriedades → Ligações iônica e metálica",
+      "gold_rank": 2,
+      "subject_options": 45,
+      "top_candidates": [
+        {
+          "content_id": "quimica.content.estruturas-de-lewis-e-ligacao-covalente",
+          "subject": "Química",
+          "topic": "Estruturas de Lewis e ligação covalente",
+          "path": "Química → Matéria, estrutura e propriedades → Estruturas de Lewis e ligação covalente",
+          "description": "Conteúdo de Química: Estruturas de Lewis e ligação covalente.",
+          "aliases": "Regra do octeto e estruturas de Lewis | Ligação covalente simples, dupla e tripla | Ligação coordenada e exceções ao octeto | Ressonância | Carga formal e número de oxidação",
+          "score": 0.5768585775897618
+        },
+        {
+          "content_id": "quimica.content.ligacoes-ionica-e-metalica",
+          "subject": "Química",
+          "topic": "Ligações iônica e metálica",
+          "path": "Química → Matéria, estrutura e propriedades → Ligações iônica e metálica",
+          "description": "Conteúdo de Química: Ligações iônica e metálica.",
+          "aliases": "Ligação iônica e fórmulas | Propriedades dos compostos iônicos | Ligação metálica e ligas",
+          "score": 0.5517494950370246
+        },
+        {
+          "content_id": "quimica.content.entalpia-por-energia-de-ligacao",
+          "subject": "Química",
+          "topic": "Entalpia por energia de ligação",
+          "path": "Química → Energia e velocidade das reações → Entalpia por energia de ligação",
+          "description": "Conteúdo de Química: Entalpia por energia de ligação.",
+          "aliases": "Energia de ligação | Cálculo de ΔH por energias de ligação",
+          "score": 0.5273153481272431
+        },
+        {
+          "content_id": "quimica.content.ciclos-do-carbono-nitrogenio-e-enxofre",
+          "subject": "Química",
+          "topic": "Ciclos do carbono, nitrogênio e enxofre",
+          "path": "Química → Química, indústria e ambiente → Ciclos do carbono, nitrogênio e enxofre",
+          "description": "Conteúdo de Química: Ciclos do carbono, nitrogênio e enxofre.",
+          "aliases": "Ciclo do carbono | Ciclo do nitrogênio | Ciclo do enxofre",
+          "score": 0.5127313260257615
+        },
+        {
+          "content_id": "quimica.content.tabela-periodica-e-propriedades-periodicas",
+          "subject": "Química",
+          "topic": "Tabela periódica e propriedades periódicas",
+          "path": "Química → Matéria, estrutura e propriedades → Tabela periódica e propriedades periódicas",
+          "description": "Conteúdo de Química: Tabela periódica e propriedades periódicas.",
+          "aliases": "Organização da tabela periódica | Raio atômico e iônico | Energia de ionização e afinidade eletrônica | Eletronegatividade e caráter metálico | Famílias e elementos representativos",
+          "score": 0.5107541062256535
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q7",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.trigonometria-no-triangulo",
+      "content_path": "Matemática → Trigonometria → Trigonometria no triângulo",
+      "gold_rank": 4,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.funcoes-trigonometricas-inversas",
+          "subject": "Matemática",
+          "topic": "Funções trigonométricas inversas",
+          "path": "Matemática → Álgebra, funções e sequências → Funções trigonométricas inversas",
+          "description": "Conteúdo de Matemática: Funções trigonométricas inversas.",
+          "aliases": "Arco seno, arco cosseno e arco tangente | Equações com funções inversas",
+          "score": 0.5730360733938339
+        },
+        {
+          "content_id": "matematica.content.ciclo-trigonometrico-e-funcoes-trigonometricas",
+          "subject": "Matemática",
+          "topic": "Ciclo trigonométrico e funções trigonométricas",
+          "path": "Matemática → Trigonometria → Ciclo trigonométrico e funções trigonométricas",
+          "description": "Relações no ciclo e funções trigonométricas periódicas.",
+          "aliases": "Radianos e arcos no ciclo | Seno, cosseno e tangente no ciclo | Gráficos das funções trigonométricas | Fenômenos periódicos | Secante, cossecante e cotangente",
+          "score": 0.552812887635239
+        },
+        {
+          "content_id": "matematica.content.identidades-e-equacoes-trigonometricas",
+          "subject": "Matemática",
+          "topic": "Identidades e equações trigonométricas",
+          "path": "Matemática → Trigonometria → Identidades e equações trigonométricas",
+          "description": "Identidades e equações envolvendo funções trigonométricas.",
+          "aliases": "Relação fundamental e relações derivadas | Adição e subtração de arcos | Arco duplo | Arco metade | Transformação em produto | Equações trigonométricas | Inequações trigonométricas",
+          "score": 0.5407506484352316
+        },
+        {
+          "content_id": "matematica.content.trigonometria-no-triangulo",
+          "subject": "Matemática",
+          "topic": "Trigonometria no triângulo",
+          "path": "Matemática → Trigonometria → Trigonometria no triângulo",
+          "description": "Seno, cosseno e tangente em triângulos, conforme o programa.",
+          "aliases": "Razões trigonométricas no triângulo retângulo | Ângulos notáveis | Lei dos senos | Lei dos cossenos | Área com seno",
+          "score": 0.5290075061876908
+        },
+        {
+          "content_id": "matematica.content.equacao-da-reta",
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "path": "Matemática → Geometria e medidas → Equação da reta",
+          "description": "Conteúdo de Matemática: Equação da reta.",
+          "aliases": "Equações da reta | Coeficiente angular | Distância de ponto a reta | Interseção e ângulo entre retas | Inequações e regiões do plano",
+          "score": 0.5174908827108785
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q11",
+      "subject": "Literatura",
+      "stage1_id": "literatura.content.conteudo-de-leitura-obrigatoria",
+      "content_path": "Literatura → Gêneros, formas e leitura literária → Conteúdo de leitura obrigatória",
+      "gold_rank": 2,
+      "subject_options": 26,
+      "top_candidates": [
+        {
+          "content_id": "literatura.content.literatura-contemporanea-brasileira",
+          "subject": "Literatura",
+          "topic": "Literatura contemporânea brasileira",
+          "path": "Literatura → Literaturas e tradições culturais → Literatura contemporânea brasileira",
+          "description": "Conteúdo de Literatura: Literatura contemporânea brasileira.",
+          "aliases": "Prosa contemporânea | Poesia contemporânea | Literatura periférica e de autoria negra",
+          "score": 0.4843840436225771
+        },
+        {
+          "content_id": "literatura.content.conteudo-de-leitura-obrigatoria",
+          "subject": "Literatura",
+          "topic": "Conteúdo de leitura obrigatória",
+          "path": "Literatura → Gêneros, formas e leitura literária → Conteúdo de leitura obrigatória",
+          "description": "Conteúdo de Literatura: Conteúdo de leitura obrigatória.",
+          "aliases": "Lista de leituras obrigatórias FUVEST | Leitura comparada de obras indicadas",
+          "score": 0.4762060877635905
+        },
+        {
+          "content_id": "literatura.content.modernismo-primeira-geracao",
+          "subject": "Literatura",
+          "topic": "Modernismo: primeira geração",
+          "path": "Literatura → Períodos e movimentos literários → Modernismo: primeira geração",
+          "description": "Conteúdo de Literatura: Modernismo: primeira geração.",
+          "aliases": "Semana de Arte Moderna | Oswald e Mário de Andrade | Manuel Bandeira modernista",
+          "score": 0.46559797791220875
+        },
+        {
+          "content_id": "literatura.content.modernismo-poesia-de-30",
+          "subject": "Literatura",
+          "topic": "Modernismo: poesia de 30",
+          "path": "Literatura → Períodos e movimentos literários → Modernismo: poesia de 30",
+          "description": "Conteúdo de Literatura: Modernismo: poesia de 30.",
+          "aliases": "Drummond, Bandeira e Murilo Mendes | Cecília Meireles e Vinicius de Moraes",
+          "score": 0.4608133580844853
+        },
+        {
+          "content_id": "literatura.content.intertextualidade-entre-obras-literarias",
+          "subject": "Literatura",
+          "topic": "Intertextualidade entre obras literárias",
+          "path": "Literatura → Gêneros, formas e leitura literária → Intertextualidade entre obras literárias",
+          "description": "Conteúdo de Literatura: Intertextualidade entre obras literárias.",
+          "aliases": "Diálogos entre obras | Literatura e outras artes",
+          "score": 0.4425190601413492
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q12",
+      "subject": "Literatura",
+      "stage1_id": "literatura.content.conteudo-de-leitura-obrigatoria",
+      "content_path": "Literatura → Gêneros, formas e leitura literária → Conteúdo de leitura obrigatória",
+      "gold_rank": 18,
+      "subject_options": 26,
+      "top_candidates": [
+        {
+          "content_id": "literatura.content.modernismo-poesia-de-30",
+          "subject": "Literatura",
+          "topic": "Modernismo: poesia de 30",
+          "path": "Literatura → Períodos e movimentos literários → Modernismo: poesia de 30",
+          "description": "Conteúdo de Literatura: Modernismo: poesia de 30.",
+          "aliases": "Drummond, Bandeira e Murilo Mendes | Cecília Meireles e Vinicius de Moraes",
+          "score": 0.4194909492459389
+        },
+        {
+          "content_id": "literatura.content.classicismo-e-camoes",
+          "subject": "Literatura",
+          "topic": "Classicismo e Camões",
+          "path": "Literatura → Períodos e movimentos literários → Classicismo e Camões",
+          "description": "Conteúdo de Literatura: Classicismo e Camões.",
+          "aliases": "Camões lírico | Os Lusíadas",
+          "score": 0.41097676820372253
+        },
+        {
+          "content_id": "literatura.content.pre-modernismo",
+          "subject": "Literatura",
+          "topic": "Pré-Modernismo",
+          "path": "Literatura → Períodos e movimentos literários → Pré-Modernismo",
+          "description": "Conteúdo de Literatura: Pré-Modernismo.",
+          "aliases": "Euclides da Cunha e Os sertões | Lima Barreto e Monteiro Lobato | Augusto dos Anjos",
+          "score": 0.40191123312576005
+        },
+        {
+          "content_id": "literatura.content.guimaraes-rosa-campo-geral",
+          "subject": "Literatura",
+          "topic": "Guimarães Rosa: Campo Geral",
+          "path": "Literatura → Autores e obras → Guimarães Rosa: Campo Geral",
+          "description": "Conteúdo de Literatura: Guimarães Rosa: Campo Geral.",
+          "aliases": "Campo geral: enredo e personagens | Linguagem roseana",
+          "score": 0.4018645346880386
+        },
+        {
+          "content_id": "literatura.content.barroco-gregorio-de-matos-e-vieira",
+          "subject": "Literatura",
+          "topic": "Barroco: Gregório de Matos e Vieira",
+          "path": "Literatura → Períodos e movimentos literários → Barroco: Gregório de Matos e Vieira",
+          "description": "Conteúdo de Literatura: Barroco: Gregório de Matos e Vieira.",
+          "aliases": "Características do Barroco | Gregório de Matos | Padre Antônio Vieira",
+          "score": 0.4012228612615273
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q18",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.logaritmos-e-funcoes-logaritmicas",
+      "content_path": "Matemática → Álgebra, funções e sequências → Logaritmos e funções logarítmicas",
+      "gold_rank": 9,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.amostragem-e-pesquisas",
+          "subject": "Matemática",
+          "topic": "Amostragem e pesquisas",
+          "path": "Matemática → Números, medidas e proporcionalidade → Amostragem e pesquisas",
+          "description": "Conteúdo de Matemática: Amostragem e pesquisas.",
+          "aliases": "População e amostra | Tipos de amostragem | Vieses e planejamento de pesquisas",
+          "score": 0.4232158653737041
+        },
+        {
+          "content_id": "matematica.content.porcentagem",
+          "subject": "Matemática",
+          "topic": "Porcentagem",
+          "path": "Matemática → Números, medidas e proporcionalidade → Porcentagem",
+          "description": "Conteúdo de Matemática: Porcentagem.",
+          "aliases": "Cálculo de porcentagens | Aumentos e descontos | Variações sucessivas | Pontos percentuais",
+          "score": 0.42005600339730975
+        },
+        {
+          "content_id": "matematica.content.estatistica-descritiva-media-mediana-e-moda",
+          "subject": "Matemática",
+          "topic": "Estatística descritiva: média, mediana e moda",
+          "path": "Matemática → Contagem, probabilidade e estatística → Estatística descritiva: média, mediana e moda",
+          "description": "Conteúdo de Matemática: Estatística descritiva: média, mediana e moda.",
+          "aliases": "Média aritmética e ponderada | Mediana | Moda | Médias geométrica e harmônica",
+          "score": 0.419406460076817
+        },
+        {
+          "content_id": "matematica.content.funcoes-definidas-por-partes",
+          "subject": "Matemática",
+          "topic": "Funções definidas por partes",
+          "path": "Matemática → Álgebra, funções e sequências → Funções definidas por partes",
+          "description": "Conteúdo de Matemática: Funções definidas por partes.",
+          "aliases": "Leitura e construção de gráficos por partes | Aplicações em tarifas e impostos",
+          "score": 0.416466309830806
+        },
+        {
+          "content_id": "matematica.content.medidas-de-dispersao",
+          "subject": "Matemática",
+          "topic": "Medidas de dispersão",
+          "path": "Matemática → Contagem, probabilidade e estatística → Medidas de dispersão",
+          "description": "Conteúdo de Matemática: Medidas de dispersão.",
+          "aliases": "Amplitude | Variância e desvio padrão | Desvio médio e coeficiente de variação",
+          "score": 0.41106352349925157
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q32",
+      "subject": "Química",
+      "stage1_id": "quimica.content.equilibrio-quimico-e-deslocamento",
+      "content_path": "Química → Soluções e equilíbrio químico → Equilíbrio químico e deslocamento",
+      "gold_rank": 7,
+      "subject_options": 45,
+      "top_candidates": [
+        {
+          "content_id": "quimica.content.equilibrio-acido-base",
+          "subject": "Química",
+          "topic": "Equilíbrio ácido-base",
+          "path": "Química → Soluções e equilíbrio químico → Equilíbrio ácido-base",
+          "description": "Conteúdo de Química: Equilíbrio ácido-base.",
+          "aliases": "Constantes de ionização (Ka e Kb) | Hidrólise salina | Soluções-tampão | Produto iônico da água",
+          "score": 0.5319362485584348
+        },
+        {
+          "content_id": "quimica.content.poluicao-da-agua-e-agrotoxicos",
+          "subject": "Química",
+          "topic": "Poluição da água e agrotóxicos",
+          "path": "Química → Química, indústria e ambiente → Poluição da água e agrotóxicos",
+          "description": "Conteúdo de Química: Poluição da água e agrotóxicos.",
+          "aliases": "Contaminação por metais pesados | Agrotóxicos e fertilizantes | Esgoto e poluentes orgânicos",
+          "score": 0.5226744115540564
+        },
+        {
+          "content_id": "quimica.content.oxigenio-dissolvido-e-vida-aquatica",
+          "subject": "Química",
+          "topic": "Oxigênio dissolvido e vida aquática",
+          "path": "Química → Química, indústria e ambiente → Oxigênio dissolvido e vida aquática",
+          "description": "Conteúdo de Química: Oxigênio dissolvido e vida aquática.",
+          "aliases": "Solubilidade do O₂ na água | DBO e eutrofização",
+          "score": 0.5225979048174726
+        },
+        {
+          "content_id": "quimica.content.equilibrio-de-solubilidade",
+          "subject": "Química",
+          "topic": "Equilíbrio de solubilidade",
+          "path": "Química → Soluções e equilíbrio químico → Equilíbrio de solubilidade",
+          "description": "Conteúdo de Química: Equilíbrio de solubilidade.",
+          "aliases": "Produto de solubilidade (Kps) | Efeito do íon comum | Curvas de solubilidade",
+          "score": 0.5203422184141476
+        },
+        {
+          "content_id": "quimica.content.producao-industrial-de-compostos-inorganicos",
+          "subject": "Química",
+          "topic": "Produção industrial de compostos inorgânicos",
+          "path": "Química → Química, indústria e ambiente → Produção industrial de compostos inorgânicos",
+          "description": "Conteúdo de Química: Produção industrial de compostos inorgânicos.",
+          "aliases": "Síntese da amônia | Ácido sulfúrico e ácido nítrico | Metalurgia e siderurgia | Cal, cimento e vidro",
+          "score": 0.5155217564684464
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q36",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.trigonometria-no-triangulo",
+      "content_path": "Matemática → Trigonometria → Trigonometria no triângulo",
+      "gold_rank": 31,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.plano-cartesiano-e-distancia-entre-pontos",
+          "subject": "Matemática",
+          "topic": "Plano cartesiano e distância entre pontos",
+          "path": "Matemática → Geometria e medidas → Plano cartesiano e distância entre pontos",
+          "description": "Conteúdo de Matemática: Plano cartesiano e distância entre pontos.",
+          "aliases": "Distância entre dois pontos | Ponto médio e baricentro | Área de triângulo por coordenadas",
+          "score": 0.5578141670278961
+        },
+        {
+          "content_id": "matematica.content.grandezas-compostas-e-unidades-de-medida",
+          "subject": "Matemática",
+          "topic": "Grandezas compostas e unidades de medida",
+          "path": "Matemática → Números, medidas e proporcionalidade → Grandezas compostas e unidades de medida",
+          "description": "Conteúdo de Matemática: Grandezas compostas e unidades de medida.",
+          "aliases": "Conversão de unidades | Grandezas compostas | Escalas",
+          "score": 0.5172700960665896
+        },
+        {
+          "content_id": "matematica.content.porcentagem",
+          "subject": "Matemática",
+          "topic": "Porcentagem",
+          "path": "Matemática → Números, medidas e proporcionalidade → Porcentagem",
+          "description": "Conteúdo de Matemática: Porcentagem.",
+          "aliases": "Cálculo de porcentagens | Aumentos e descontos | Variações sucessivas | Pontos percentuais",
+          "score": 0.505211784955015
+        },
+        {
+          "content_id": "matematica.content.equacao-da-reta",
+          "subject": "Matemática",
+          "topic": "Equação da reta",
+          "path": "Matemática → Geometria e medidas → Equação da reta",
+          "description": "Conteúdo de Matemática: Equação da reta.",
+          "aliases": "Equações da reta | Coeficiente angular | Distância de ponto a reta | Interseção e ângulo entre retas | Inequações e regiões do plano",
+          "score": 0.49447404713554954
+        },
+        {
+          "content_id": "matematica.content.medidas-de-dispersao",
+          "subject": "Matemática",
+          "topic": "Medidas de dispersão",
+          "path": "Matemática → Contagem, probabilidade e estatística → Medidas de dispersão",
+          "description": "Conteúdo de Matemática: Medidas de dispersão.",
+          "aliases": "Amplitude | Variância e desvio padrão | Desvio médio e coeficiente de variação",
+          "score": 0.49220381899602594
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q37",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.circunferencia-no-plano-cartesiano",
+      "content_path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+      "gold_rank": 2,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.poligonos-e-circunferencia",
+          "subject": "Matemática",
+          "topic": "Polígonos e circunferência",
+          "path": "Matemática → Geometria e medidas → Polígonos e circunferência",
+          "description": "Conteúdo de Matemática: Polígonos e circunferência.",
+          "aliases": "Ângulos em polígonos | Polígonos regulares | Ângulos na circunferência | Comprimento da circunferência e arcos | Quadriláteros notáveis",
+          "score": 0.5729789235115935
+        },
+        {
+          "content_id": "matematica.content.circunferencia-no-plano-cartesiano",
+          "subject": "Matemática",
+          "topic": "Circunferência no plano cartesiano",
+          "path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano",
+          "description": "Conteúdo de Matemática: Circunferência no plano cartesiano.",
+          "aliases": "Equação da circunferência | Posições relativas | Cônicas",
+          "score": 0.5418288181271826
+        },
+        {
+          "content_id": "matematica.content.poliedros-e-inscricao-de-solidos",
+          "subject": "Matemática",
+          "topic": "Poliedros e inscrição de sólidos",
+          "path": "Matemática → Geometria e medidas → Poliedros e inscrição de sólidos",
+          "description": "Conteúdo de Matemática: Poliedros e inscrição de sólidos.",
+          "aliases": "Relação de Euler | Poliedros regulares | Inscrição e circunscrição de sólidos | Posições relativas no espaço",
+          "score": 0.5294442290359304
+        },
+        {
+          "content_id": "matematica.content.prismas-e-cilindros",
+          "subject": "Matemática",
+          "topic": "Prismas e cilindros",
+          "path": "Matemática → Geometria e medidas → Prismas e cilindros",
+          "description": "Conteúdo de Matemática: Prismas e cilindros.",
+          "aliases": "Prismas | Paralelepípedo e cubo | Cilindro | Princípio de Cavalieri",
+          "score": 0.5222244043257651
+        },
+        {
+          "content_id": "matematica.content.planificacoes-e-vistas-ortogonais",
+          "subject": "Matemática",
+          "topic": "Planificações e vistas ortogonais",
+          "path": "Matemática → Geometria e medidas → Planificações e vistas ortogonais",
+          "description": "Conteúdo de Matemática: Planificações e vistas ortogonais.",
+          "aliases": "Planificação de sólidos | Vistas ortogonais e projeções | Menor caminho em superfícies",
+          "score": 0.5159699174194676
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q38",
+      "subject": "Geografia",
+      "stage1_id": "geografia.content.urbanizacao-e-metropoles",
+      "content_path": "Geografia → Espaço urbano e rural → Urbanização e metrópoles",
+      "gold_rank": 1,
+      "subject_options": 42,
+      "top_candidates": [
+        {
+          "content_id": "geografia.content.urbanizacao-e-metropoles",
+          "subject": "Geografia",
+          "topic": "Urbanização e metrópoles",
+          "path": "Geografia → Espaço urbano e rural → Urbanização e metrópoles",
+          "description": "Conteúdo de Geografia: Urbanização e metrópoles.",
+          "aliases": "Urbanização brasileira | Rede e hierarquia urbana | Problemas urbanos | Urbanização mundial",
+          "score": 0.5786069328414069
+        },
+        {
+          "content_id": "geografia.content.regionalizacao-do-brasil",
+          "subject": "Geografia",
+          "topic": "Regionalização do Brasil",
+          "path": "Geografia → Geopolítica e regionalização → Regionalização do Brasil",
+          "description": "Conteúdo de Geografia: Regionalização do Brasil.",
+          "aliases": "Regiões do IBGE | Complexos regionais | Quatro Brasis de Milton Santos",
+          "score": 0.5497012446728077
+        },
+        {
+          "content_id": "geografia.content.distribuicao-e-crescimento-populacional",
+          "subject": "Geografia",
+          "topic": "Distribuição e crescimento populacional",
+          "path": "Geografia → População, território e mobilidade → Distribuição e crescimento populacional",
+          "description": "Conteúdo de Geografia: Distribuição e crescimento populacional.",
+          "aliases": "Conceitos demográficos | Teorias demográficas | Distribuição da população",
+          "score": 0.5158342439059873
+        },
+        {
+          "content_id": "geografia.content.migracoes-e-refugiados",
+          "subject": "Geografia",
+          "topic": "Migrações e refugiados",
+          "path": "Geografia → População, território e mobilidade → Migrações e refugiados",
+          "description": "Conteúdo de Geografia: Migrações e refugiados.",
+          "aliases": "Migrações internacionais | Refugiados e deslocados | Migrações internas no Brasil",
+          "score": 0.5009163353018076
+        },
+        {
+          "content_id": "geografia.content.trabalho-urbano-e-rural-contemporaneo",
+          "subject": "Geografia",
+          "topic": "Trabalho urbano e rural contemporâneo",
+          "path": "Geografia → Economia, redes e energia → Trabalho urbano e rural contemporâneo",
+          "description": "Conteúdo de Geografia: Trabalho urbano e rural contemporâneo.",
+          "aliases": "Precarização e uberização | Trabalho no campo",
+          "score": 0.4924570947190772
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q39",
+      "subject": "Língua Portuguesa",
+      "stage1_id": "lingua-portuguesa.content.interpretacao-de-texto-cronica",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: crônica",
+      "gold_rank": 5,
+      "subject_options": 36,
+      "top_candidates": [
+        {
+          "content_id": "lingua-portuguesa.content.intertextualidade-parodia-e-interdiscursividade",
+          "subject": "Língua Portuguesa",
+          "topic": "Intertextualidade, paródia e interdiscursividade",
+          "path": "Língua Portuguesa → Texto, discurso e argumentação → Intertextualidade, paródia e interdiscursividade",
+          "description": "Conteúdo de Língua Portuguesa: Intertextualidade, paródia e interdiscursividade.",
+          "aliases": "Intertextualidade explícita e implícita | Paródia e paráfrase | Interdiscursividade",
+          "score": 0.4048494479867401
+        },
+        {
+          "content_id": "lingua-portuguesa.content.retextualizacao-e-reescrita",
+          "subject": "Língua Portuguesa",
+          "topic": "Retextualização e reescrita",
+          "path": "Língua Portuguesa → Texto, discurso e argumentação → Retextualização e reescrita",
+          "description": "Conteúdo de Língua Portuguesa: Retextualização e reescrita.",
+          "aliases": "Passagem da fala para a escrita | Adequação ao gênero e ao registro",
+          "score": 0.38917559330460116
+        },
+        {
+          "content_id": "lingua-portuguesa.content.classes-gramaticais-e-morfossintaxe",
+          "subject": "Língua Portuguesa",
+          "topic": "Classes gramaticais e morfossintaxe",
+          "path": "Língua Portuguesa → Gramática e funcionamento da língua → Classes gramaticais e morfossintaxe",
+          "description": "Conteúdo de Língua Portuguesa: Classes gramaticais e morfossintaxe.",
+          "aliases": "Substantivo, adjetivo e advérbio | Pronomes | Conjunções e preposições | Termos da oração | Funções do 'que' e do 'se'",
+          "score": 0.3846266992593576
+        },
+        {
+          "content_id": "lingua-portuguesa.content.sintaxe-coordenacao-e-subordinacao",
+          "subject": "Língua Portuguesa",
+          "topic": "Sintaxe: coordenação e subordinação",
+          "path": "Língua Portuguesa → Gramática e funcionamento da língua → Sintaxe: coordenação e subordinação",
+          "description": "Conteúdo de Língua Portuguesa: Sintaxe: coordenação e subordinação.",
+          "aliases": "Orações coordenadas | Orações subordinadas substantivas e adjetivas | Orações subordinadas adverbiais | Orações reduzidas",
+          "score": 0.37241407607168237
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cronica",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: crônica",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: crônica",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: crônica.",
+          "aliases": "Características da crônica | Humor e reflexão na crônica",
+          "score": 0.36978379089978963
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q50",
+      "subject": "História",
+      "stage1_id": "historia.content.oriente-medio-contemporaneo",
+      "content_path": "História → Conflitos, regimes e relações globais → Oriente Médio contemporâneo",
+      "gold_rank": 2,
+      "subject_options": 55,
+      "top_candidates": [
+        {
+          "content_id": "historia.content.civilizacoes-antigas-do-oriente-e-da-africa",
+          "subject": "História",
+          "topic": "Civilizações antigas do Oriente e da África",
+          "path": "História → Sociedades antigas e medievais → Civilizações antigas do Oriente e da África",
+          "description": "Conteúdo de História: Civilizações antigas do Oriente e da África.",
+          "aliases": "Mesopotâmia | Egito antigo | Reinos africanos antigos | Hebreus, fenícios e persas | China e Índia antigas",
+          "score": 0.4619787667093079
+        },
+        {
+          "content_id": "historia.content.oriente-medio-contemporaneo",
+          "subject": "História",
+          "topic": "Oriente Médio contemporâneo",
+          "path": "História → Conflitos, regimes e relações globais → Oriente Médio contemporâneo",
+          "description": "Conteúdo de História: Oriente Médio contemporâneo.",
+          "aliases": "Questão palestina | Revolução Iraniana e guerras do Golfo | Primavera Árabe",
+          "score": 0.4227228269124941
+        },
+        {
+          "content_id": "historia.content.expansao-maritima-e-conquista-da-america",
+          "subject": "História",
+          "topic": "Expansão marítima e conquista da América",
+          "path": "História → Expansões, colonização e sociedades americanas → Expansão marítima e conquista da América",
+          "description": "Conteúdo de História: Expansão marítima e conquista da América.",
+          "aliases": "Pioneirismo português | Expansão espanhola e Tratado de Tordesilhas | Conquista e colapso demográfico indígena | Início da colonização do Brasil | Jesuítas e catequese",
+          "score": 0.4084381030865714
+        },
+        {
+          "content_id": "historia.content.feudalismo-e-poder-no-medievo",
+          "subject": "História",
+          "topic": "Feudalismo e poder no Medievo",
+          "path": "História → Sociedades antigas e medievais → Feudalismo e poder no Medievo",
+          "description": "Conteúdo de História: Feudalismo e poder no Medievo.",
+          "aliases": "Formação do feudalismo | Sociedade estamental e servidão | Igreja medieval | Cruzadas e renascimento comercial | Crise do século XIV | Islã e mundo bizantino",
+          "score": 0.398542658365395
+        },
+        {
+          "content_id": "historia.content.descolonizacao-da-africa-e-da-asia",
+          "subject": "História",
+          "topic": "Descolonização da África e da Ásia",
+          "path": "História → Conflitos, regimes e relações globais → Descolonização da África e da Ásia",
+          "description": "Conteúdo de História: Descolonização da África e da Ásia.",
+          "aliases": "Independência da Índia | Descolonização da África | Independências das colônias portuguesas | Conferência de Bandung e Terceiro Mundo",
+          "score": 0.3955419909939515
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q51",
+      "subject": "História",
+      "stage1_id": "historia.content.oriente-medio-contemporaneo",
+      "content_path": "História → Conflitos, regimes e relações globais → Oriente Médio contemporâneo",
+      "gold_rank": 1,
+      "subject_options": 55,
+      "top_candidates": [
+        {
+          "content_id": "historia.content.oriente-medio-contemporaneo",
+          "subject": "História",
+          "topic": "Oriente Médio contemporâneo",
+          "path": "História → Conflitos, regimes e relações globais → Oriente Médio contemporâneo",
+          "description": "Conteúdo de História: Oriente Médio contemporâneo.",
+          "aliases": "Questão palestina | Revolução Iraniana e guerras do Golfo | Primavera Árabe",
+          "score": 0.475698720022231
+        },
+        {
+          "content_id": "historia.content.apartheid-e-segregacao-racial",
+          "subject": "História",
+          "topic": "Apartheid e segregação racial",
+          "path": "História → Conflitos, regimes e relações globais → Apartheid e segregação racial",
+          "description": "Conteúdo de História: Apartheid e segregação racial.",
+          "aliases": "Apartheid na África do Sul | Segregação nos Estados Unidos",
+          "score": 0.46363045856396407
+        },
+        {
+          "content_id": "historia.content.segunda-guerra-mundial",
+          "subject": "História",
+          "topic": "Segunda Guerra Mundial",
+          "path": "História → Conflitos, regimes e relações globais → Segunda Guerra Mundial",
+          "description": "Conteúdo de História: Segunda Guerra Mundial.",
+          "aliases": "Expansionismo e causas da guerra | Desenvolvimento do conflito | Holocausto | Brasil na Segunda Guerra | Bomba atômica e fim da guerra",
+          "score": 0.45619809042341447
+        },
+        {
+          "content_id": "historia.content.declaracao-universal-dos-direitos-humanos",
+          "subject": "História",
+          "topic": "Declaração Universal dos Direitos Humanos",
+          "path": "História → Brasil contemporâneo, cidadania e memória → Declaração Universal dos Direitos Humanos",
+          "description": "Conteúdo de História: Declaração Universal dos Direitos Humanos.",
+          "aliases": "Declaração de 1948 | Direitos humanos no pós-guerra",
+          "score": 0.43327745751432195
+        },
+        {
+          "content_id": "historia.content.primeira-guerra-mundial",
+          "subject": "História",
+          "topic": "Primeira Guerra Mundial",
+          "path": "História → Conflitos, regimes e relações globais → Primeira Guerra Mundial",
+          "description": "Conteúdo de História: Primeira Guerra Mundial.",
+          "aliases": "Causas da Primeira Guerra | Guerra de trincheiras e frente interna | Tratado de Versalhes e Liga das Nações",
+          "score": 0.42950993597846043
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q52",
+      "subject": "Geografia",
+      "stage1_id": "geografia.content.geopolitica-e-potencias-mundiais",
+      "content_path": "Geografia → Geopolítica e regionalização → Geopolítica e potências mundiais",
+      "gold_rank": 4,
+      "subject_options": 42,
+      "top_candidates": [
+        {
+          "content_id": "geografia.content.ocupacao-da-amazonia",
+          "subject": "Geografia",
+          "topic": "Ocupação da Amazônia",
+          "path": "Geografia → Espaço urbano e rural → Ocupação da Amazônia",
+          "description": "Conteúdo de Geografia: Ocupação da Amazônia.",
+          "aliases": "Projetos de integração da Amazônia | Arco do desmatamento | Desenvolvimento sustentável na Amazônia",
+          "score": 0.46277934797645065
+        },
+        {
+          "content_id": "geografia.content.conflitos-territoriais-na-america-latina",
+          "subject": "Geografia",
+          "topic": "Conflitos territoriais na América Latina",
+          "path": "Geografia → Geopolítica e regionalização → Conflitos territoriais na América Latina",
+          "description": "Conteúdo de Geografia: Conflitos territoriais na América Latina.",
+          "aliases": "Disputas fronteiriças | Narcotráfico e conflitos internos",
+          "score": 0.3938352125481889
+        },
+        {
+          "content_id": "geografia.content.globalizacao-e-fluxos-financeiros",
+          "subject": "Geografia",
+          "topic": "Globalização e fluxos financeiros",
+          "path": "Geografia → Economia, redes e energia → Globalização e fluxos financeiros",
+          "description": "Conteúdo de Geografia: Globalização e fluxos financeiros.",
+          "aliases": "Globalização econômica | Fluxos financeiros e crises | Redes e circulação",
+          "score": 0.3841296987529212
+        },
+        {
+          "content_id": "geografia.content.geopolitica-e-potencias-mundiais",
+          "subject": "Geografia",
+          "topic": "Geopolítica e potências mundiais",
+          "path": "Geografia → Geopolítica e regionalização → Geopolítica e potências mundiais",
+          "description": "Conteúdo de Geografia: Geopolítica e potências mundiais.",
+          "aliases": "Ordem mundial multipolar | BRICS e países emergentes | Conflitos contemporâneos",
+          "score": 0.37529874060353796
+        },
+        {
+          "content_id": "geografia.content.agropecuaria-e-agronegocio",
+          "subject": "Geografia",
+          "topic": "Agropecuária e agronegócio",
+          "path": "Geografia → Economia, redes e energia → Agropecuária e agronegócio",
+          "description": "Conteúdo de Geografia: Agropecuária e agronegócio.",
+          "aliases": "Modernização agrícola e Revolução Verde | Agronegócio e commodities | Agricultura familiar e orgânica | Fronteira agrícola",
+          "score": 0.37403366338477134
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q55",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.divisibilidade-e-numeros-primos",
+      "content_path": "Matemática → Números, medidas e proporcionalidade → Divisibilidade e números primos",
+      "gold_rank": 1,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.divisibilidade-e-numeros-primos",
+          "subject": "Matemática",
+          "topic": "Divisibilidade e números primos",
+          "path": "Matemática → Números, medidas e proporcionalidade → Divisibilidade e números primos",
+          "description": "Conteúdo de Matemática: Divisibilidade e números primos.",
+          "aliases": "Critérios de divisibilidade | Números primos e fatoração | MDC e MMC | Divisão euclidiana e restos | Quantidade de divisores",
+          "score": 0.6432847117270521
+        },
+        {
+          "content_id": "matematica.content.conjuntos-numericos-e-operacoes",
+          "subject": "Matemática",
+          "topic": "Conjuntos numéricos e operações",
+          "path": "Matemática → Números, medidas e proporcionalidade → Conjuntos numéricos e operações",
+          "description": "Conteúdo de Matemática: Conjuntos numéricos e operações.",
+          "aliases": "Operações com conjuntos | Naturais, inteiros e racionais | Irracionais e reais | Potenciação e radiciação numérica | Valor absoluto e ordem",
+          "score": 0.6284378966489885
+        },
+        {
+          "content_id": "matematica.content.numeros-complexos",
+          "subject": "Matemática",
+          "topic": "Números complexos",
+          "path": "Matemática → Álgebra, funções e sequências → Números complexos",
+          "description": "Conteúdo de Matemática: Números complexos.",
+          "aliases": "Forma algébrica | Plano de Argand-Gauss | Forma trigonométrica | Potenciação e radiciação (De Moivre)",
+          "score": 0.576070156821813
+        },
+        {
+          "content_id": "matematica.content.razoes-proporcoes-e-grandezas-proporcionais",
+          "subject": "Matemática",
+          "topic": "Razões, proporções e grandezas proporcionais",
+          "path": "Matemática → Números, medidas e proporcionalidade → Razões, proporções e grandezas proporcionais",
+          "description": "Conteúdo de Matemática: Razões, proporções e grandezas proporcionais.",
+          "aliases": "Razões e proporções | Grandezas diretamente proporcionais | Grandezas inversamente proporcionais | Regra de três composta | Médias e misturas",
+          "score": 0.568430717393017
+        },
+        {
+          "content_id": "matematica.content.poliedros-e-inscricao-de-solidos",
+          "subject": "Matemática",
+          "topic": "Poliedros e inscrição de sólidos",
+          "path": "Matemática → Geometria e medidas → Poliedros e inscrição de sólidos",
+          "description": "Conteúdo de Matemática: Poliedros e inscrição de sólidos.",
+          "aliases": "Relação de Euler | Poliedros regulares | Inscrição e circunscrição de sólidos | Posições relativas no espaço",
+          "score": 0.5642530726137289
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q60",
+      "subject": "Física",
+      "stage1_id": "fisica.content.gravitacao-e-leis-de-kepler",
+      "content_path": "Física → Mecânica → Gravitação e leis de Kepler",
+      "gold_rank": 1,
+      "subject_options": 53,
+      "top_candidates": [
+        {
+          "content_id": "fisica.content.gravitacao-e-leis-de-kepler",
+          "subject": "Física",
+          "topic": "Gravitação e leis de Kepler",
+          "path": "Física → Mecânica → Gravitação e leis de Kepler",
+          "description": "Conteúdo de Física: Gravitação e leis de Kepler.",
+          "aliases": "Leis de Kepler | Lei da gravitação universal | Campo gravitacional e gravidade em planetas | Satélites e órbitas circulares | Imponderabilidade e peso aparente",
+          "score": 0.5052744412256703
+        },
+        {
+          "content_id": "fisica.content.big-bang-e-relatividade",
+          "subject": "Física",
+          "topic": "Big Bang e relatividade",
+          "path": "Física → Física moderna → Big Bang e relatividade",
+          "description": "Conteúdo de Física: Big Bang e relatividade.",
+          "aliases": "Relatividade restrita | Equivalência massa-energia | Expansão do universo e Big Bang | Relatividade geral",
+          "score": 0.4939761485759386
+        },
+        {
+          "content_id": "fisica.content.espectroscopia",
+          "subject": "Física",
+          "topic": "Espectroscopia",
+          "path": "Física → Ondas e óptica → Espectroscopia",
+          "description": "Conteúdo de Física: Espectroscopia.",
+          "aliases": "Espectros de emissão e absorção | Modelo de Bohr e níveis de energia",
+          "score": 0.4822788823220097
+        },
+        {
+          "content_id": "fisica.content.ondas-sonoras-e-nivel-de-intensidade",
+          "subject": "Física",
+          "topic": "Ondas sonoras e nível de intensidade",
+          "path": "Física → Ondas e óptica → Ondas sonoras e nível de intensidade",
+          "description": "Conteúdo de Física: Ondas sonoras e nível de intensidade.",
+          "aliases": "Propriedades do som | Nível de intensidade sonora | Efeito Doppler | Velocidade do som e eco",
+          "score": 0.4713505282140523
+        },
+        {
+          "content_id": "fisica.content.reflexao-da-luz-e-espelhos-planos",
+          "subject": "Física",
+          "topic": "Reflexão da luz e espelhos planos",
+          "path": "Física → Ondas e óptica → Reflexão da luz e espelhos planos",
+          "description": "Conteúdo de Física: Reflexão da luz e espelhos planos.",
+          "aliases": "Princípios da óptica geométrica | Leis da reflexão | Imagens em espelhos planos | Cor dos corpos",
+          "score": 0.4695921307761879
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q61",
+      "subject": "Física",
+      "stage1_id": "fisica.content.efeito-fotoeletrico-e-quantizacao-da-energia",
+      "content_path": "Física → Física moderna → Efeito fotoelétrico e quantização da energia",
+      "gold_rank": 1,
+      "subject_options": 53,
+      "top_candidates": [
+        {
+          "content_id": "fisica.content.efeito-fotoeletrico-e-quantizacao-da-energia",
+          "subject": "Física",
+          "topic": "Efeito fotoelétrico e quantização da energia",
+          "path": "Física → Física moderna → Efeito fotoelétrico e quantização da energia",
+          "description": "Conteúdo de Física: Efeito fotoelétrico e quantização da energia.",
+          "aliases": "Fóton e quantização | Efeito fotoelétrico | Radiação do corpo negro",
+          "score": 0.6711524352048738
+        },
+        {
+          "content_id": "fisica.content.espectro-eletromagnetico",
+          "subject": "Física",
+          "topic": "Espectro eletromagnético",
+          "path": "Física → Ondas e óptica → Espectro eletromagnético",
+          "description": "Conteúdo de Física: Espectro eletromagnético.",
+          "aliases": "Faixas do espectro | Relação entre frequência, comprimento de onda e energia | Aplicações tecnológicas e biológicas",
+          "score": 0.5558411835359094
+        },
+        {
+          "content_id": "fisica.content.intensidade-de-ondas-eletromagneticas",
+          "subject": "Física",
+          "topic": "Intensidade de ondas eletromagnéticas",
+          "path": "Física → Ondas e óptica → Intensidade de ondas eletromagnéticas",
+          "description": "Conteúdo de Física: Intensidade de ondas eletromagnéticas.",
+          "aliases": "Intensidade e potência de ondas | Lei do inverso do quadrado",
+          "score": 0.5403335751685631
+        },
+        {
+          "content_id": "fisica.content.potencia-eletrica-e-consumo-de-energia",
+          "subject": "Física",
+          "topic": "Potência elétrica e consumo de energia",
+          "path": "Física → Eletricidade e magnetismo → Potência elétrica e consumo de energia",
+          "description": "Conteúdo de Física: Potência elétrica e consumo de energia.",
+          "aliases": "Potência elétrica | Consumo de energia e conta de luz | Instalações elétricas residenciais",
+          "score": 0.538149800139037
+        },
+        {
+          "content_id": "fisica.content.inducao-eletromagnetica",
+          "subject": "Física",
+          "topic": "Indução eletromagnética",
+          "path": "Física → Eletricidade e magnetismo → Indução eletromagnética",
+          "description": "Conteúdo de Física: Indução eletromagnética.",
+          "aliases": "Fluxo magnético e lei de Faraday | Lei de Lenz | Transformadores | Geradores e aplicações da indução",
+          "score": 0.5284469083554035
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q74",
+      "subject": "Matemática",
+      "stage1_id": "matematica.content.funcoes-quadraticas",
+      "content_path": "Matemática → Álgebra, funções e sequências → Funções quadráticas",
+      "gold_rank": 5,
+      "subject_options": 49,
+      "top_candidates": [
+        {
+          "content_id": "matematica.content.funcoes-afins",
+          "subject": "Matemática",
+          "topic": "Funções afins",
+          "path": "Matemática → Álgebra, funções e sequências → Funções afins",
+          "description": "Conteúdo de Matemática: Funções afins.",
+          "aliases": "Lei e gráfico da função afim | Raiz e estudo do sinal | Inequações do 1º grau | Modelagem com funções afins",
+          "score": 0.5708542377030467
+        },
+        {
+          "content_id": "matematica.content.funcoes-exponenciais",
+          "subject": "Matemática",
+          "topic": "Funções exponenciais",
+          "path": "Matemática → Álgebra, funções e sequências → Funções exponenciais",
+          "description": "Conteúdo de Matemática: Funções exponenciais.",
+          "aliases": "Função exponencial e gráfico | Equações exponenciais | Inequações exponenciais | Crescimento e decaimento exponencial",
+          "score": 0.5690086679624028
+        },
+        {
+          "content_id": "matematica.content.funcoes-definidas-por-partes",
+          "subject": "Matemática",
+          "topic": "Funções definidas por partes",
+          "path": "Matemática → Álgebra, funções e sequências → Funções definidas por partes",
+          "description": "Conteúdo de Matemática: Funções definidas por partes.",
+          "aliases": "Leitura e construção de gráficos por partes | Aplicações em tarifas e impostos",
+          "score": 0.5666033133437419
+        },
+        {
+          "content_id": "matematica.content.composicao-e-ponto-fixo-de-funcoes",
+          "subject": "Matemática",
+          "topic": "Composição e ponto fixo de funções",
+          "path": "Matemática → Álgebra, funções e sequências → Composição e ponto fixo de funções",
+          "description": "Conteúdo de Matemática: Composição e ponto fixo de funções.",
+          "aliases": "Conceito de função | Função composta | Função inversa | Ponto fixo e iterações",
+          "score": 0.5312374404210447
+        },
+        {
+          "content_id": "matematica.content.funcoes-quadraticas",
+          "subject": "Matemática",
+          "topic": "Funções quadráticas",
+          "path": "Matemática → Álgebra, funções e sequências → Funções quadráticas",
+          "description": "Conteúdo de Matemática: Funções quadráticas.",
+          "aliases": "Raízes e fórmula de Bhaskara | Gráfico e vértice da parábola | Máximos e mínimos | Estudo do sinal e inequações do 2º grau | Forma canônica e fatorada",
+          "score": 0.5304785291266234
+        }
+      ]
+    },
+    {
+      "id": "fuvest2026-fase1-prova-V1-93b417ad6ea7:q87",
+      "subject": "Língua Portuguesa",
+      "stage1_id": "lingua-portuguesa.content.interpretacao-de-texto-charge-e-cartum",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: charge e cartum",
+      "gold_rank": 6,
+      "subject_options": 36,
+      "top_candidates": [
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cancao",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: canção",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: canção",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: canção.",
+          "aliases": "Letra e contexto | Recursos poéticos na canção",
+          "score": 0.4153753487178941
+        },
+        {
+          "content_id": "lingua-portuguesa.content.parcialidade-em-textos-noticiosos",
+          "subject": "Língua Portuguesa",
+          "topic": "Parcialidade em textos noticiosos",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Parcialidade em textos noticiosos",
+          "description": "Conteúdo de Língua Portuguesa: Parcialidade em textos noticiosos.",
+          "aliases": "Escolhas lexicais e enquadramento | Imparcialidade e objetividade",
+          "score": 0.4151045254742437
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-cronica",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: crônica",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: crônica",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: crônica.",
+          "aliases": "Características da crônica | Humor e reflexão na crônica",
+          "score": 0.4127287097414677
+        },
+        {
+          "content_id": "lingua-portuguesa.content.operadores-logico-discursivos",
+          "subject": "Língua Portuguesa",
+          "topic": "Operadores lógico-discursivos",
+          "path": "Língua Portuguesa → Texto, discurso e argumentação → Operadores lógico-discursivos",
+          "description": "Conteúdo de Língua Portuguesa: Operadores lógico-discursivos.",
+          "aliases": "Relações de causa, consequência e conclusão | Relações de oposição e concessão | Operadores argumentativos",
+          "score": 0.4030382401531427
+        },
+        {
+          "content_id": "lingua-portuguesa.content.interpretacao-de-texto-noticia-e-reportagem",
+          "subject": "Língua Portuguesa",
+          "topic": "Interpretação de texto: notícia e reportagem",
+          "path": "Língua Portuguesa → Leitura, interpretação e gêneros → Interpretação de texto: notícia e reportagem",
+          "description": "Conteúdo de Língua Portuguesa: Interpretação de texto: notícia e reportagem.",
+          "aliases": "Estrutura da notícia | Reportagem e discurso citado",
+          "score": 0.39824946613582407
+        }
+      ]
+    }
+  ]
+}
