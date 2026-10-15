@@ -49,7 +49,7 @@ class ContentTaxonomyTests(unittest.TestCase):
                 service.DEFAULT_TAXONOMY, content_taxonomy=DEFAULT_CONTENT_TAXONOMY)
 
     def test_deepened_subjects_have_only_subcontent_leaves_four_levels_deep(self):
-        for subject in ("Matemática", "Física"):
+        for subject in ("Matemática", "Física", "Química"):
             leaves = [node for node in CONTENT_INDEX.values()
                       if node["subject"] == subject and node["is_leaf"]]
             self.assertGreater(len(leaves), 150, subject)
