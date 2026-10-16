@@ -26,7 +26,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | # | Fase | Status | Feitos/Total |
 |---|---|---|---|
 | 1 | Taxonomia | em andamento | 6/7 |
-| 2 | Revisão de questões → fonte de verdade | em andamento (aguardando commit) | 0/8 |
+| 2 | Revisão de questões → fonte de verdade | concluída | 8/8 |
 | 3 | Questões mal recortadas | pendente | 0/5 |
 | 4 | Reorganização e otimização (código + IA) | em andamento | 4/13 |
 | 5 | Diagnóstico inicial | pendente | 0/5 |
@@ -65,14 +65,14 @@ Base: `src/studai/features/classification/content_taxonomy.json`, `taxonomy.py`.
 
 Base: `src/studai/features/questions/review.py` (já tem os status `reviewed`/`unusable`, `reviewed_examples`, `write_reviewed_dataset`, `preserve_reviews`).
 
-- [~] Depois do upload de uma prova, abrir uma fila de revisão com todas as questões extraídas: todas as questões têm ações, não só as sinalizadas pela IA (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
-- [~] Botão de "check"/aprovar por questão, e aprovação em lote (`POST /api/exams/<id>/reviews/bulk`, usa matéria/conteúdo da IA e devolve as puladas com motivo) (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
-- [~] Edição na revisão: enunciado, alternativas, imagens (remover + enviar nova), gabarito, matéria e conteúdo (IDs da taxonomia). As correções ficam em `revisao.json` (`edits`) por cima da extração, que não muda (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
-- [~] Progresso de revisão por prova (aprovadas / pendentes / inutilizáveis / recorte ruim), agora sobre todas as questões (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
-- [~] Novo status `bad_crop` ("recorte ruim"), que manda a questão para a fila da Fase 3 (`GET /api/review/bad-crops`); fica fora do diagnóstico e do "Responder prova" (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
-- [~] RAG e exemplos de classificação passam a usar **somente** questões aprovadas, com o texto corrigido; pool do diagnóstico também aplica as correções (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
-- [~] Testes do fluxo de revisão (`tests/test_question_review.py`, `tests/test_question_reprocessing.py`) (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
-- [~] Filtros na revisão: status, sinalização, matéria, conteúdo, confiança IA < 70%, com imagem, sem gabarito, editadas e busca por número/texto (lembrados por prova no navegador) (feito e testado, aguardando commit: Claude, `claude/question-reprocessing-formulas-0dda57`)
+- [x] Depois do upload de uma prova, abrir uma fila de revisão com todas as questões extraídas: todas as questões têm ações, não só as sinalizadas pela IA (commit 0c715a3, 2026-10-16)
+- [x] Botão de "check"/aprovar por questão, e aprovação em lote (`POST /api/exams/<id>/reviews/bulk`, usa matéria/conteúdo da IA e devolve as puladas com motivo) (commit 0c715a3, 2026-10-16)
+- [x] Edição na revisão: enunciado, alternativas, imagens (remover + enviar nova), gabarito, matéria e conteúdo (IDs da taxonomia). As correções ficam em `revisao.json` (`edits`) por cima da extração, que não muda (commit 0c715a3, 2026-10-16)
+- [x] Progresso de revisão por prova (aprovadas / pendentes / inutilizáveis / recorte ruim), agora sobre todas as questões (commit 0c715a3, 2026-10-16)
+- [x] Novo status `bad_crop` ("recorte ruim"), que manda a questão para a fila da Fase 3 (`GET /api/review/bad-crops`); fica fora do diagnóstico e do "Responder prova" (commit 0c715a3, 2026-10-16)
+- [x] RAG e exemplos de classificação passam a usar **somente** questões aprovadas, com o texto corrigido; pool do diagnóstico também aplica as correções (commit 0c715a3, 2026-10-16)
+- [x] Testes do fluxo de revisão (`tests/test_question_review.py`, `tests/test_question_reprocessing.py`) (commit 0c715a3, 2026-10-16)
+- [x] Filtros na revisão: status, sinalização, matéria, conteúdo, confiança IA < 70%, com imagem, sem gabarito, editadas e busca por número/texto (lembrados por prova no navegador) (commit 0c715a3, 2026-10-16)
 
 ## Fase 3 — Questões mal recortadas
 
@@ -151,4 +151,4 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Enunciado antes das instruções (flag `STUDAI_QUESTION_FIRST`), medido 26% mais lento no qwen3.5 | f2430e2 |
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Remoção das flags `STUDAI_STAGE_ORDER` e `STUDAI_QUESTION_FIRST`, que não deram ganho | — |
 | 2026-10-15 | Claude (agentes em paralelo) / `feature/classification/hierarchical-taxonomy` | Taxonomia `fuvest-2027.v7`: proposta integrada, passada editorial nas 13 matérias, nós `deprecated`, mapeamento de rótulos legados, testes de estrutura | — |
-| 2026-10-16 | Claude / `claude/question-reprocessing-formulas-0dda57` | Fase 2: fila de revisão completa, edições em camada, aprovação em lote, `bad_crop`, gabarito manual, filtros | — |
+| 2026-10-16 | Claude / `claude/question-reprocessing-formulas-0dda57` | Fase 2: fila de revisão completa, edições em camada, aprovação em lote, `bad_crop`, gabarito manual, filtros | 0c715a3 |
