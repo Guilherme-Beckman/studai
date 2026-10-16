@@ -362,6 +362,7 @@ def _ai_options() -> dict:
             "geminiConfigured": bool(keys),
             "geminiKeyCount": len(keys),
             "freeCloudLanes": [name for name, *_ in _cloud_lanes(max_tokens=1)],
+            "freeCloud": _cloud_lane_status(),
         }
         AI_OPTIONS_CACHE = (now, options)
         return dict(options)
@@ -397,14 +398,36 @@ def _env_int(name: str, default: int, low: int, high: int) -> int:
     return value
 
 
-def _cloud_lanes(*, max_tokens: int) -> list[tuple]:
-    """Lanes for free OpenAI-compatible tiers configured in the environment."""
+def _cloud_models(config: dict) -> tuple[list[str], bool]:
+    """Models of a free cloud preset and whether they came from the defaults."""
+    raw = os.environ.get(config["models_env"], "").strip()
+    models = list(dict.fromkeys(m.strip() for m in (raw or config["default_models"]).split(",") if m.strip()))
+    return models, not raw
+
+
+def _cloud_lane_status() -> list[dict]:
+    """What the interface may show about each free cloud tier: never the key itself."""
+    status = []
+    for preset, config in CLOUD_LANE_PRESETS.items():
+        key_env = classification.OPENAI_COMPAT_PRESETS[preset][1]
+        models, default = _cloud_models(config)
+        status.append({"id": preset, "label": config["label"], "keyEnv": key_env,
+                       "modelsEnv": config["models_env"], "models": models, "defaultModels": default,
+                       "configured": bool(os.environ.get(key_env, "").strip() and models)})
+    return status
+
+
+def _cloud_lanes(*, max_tokens: int, providers: set[str] | None = None) -> list[tuple]:
+    """Lanes for free OpenAI-compatible tiers configured in the environment.
+
+    ``providers`` limits the tiers used (None means every configured tier)."""
     lanes: list[tuple] = []
     for preset, config in CLOUD_LANE_PRESETS.items():
+        if providers is not None and preset not in providers:
+            continue
         base_url, key_env = classification.OPENAI_COMPAT_PRESETS[preset]
         key = os.environ.get(key_env, "").strip()
-        raw = os.environ.get(config["models_env"], "").strip() or config["default_models"]
-        models = list(dict.fromkeys(m.strip() for m in raw.split(",") if m.strip()))
+        models, _ = _cloud_models(config)
         if not key or not models:
             continue
         rpm = _env_int(config["rpm_env"], config["rpm_default"], 0, 10_000)
@@ -419,7 +442,8 @@ def _cloud_lanes(*, max_tokens: int) -> list[tuple]:
 SHARED_POOLS: dict[str, tuple[float, RotatingPoolProvider]] = {}
 SHARED_POOLS_LOCK = threading.Lock()
 SHARED_POOL_TTL_SECONDS = 15 * 60
-POOL_PAYLOAD_KEYS = ("useOllama", "ollamaModels", "geminiModels", "useFreeCloud", "ollamaThreads", "baseUrl")
+POOL_PAYLOAD_KEYS = ("useOllama", "ollamaModels", "geminiModels", "useFreeCloud", "cloudProviders",
+                     "ollamaThreads", "baseUrl")
 
 
 def _shared_pool_provider(payload: dict) -> RotatingPoolProvider:
@@ -459,9 +483,15 @@ def _pool_provider(payload: dict, *, max_tokens: int = 1600) -> RotatingPoolProv
     if selected_gemini and not keys:
         raise ValueError("configure GEMINI_API_KEYS no arquivo .env para usar Gemini")
     use_cloud = str(payload.get("useFreeCloud", "true")).strip().casefold() not in {"false", "0", "no", "off"}
-    cloud_lanes = _cloud_lanes(max_tokens=max_tokens) if use_cloud else []
+    # Sem cloudProviders no pedido valem todas as faixas configuradas (compatível com clientes antigos).
+    cloud_providers = (set(split_models(payload.get("cloudProviders")))
+                       if payload.get("cloudProviders") is not None else None)
+    unknown = (cloud_providers or set()) - set(CLOUD_LANE_PRESETS)
+    if unknown:
+        raise ValueError(f"faixa de nuvem desconhecida: {', '.join(sorted(unknown))}")
+    cloud_lanes = _cloud_lanes(max_tokens=max_tokens, providers=cloud_providers) if use_cloud else []
     if not selected_ollama and not selected_gemini and not cloud_lanes:
-        raise ValueError("selecione ao menos um modelo Ollama ou Gemini")
+        raise ValueError("selecione ao menos um modelo Ollama, Gemini ou uma faixa grátis de nuvem")
     try:
         threads = int(payload.get("ollamaThreads") or 0)
     except (TypeError, ValueError):

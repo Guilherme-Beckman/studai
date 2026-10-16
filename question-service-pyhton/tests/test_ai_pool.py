@@ -1,5 +1,6 @@
 import json
 import io
+import json
 import os
 import sys
 import tempfile
@@ -285,6 +286,22 @@ class AIPoolTests(unittest.TestCase):
         self.assertEqual(created, [("openrouter", server.CLOUD_LANE_PRESETS["openrouter"]["default_models"])])
         self.assertEqual(len(lanes), 1)
         self.assertEqual(lanes[0][3], 20)
+
+    def test_cloud_lane_status_and_provider_filter(self):
+        env = {"GROQ_API_KEY": "groq-secret", "STUDAI_GROQ_MODELS": "", "OPENROUTER_API_KEY": "or-secret",
+               "STUDAI_OPENROUTER_MODELS": "x/y:free", "HF_TOKEN": "", "STUDAI_HF_MODELS": ""}
+        with patch.dict(os.environ, env), \
+             patch.object(server, "make_provider", side_effect=lambda name, model, **kw: StubProvider(model)):
+            status = {lane["id"]: lane for lane in server._cloud_lane_status()}
+            only_groq = server._cloud_lanes(max_tokens=10, providers={"groq"})
+            none = server._cloud_lanes(max_tokens=10, providers=set())
+        self.assertTrue(status["groq"]["configured"] and status["groq"]["defaultModels"])
+        self.assertEqual(status["openrouter"]["models"], ["x/y:free"])
+        self.assertFalse(status["openrouter"]["defaultModels"])
+        self.assertFalse(status["huggingface"]["configured"])
+        self.assertNotIn("secret", json.dumps(status))
+        self.assertEqual([name.split(" ")[0] for name, *_ in only_groq], ["Groq"])
+        self.assertEqual(none, [])
 
     def test_openai_compatible_provider_rotates_models_like_gemini(self):
         responses = [LLMError("HTTP 429: rate limit", status_code=429),

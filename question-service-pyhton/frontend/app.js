@@ -569,7 +569,8 @@ async function setupAIOptions() {
   let loadedOptions = null;
   const updateStatus = () => {
     if (!loadedOptions) return;
-    status.textContent = `${useOllama.checked ? (loadedOptions.ollamaAvailable ? `${loadedOptions.ollamaModels.length} modelo(s) Ollama ativo(s)` : "Ollama não encontrado") : "Ollama desativado"} · ${loadedOptions.geminiConfigured ? `${loadedOptions.geminiKeyCount} chave(s) Gemini configurada(s)` : "Gemini sem chaves configuradas"}`;
+    const cloudReady = (loadedOptions.freeCloud || []).filter(lane => lane.configured).length;
+    status.textContent = `${useOllama.checked ? (loadedOptions.ollamaAvailable ? `${loadedOptions.ollamaModels.length} modelo(s) Ollama ativo(s)` : "Ollama não encontrado") : "Ollama desativado"} · ${loadedOptions.geminiConfigured ? `${loadedOptions.geminiKeyCount} chave(s) Gemini configurada(s)` : "Gemini sem chaves configuradas"} · ${cloudReady ? `${cloudReady} faixa(s) grátis de nuvem` : "nenhuma faixa grátis de nuvem"}`;
   };
   const updateOllamaControls = () => {
     localSelect.disabled = !useOllama.checked || !localSelect.options.length || !localSelect.options[0].value;
@@ -599,10 +600,27 @@ async function setupAIOptions() {
     if (options.geminiConfigured && !options.geminiModels.length) {
       geminiStatus.textContent = "Não foi possível listar modelos Gemini disponíveis para as chaves configuradas.";
     }
+    renderCloudLanes(options.freeCloud || []);
   } catch (error) {
     status.textContent = `Não foi possível carregar os modelos: ${error.message}`;
     geminiStatus.textContent = "Verifique se a API local está ativa.";
+    $("#process-cloud-lanes").innerHTML = `<p class="field-help">Verifique se a API local está ativa.</p>`;
   }
+}
+
+function renderCloudLanes(lanes) {
+  const list = $("#process-cloud-lanes");
+  const checked = new Set($$("#process-cloud-lanes input:checked").map(input => input.value));
+  const firstRender = !list.querySelector("input");
+  list.innerHTML = lanes.length ? lanes.map(lane => {
+    const models = lane.models.map(model => `<code>${escapeHtml(model)}</code>`).join(" → ");
+    const detail = lane.configured
+      ? `${lane.defaultModels ? "Padrão" : "Do .env"}: ${models}`
+      : (lane.models.length ? `Adicione <code>${escapeHtml(lane.keyEnv)}</code> ao .env para ativar.`
+                            : `Adicione <code>${escapeHtml(lane.keyEnv)}</code> e <code>${escapeHtml(lane.modelsEnv)}</code> ao .env para ativar.`);
+    const on = lane.configured && (firstRender || checked.has(lane.id));
+    return `<label class="cloud-lane${lane.configured ? "" : " unavailable"}"><input type="checkbox" value="${escapeHtml(lane.id)}"${on ? " checked" : ""}${lane.configured ? "" : " disabled"}><span class="cloud-lane-main"><strong>${escapeHtml(lane.label)}</strong><span class="cloud-lane-models">${detail}</span></span></label>`;
+  }).join("") : `<p class="field-help">Nenhuma faixa grátis disponível.</p>`;
 }
 
 function providerConfig(prefix) {
@@ -626,6 +644,7 @@ function processConfig() {
     useOllama,
     ollamaModels,
     geminiModels: [...$("#process-gemini-models").selectedOptions].map(option => option.value).filter(Boolean),
+    cloudProviders: $$("#process-cloud-lanes input:checked").map(input => input.value),
     ollamaThreads: $("#process-ollama-threads").value || "0",
   };
 }
@@ -650,7 +669,7 @@ async function processPdf(event) {
   renderProcessProgress({ status: "running", stage: "upload_saved", message: `Enviando ${file.name}`, progress: 1 });
   try {
     const config = processConfig();
-    if (!config.ollamaModels.length && !config.geminiModels.length) throw new Error("Selecione ao menos um modelo de IA disponível.");
+    if (!config.ollamaModels.length && !config.geminiModels.length && !config.cloudProviders.length) throw new Error("Selecione ao menos um modelo Ollama, Gemini ou uma faixa grátis de nuvem.");
     const record = { jobId: newClientJobId(), proof: file, keyFile, filename: file.name, keyFilename: keyFile.name, config, images: $("#process-images").checked };
     await savePendingProcess(record);
     await runSavedProcess(record, processUploadController.signal);
@@ -674,6 +693,11 @@ async function submitSavedProcess(record, signal) {
     useOllama: String(record.config.useOllama !== false),
     ollamaModels: (record.config.ollamaModels || []).join(","), geminiModels: (record.config.geminiModels || []).join(","),
     ollamaThreads: record.config.ollamaThreads || "0" });
+  // Envios salvos antes desta opção não têm cloudProviders: o backend usa todas as faixas.
+  if (Array.isArray(record.config.cloudProviders)) {
+    query.set("useFreeCloud", String(record.config.cloudProviders.length > 0));
+    query.set("cloudProviders", record.config.cloudProviders.join(","));
+  }
   if (record.images) query.set("images", "sempre");
   return api(`/api/exams/process?${query}`, { method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.proof, signal });
 }
