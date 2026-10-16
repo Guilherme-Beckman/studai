@@ -247,7 +247,10 @@ def render_questao(q: dict, shared: dict | None, has_images: bool) -> str:
     if tem_fig and not has_images:
         parts.append("(A questão possui figura/gráfico que não está disponível em texto.)")
     if q.get("revisar") and "formula_matematica" in q["revisar"]:
-        parts.append("(Fórmulas podem estar linearizadas no texto, ex.: '√2 2' = √2/2.)")
+        parts.append("(Fórmulas reconstruídas do PDF: 'a/b' = fração, '₂' ou '_{..}' = índice, "
+                     "'²' ou '^{..}' = expoente.)")
+    if re.search(r"\[(?:azul|vermelho|verde|amarelo|laranja|roxo|rosa): ", "\n".join(parts)):
+        parts.append("(Trechos '[cor: ...]' aparecem coloridos no original; a cor faz parte do enunciado.)")
     return "<questao>\n" + "\n\n".join(parts) + "\n</questao>"
 
 
@@ -651,7 +654,8 @@ def load_images(base: Path, q: dict, shared: dict | None, mode: str) -> list[byt
         return []
     tem_fig = bool(q.get("figuras_enunciado") or any(a.get("figuras") for a in q.get("alternativas", {}).values())
                    or (shared and shared.get("figuras")))
-    if mode == "figuras" and not tem_fig:
+    # Texto com glifo não decodificado não é confiável: o recorte da questão supre a leitura.
+    if mode == "figuras" and not tem_fig and "glifo_estranho" not in (q.get("revisar") or []):
         return []
     paths = list(q.get("imagens_completas", []))
     if shared:
