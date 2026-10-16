@@ -96,6 +96,24 @@ class QuestionReprocessingTests(unittest.TestCase):
         current = json.loads(self.classified.read_text(encoding="utf-8"))["questoes"][0]
         self.assertEqual(sorted(current["alternativas"]), list("ABCDE"))
 
+    def test_reviewed_question_can_be_reprocessed_and_keeps_its_review(self):
+        review.save_review(self.classified, 1, {"status": "reviewed", "subject": "Matemática",
+                                                "topic": "Probabilidade"})
+        preview = self.run_preview()
+        server._confirm_question_reprocess("exam-id", 1, preview["previewId"])
+        refreshed = review.read_reviews(self.classified)["questions"]["1"]
+        self.assertEqual(refreshed["status"], "reviewed")
+        self.assertIn("probabilidade", json.loads(self.classified.read_text(encoding="utf-8"))
+                      ["questoes"][0]["enunciado"].lower())
+
+    def test_stale_glyphs_make_unflagged_question_reprocessable(self):
+        clean = {"numero": 3, "enunciado": "Calcule f(x)", "alternativas": {"A": {"texto": "2"}}, "revisar": []}
+        self.assertFalse(server._can_reprocess(clean, None))
+        # "ܣ" (U+0723) vinha de provas 2012–2019 e só passou a ser reconhecido depois.
+        stale = {**clean, "alternativas": {"A": {"texto": "\u0723 = 2"}}}
+        self.assertTrue(server._can_reprocess(stale, {"status": "reviewed"}))
+        self.assertTrue(server._can_reprocess(clean, {"status": "unusable"}))
+
     def test_missing_pdf_and_wrong_question_leave_original_unchanged(self):
         self.pdf.unlink()
         with self.assertRaisesRegex(FileNotFoundError, "Envie o PDF"):
@@ -158,6 +176,35 @@ class QuestionReprocessingTests(unittest.TestCase):
             db.close()
         self.assertFalse(any(row["number"] == 1 for row in pool))
         self.assertEqual(excluded["unusable"], 1)
+
+    def test_bad_crop_is_excluded_and_edits_reach_the_diagnostic_pool(self):
+        data = json.loads(self.classified.read_text(encoding="utf-8"))
+        data["questoes"][1]["classificacao"] = {"materia": "Matemática", "assunto": "Probabilidade"}
+        self.classified.write_text(json.dumps(data), encoding="utf-8")
+        review.save_review(self.classified, 1, {"status": "bad_crop"})
+        review.save_review(self.classified, 2, {"status": "pending", "edits": {
+            "alternativas": {"A": {"texto": "b"}, "B": {"texto": "corrigida"}}}})
+        db = connect_db(self.root / "diagnostics.sqlite3")
+        try:
+            for number, answer in ((1, "A"), (2, "B")):
+                db.execute("INSERT INTO answer_keys(source_id,question_number,answer,source_pdf,imported_at,is_annulled) VALUES(?,?,?,?,?,?)",
+                           ("exam-id", number, answer, "exam.pdf", "now", 0))
+            db.commit()
+            pool, excluded = load_question_pool(self.processed, db, ["Matemática"])
+        finally:
+            db.close()
+        self.assertEqual(excluded["bad_crop"], 1)
+        # A alternativa B só existe na correção; sem ela a 2 ficaria sem gabarito válido.
+        self.assertEqual([row["number"] for row in pool], [2])
+        self.assertEqual(pool[0]["question"]["alternativas"]["B"]["texto"], "corrigida")
+
+    def test_confirmed_reprocess_replaces_the_previous_text_corrections(self):
+        review.save_review(self.classified, 1, {"status": "unusable", "edits": {"enunciado": "corrigido à mão"}})
+        preview = self.run_preview()
+        server._confirm_question_reprocess("exam-id", 1, preview["previewId"])
+        refreshed = review.read_reviews(self.classified)["questions"]["1"]
+        self.assertNotIn("edits", refreshed)
+        self.assertNotIn("status", refreshed)
 
     def test_fuvest_2025_questions_1_and_26_recover_all_choices_and_full_region_crops(self):
         pdf = Path(__file__).resolve().parents[1] / "fuvest_acervo/2025/1a_fase/provas/fuvest2025_primeira_fase_prova_V1.pdf"

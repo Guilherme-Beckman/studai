@@ -1,9 +1,15 @@
 """Persistência das revisões humanas e materialização dos exemplos FUVEST."""
 from __future__ import annotations
 
+import copy
 import json
 import os
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
+
+# "reviewed" é a questão aprovada; "bad_crop" vai para a fila de recortes ruins (Fase 3).
+STATUSES = ("reviewed", "unusable", "bad_crop")
 
 
 def review_file(exam_json: Path) -> Path:
@@ -63,28 +69,127 @@ def review_reasons(question: dict) -> list[str]:
 
 
 def is_reviewed(review: dict | None) -> bool:
-    return isinstance(review, dict) and review.get("status") in {"reviewed", "unusable"}
+    return isinstance(review, dict) and review.get("status") in STATUSES
+
+
+def apply_edits(question: dict, review: dict | None) -> dict:
+    """Questão com as correções humanas aplicadas por cima da extração (que fica intacta)."""
+    edits = (review or {}).get("edits") if isinstance(review, dict) else None
+    result = copy.deepcopy(question)
+    if not isinstance(edits, dict):
+        return result
+    if "enunciado" in edits:
+        result["enunciado"] = edits["enunciado"]
+    if "figuras_enunciado" in edits:
+        result["figuras_enunciado"] = list(edits["figuras_enunciado"] or [])
+    if isinstance(edits.get("alternativas"), dict):
+        options = result.get("alternativas") or {}
+        merged = {}
+        for letter, value in edits["alternativas"].items():
+            current = options.get(letter)
+            current = dict(current) if isinstance(current, dict) else {"texto": str(current or "")}
+            if "texto" in value:
+                current["texto"] = value["texto"]
+            if "figuras" in value:
+                current["figuras"] = list(value["figuras"] or [])
+            current.setdefault("figuras", [])
+            merged[letter] = current
+        result["alternativas"] = dict(sorted(merged.items()))
+    return result
+
+
+MAX_STEM_CHARS = 20_000
+MAX_OPTION_CHARS = 5_000
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+IMAGE_SIGNATURES = ((b"\x89PNG\r\n\x1a\n", ".png"), (b"\xff\xd8\xff", ".jpg"))
+
+
+def _figures(exam_dir: Path, value) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError("figuras devem ser uma lista de caminhos")
+    root = Path(exam_dir).resolve()
+    paths = []
+    for item in value:
+        rel = str(item or "")
+        target = (root / rel).resolve()
+        if not rel.startswith("img/") or not target.is_relative_to(root / "img") or not target.is_file():
+            raise ValueError(f"imagem inválida: {rel}")
+        paths.append(rel)
+    return paths
+
+
+def validate_edits(question: dict, edits, exam_dir: Path) -> dict | None:
+    """Normaliza a camada de correções enviada pela revisão; None ou {} remove a camada."""
+    if not edits:
+        return None
+    if not isinstance(edits, dict):
+        raise ValueError("edits deve ser um objeto")
+    clean: dict = {}
+    if "enunciado" in edits:
+        stem = str(edits["enunciado"] or "")
+        if len(stem) > MAX_STEM_CHARS:
+            raise ValueError(f"o enunciado deve ter no máximo {MAX_STEM_CHARS} caracteres")
+        clean["enunciado"] = stem
+    if "figuras_enunciado" in edits:
+        clean["figuras_enunciado"] = _figures(exam_dir, edits["figuras_enunciado"])
+    if "alternativas" in edits:
+        options = edits["alternativas"]
+        if not isinstance(options, dict) or not options:
+            raise ValueError("alternativas devem ser um objeto {letra: {texto, figuras}}")
+        clean["alternativas"] = {}
+        for letter, value in options.items():
+            if letter not in "ABCDE" or len(letter) != 1:
+                raise ValueError(f"alternativa inválida: {letter}")
+            value = value if isinstance(value, dict) else {"texto": value}
+            option = {"texto": str(value.get("texto") or "")}
+            if len(option["texto"]) > MAX_OPTION_CHARS:
+                raise ValueError(f"a alternativa {letter} deve ter no máximo {MAX_OPTION_CHARS} caracteres")
+            option["figuras"] = _figures(exam_dir, value.get("figuras") or [])
+            clean["alternativas"][letter] = option
+    unknown = set(edits) - {"enunciado", "figuras_enunciado", "alternativas"}
+    if unknown:
+        raise ValueError(f"campo de edição desconhecido: {', '.join(sorted(unknown))}")
+    return clean or None
+
+
+def save_image(exam_dir: Path, content: bytes) -> str:
+    """Guarda uma imagem enviada na revisão e devolve o caminho relativo à prova."""
+    if not content or len(content) > MAX_IMAGE_BYTES:
+        raise ValueError("a imagem deve ter até 5 MB")
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        suffix = ".webp"
+    else:
+        suffix = next((ext for signature, ext in IMAGE_SIGNATURES if content.startswith(signature)), None)
+    if suffix is None:
+        raise ValueError("envie uma imagem PNG, JPEG ou WebP")
+    folder = Path(exam_dir) / "img"
+    folder.mkdir(parents=True, exist_ok=True)
+    name = f"edit_{uuid.uuid4().hex[:12]}{suffix}"
+    (folder / name).write_bytes(content)
+    return f"img/{name}"
 
 
 def review_stats(data: dict, reviews: dict) -> dict:
+    """Progresso sobre todas as questões; as chaves "reviewRequired"/"reviewedQuestions"/
+    "pendingReview" continuam contando só as sinalizadas pela IA."""
     states = reviews.get("questions") or {}
-    required = [q for q in data.get("questoes", []) if review_reasons(q)]
-    reviewed = sum(is_reviewed(states.get(str(q.get("numero")))) for q in required)
-    total = len(required)
-    return {"reviewRequired": total, "reviewedQuestions": reviewed,
-            "pendingReview": total - reviewed,
-            "reviewProgress": 100 if not total else round(reviewed * 100 / total)}
+    questions = data.get("questoes", [])
+    status_of = [(states.get(str(q.get("numero"))) or {}).get("status") for q in questions]
+    required = [q for q in questions if review_reasons(q)]
+    flagged_done = sum(is_reviewed(states.get(str(q.get("numero")))) for q in required)
+    total = len(questions)
+    decided = sum(status in STATUSES for status in status_of)
+    return {"total": total, "approved": status_of.count("reviewed"), "unusable": status_of.count("unusable"),
+            "badCrop": status_of.count("bad_crop"), "pending": total - decided,
+            "reviewRequired": len(required), "reviewedQuestions": flagged_done,
+            "pendingReview": len(required) - flagged_done,
+            "reviewProgress": 100 if not total else round(decided * 100 / total)}
 
 
-def save_review(exam_json: Path, question_number: int, value: dict) -> dict:
-    data = json.loads(Path(exam_json).read_text(encoding="utf-8"))
-    question = next((q for q in data.get("questoes", [])
-                     if int(q.get("numero", -1)) == question_number), None)
-    if question is None:
-        raise FileNotFoundError(f"questão {question_number} não encontrada nesta prova")
-    reviews = read_reviews(exam_json)
+def _record(value: dict, previous: dict | None) -> dict:
+    status = value.get("status")
     record = {
-        "status": value["status"],
+        "status": status if status in STATUSES else None,
         "subject": value.get("subject"),
         "topic": value.get("topic"),
         "content_id": value.get("content_id"),
@@ -93,18 +198,49 @@ def save_review(exam_json: Path, question_number: int, value: dict) -> dict:
         "related_content_ids": value.get("related_content_ids") or [],
         "note": str(value.get("note") or "").strip(),
     }
-    states = reviews.setdefault("questions", {})
-    states[str(question_number)] = record
+    if record["status"] is None:
+        record.pop("status")
+    # Sem "edits" no pedido a correção anterior continua valendo; None remove a camada.
+    if "edits" in value:
+        edits, edited_at = value["edits"], datetime.now(timezone.utc).isoformat(timespec="seconds")
+    else:
+        edits, edited_at = (previous or {}).get("edits"), (previous or {}).get("edited_at")
+    if edits:
+        record.update(edits=edits, edited_at=edited_at)
+    return record
+
+
+def _write_reviews(exam_json: Path, reviews: dict) -> None:
     target = review_file(exam_json)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(reviews, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     os.replace(temporary, target)
-    return {**record, **review_stats(data, reviews)}
 
 
-def reviewed_examples(root: Path) -> list[dict]:
-    """Return only usable, human-confirmed examples, without answer-key labels."""
+def save_reviews_bulk(exam_json: Path, values: dict[int, dict]) -> dict:
+    """Grava várias decisões numa única escrita atômica."""
+    data = json.loads(Path(exam_json).read_text(encoding="utf-8"))
+    numbers = {int(q.get("numero", -1)) for q in data.get("questoes", [])}
+    missing = sorted(set(values) - numbers)
+    if missing:
+        raise FileNotFoundError(f"questão {missing[0]} não encontrada nesta prova")
+    reviews = read_reviews(exam_json)
+    states = reviews.setdefault("questions", {})
+    for number, value in values.items():
+        states[str(number)] = _record(value, states.get(str(number)))
+    _write_reviews(exam_json, reviews)
+    return {"questions": {str(n): states[str(n)] for n in values}, **review_stats(data, reviews)}
+
+
+def save_review(exam_json: Path, question_number: int, value: dict) -> dict:
+    saved = save_reviews_bulk(exam_json, {question_number: value})
+    record = saved.pop("questions")[str(question_number)]
+    return {**record, **saved}
+
+
+def _exam_files(root: Path) -> dict[str, tuple[Path, dict]]:
+    """Um JSON por prova, preferindo o classificado."""
     candidates: dict[str, tuple[Path, dict]] = {}
     for path in Path(root).rglob("questoes*.json"):
         try:
@@ -117,14 +253,33 @@ def reviewed_examples(root: Path) -> list[dict]:
         previous = candidates.get(exam_id)
         if previous is None or ("classificado" in path.name and "classificado" not in previous[0].name):
             candidates[exam_id] = (path, data)
+    return candidates
 
+
+def bad_crop_queue(root: Path) -> list[dict]:
+    """Questões marcadas como "recorte ruim", para a fila de recorte da Fase 3."""
     rows = []
-    for exam_id, (path, data) in candidates.items():
+    for exam_id, (path, data) in sorted(_exam_files(root).items()):
+        reviews = read_reviews(path).get("questions") or {}
+        for question in data.get("questoes", []):
+            review = reviews.get(str(question.get("numero"))) or {}
+            if review.get("status") == "bad_crop":
+                rows.append({"exam": exam_id, "numero": question.get("numero"),
+                             "pagina": question.get("pagina"), "note": review.get("note") or "",
+                             "examJson": str(path)})
+    return rows
+
+
+def reviewed_examples(root: Path) -> list[dict]:
+    """Return only usable, human-confirmed examples, without answer-key labels."""
+    rows = []
+    for exam_id, (path, data) in _exam_files(root).items():
         reviews = read_reviews(path).get("questions") or {}
         shared = data.get("textos_compartilhados") or {}
         for question in data.get("questoes", []):
             number = question.get("numero")
             review = reviews.get(str(number)) or {}
+            question = apply_edits(question, review)
             if (review.get("status") != "reviewed" or not review.get("subject")
                     or not review.get("content_id")):
                 continue

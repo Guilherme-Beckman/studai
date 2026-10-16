@@ -20,12 +20,12 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import urllib.error
 import urllib.request
 
-from studai.features.answer_keys.service import exam_variant, import_key_file
+from studai.features.answer_keys.service import exam_variant, import_key_file, set_reviewed_answer
 from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
-from studai.features.questions.extractor import extract_pdf
+from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import review as question_review
 from studai.integrations.llm import (
     GeminiProvider, OllamaProvider, RotatingPoolProvider, load_dotenv, make_provider,
@@ -578,6 +578,95 @@ def _source_pdf(exam_id: str, exam_json: Path, uploaded: bytes | None = None,
     raise FileNotFoundError("PDF original não encontrado. Envie o PDF associado à prova para reprocessar.")
 
 
+def _classification_label(subject: str, content_id: str | None, topic: str = "") -> dict:
+    """Matéria e conteúdo validados contra a taxonomia, no formato gravado na revisão."""
+    if subject not in DEFAULT_TAXONOMY:
+        raise ValueError("selecione uma matéria válida")
+    content_id = canonical_content_id(str(content_id), subject=subject) if content_id else None
+    if content_id:
+        return {"subject": subject, "topic": CONTENT_INDEX[content_id]["name"], "content_id": content_id,
+                "taxonomy_version": CONTENT_TAXONOMY_VERSION,
+                "content_path": " → ".join(CONTENT_INDEX[content_id]["path"])}
+    if topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
+        raise ValueError("selecione um tópico válido para a matéria")
+    return {"subject": subject, "topic": topic}
+
+
+def _review_values(question: dict, body: dict, exam_dir: Path) -> dict:
+    status = str(body.get("status") or "")
+    if status not in (*question_review.STATUSES, "pending"):
+        raise ValueError("status deve ser reviewed, unusable, bad_crop ou pending")
+    values = {"status": status, "note": str(body.get("note") or "")}
+    if len(values["note"]) > 2000:
+        raise ValueError("a observação deve ter no máximo 2000 caracteres")
+    if status == "reviewed":
+        values.update(_classification_label(str(body.get("subject") or "").strip(), body.get("content_id"),
+                                             str(body.get("topic") or "").strip()))
+    elif status == "pending" and body.get("subject"):
+        # Correção salva sem aprovar ainda guarda a matéria/conteúdo escolhidos.
+        values.update(_classification_label(str(body["subject"]).strip(), body.get("content_id"),
+                                            str(body.get("topic") or "").strip()))
+    else:
+        values.update(subject=None, topic=None)
+    if "edits" in body:
+        values["edits"] = question_review.validate_edits(question, body["edits"], exam_dir)
+    return values
+
+
+def _bulk_approve(exam_id: str, numbers: list) -> dict:
+    """Aprova as questões escolhidas com a matéria e o conteúdo sugeridos pela IA."""
+    _, exam_json = _find_exam(exam_id)
+    data = json.loads(exam_json.read_text(encoding="utf-8"))
+    questions = {int(q.get("numero", -1)): q for q in data.get("questoes", [])}
+    reviews = question_review.read_reviews(exam_json).get("questions") or {}
+    values, skipped = {}, []
+    for raw in numbers:
+        try:
+            number = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError(f"número de questão inválido: {raw!r}") from None
+        question = questions.get(number)
+        if question is None:
+            skipped.append({"numero": number, "motivo": "questão não encontrada"})
+            continue
+        previous = reviews.get(str(number)) or {}
+        classification_data = question.get("classificacao") if isinstance(question.get("classificacao"), dict) else {}
+        subject = previous.get("subject") or question.get("materia") or classification_data.get("materia")
+        content_id = previous.get("content_id") or classification_data.get("conteudo_principal_id")
+        try:
+            if not content_id:
+                raise ValueError("sem conteúdo da taxonomia")
+            label = _classification_label(str(subject or ""), content_id)
+        except ValueError as exc:
+            skipped.append({"numero": number, "motivo": str(exc)})
+            continue
+        values[number] = {**label, "status": "reviewed", "note": previous.get("note") or "",
+                          "related_content_ids": classification_data.get("conteudos_relacionados_ids") or []}
+    result = question_review.save_reviews_bulk(exam_json, values) if values else {
+        **question_review.review_stats(data, {"questions": reviews})}
+    result.pop("questions", None)
+    job_id = _queue_review_index(exam_json) if values else None
+    return {"approved": sorted(values), "skipped": skipped, "reviewProgress": result,
+            "ragStatus": "queued" if job_id else None, "ragJobId": job_id}
+
+
+REPROCESS_ISSUES = {"alternativas_incompletas", "alternativa_vazia", "enunciado_vazio",
+                    "glifo_estranho", "formula_matematica"}
+
+
+def _can_reprocess(question: dict, review: dict | None) -> bool:
+    """Questão inutilizável, com falha de extração sinalizada, ou cujo texto salvo ainda tem
+    glifos que a extração atual reconhece (provas extraídas antes de um ajuste no decodificador)."""
+    if (review or {}).get("status") in ("unusable", "bad_crop"):
+        return True
+    if REPROCESS_ISSUES.intersection(question_review.review_reasons(question)):
+        return True
+    options = question.get("alternativas") or {}
+    texts = [question.get("enunciado") or ""] + [
+        option if isinstance(option, str) else str((option or {}).get("texto") or "") for option in options.values()]
+    return bool(CORRUPT_GLYPH_RE.search("\n".join(texts)))
+
+
 def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
                         filename: str | None, cancelled, job_id: str) -> dict:
     _, exam_json = _find_exam(exam_id)
@@ -587,11 +676,9 @@ def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
     if old_question is None:
         raise FileNotFoundError(f"questão {number} não encontrada nesta prova")
     review = question_review.read_reviews(exam_json).get("questions", {}).get(str(number), {})
-    extraction_issues = {"alternativas_incompletas", "alternativa_vazia", "enunciado_vazio",
-                         "glifo_estranho", "formula_matematica"}
-    eligible = review.get("status") == "unusable" or bool(
-        extraction_issues.intersection(question_review.review_reasons(old_question)))
-    if review.get("status") not in (None, "unusable") or not eligible:
+    # Questões já revisadas também podem ser reextraídas (p. ex. após correção de fórmulas):
+    # a revisão humana é preservada na confirmação.
+    if not _can_reprocess(old_question, review):
         raise ValueError("esta questão não tem uma falha de extração elegível para reprocessamento")
 
     workdir = QUESTION_REPROCESS_ROOT / uuid.uuid4().hex
@@ -739,8 +826,11 @@ def _confirm_question_reprocess(exam_id: str, number: int, preview_id: str) -> d
 
     # A revisão volta a ficar pendente se o classificador ou a nova extração ainda sinalizarem algo.
     record = dict(review)
-    if record.get("status") == "unusable":
+    if record.get("status") in ("unusable", "bad_crop"):
         record.pop("status", None)
+    # A nova extração passa a ser a base; correções feitas sobre a anterior deixam de valer.
+    record.pop("edits", None)
+    record.pop("edited_at", None)
     reviews.setdefault("questions", {})[str(number)] = record
     review_path = question_review.review_file(selected_path)
     review_temp = review_path.with_name(review_path.name + f".{preview_id}.tmp")
@@ -1082,6 +1172,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, [{"id": "demo", "name": "Demonstração offline"},
                                         {"id": "ollama", "name": "Ollama local"},
                                         {"id": "mock", "name": "Classificação simulada"}])
+            if path == "/api/review/bad-crops":
+                return self._json(200, question_review.bad_crop_queue(PROCESSED_ROOT))
             if path == "/api/exams":
                 return self._json(200, _list_exams())
             if path == "/api/courses":
@@ -1118,9 +1210,11 @@ class Handler(BaseHTTPRequestHandler):
                 questions = []
                 for question in data["questoes"]:
                     number = str(question.get("numero"))
-                    questions.append({**question, "review": human_reviews.get(number),
+                    questions.append({**question_review.apply_edits(question, human_reviews.get(number)),
+                                      "review": human_reviews.get(number),
                                       "reviewReasons": question_review.review_reasons(question),
-                                      "needsReview": bool(question_review.review_reasons(question))})
+                                      "needsReview": bool(question_review.review_reasons(question)),
+                                      "canReprocess": _can_reprocess(question, human_reviews.get(number))})
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
                     answer_keys = {str(row[0]): {"answer": row[1], "annulled": bool(row[2])}
@@ -1210,37 +1304,20 @@ class Handler(BaseHTTPRequestHandler):
             if not match:
                 return self._json(404, {"error": "rota não encontrada"})
             exam_id, number = match.group(1), int(match.group(2))
-            _, exam_json = _find_exam(exam_id)
+            summary, exam_json = _find_exam(exam_id)
             body = self._read_json()
-            status = str(body.get("status") or "")
-            if status not in {"reviewed", "unusable"}:
-                raise ValueError("status deve ser reviewed ou unusable")
             data = json.loads(exam_json.read_text(encoding="utf-8"))
             question = next((q for q in data.get("questoes", [])
                              if int(q.get("numero", -1)) == number), None)
             if question is None:
                 raise FileNotFoundError(f"questão {number} não encontrada nesta prova")
-            if not question_review.review_reasons(question):
-                raise ValueError("esta questão não está marcada para revisão pela IA")
-            values = {"status": status, "note": str(body.get("note") or "")}
-            if len(values["note"]) > 2000:
-                raise ValueError("a observação deve ter no máximo 2000 caracteres")
-            if status == "reviewed":
-                subject = str(body.get("subject") or "").strip()
-                topic = str(body.get("topic") or "").strip()
-                if subject not in DEFAULT_TAXONOMY:
-                    raise ValueError("selecione uma matéria válida")
-                content_id = canonical_content_id(str(body.get("content_id") or ""), subject=subject) \
-                    if body.get("content_id") else None
-                if content_id:
-                    topic = CONTENT_INDEX[content_id]["name"]
-                    values.update(content_id=content_id, taxonomy_version=CONTENT_TAXONOMY_VERSION,
-                                  content_path=" → ".join(CONTENT_INDEX[content_id]["path"]))
-                elif topic not in DEFAULT_TOPIC_TAXONOMY.get(subject, []):
-                    raise ValueError("selecione um tópico válido para a matéria")
-                values.update(subject=subject, topic=topic)
-            else:
-                values.update(subject=None, topic=None)
+            values = _review_values(question, body, exam_json.parent)
+            if "answer" in body:
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    set_reviewed_answer(db, summary["id"], number, str(body.get("answer") or ""))
+                finally:
+                    db.close()
             saved = question_review.save_review(exam_json, number, values)
             job_id = _queue_review_index(exam_json)
             return self._json(200, {**saved, "ragStatus": "queued", "ragJobId": job_id})
@@ -1255,6 +1332,20 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
         try:
+            bulk_match = re.fullmatch(r"/api/exams/([^/]+)/reviews/bulk", path)
+            if bulk_match:
+                numbers = self._read_json().get("numbers")
+                if not isinstance(numbers, list) or not numbers:
+                    raise ValueError("informe as questões em numbers")
+                return self._json(200, _bulk_approve(bulk_match.group(1), numbers))
+            image_match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/images", path)
+            if image_match:
+                _, exam_json = _find_exam(image_match.group(1))
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > question_review.MAX_IMAGE_BYTES:
+                    raise ValueError("a imagem deve ter até 5 MB")
+                return self._json(201, {"path": question_review.save_image(
+                    exam_json.parent, self.rfile.read(length) if length else b"")})
             reprocess_match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/reprocess", path)
             if reprocess_match:
                 exam_id, number = reprocess_match.group(1), int(reprocess_match.group(2))

@@ -145,9 +145,11 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
                 excluded["invalid_number"] += 1
                 continue
             identity = (source_id, number)
-            if (reviewed_states.get(str(number)) or {}).get("status") == "unusable":
-                excluded["unusable"] += 1
+            status = (reviewed_states.get(str(number)) or {}).get("status")
+            if status in ("unusable", "bad_crop"):
+                excluded[status] += 1
                 continue
+            question = question_review.apply_edits(question, reviewed_states.get(str(number)))
             if identity in seen_questions:
                 excluded["duplicate_question"] += 1
                 continue
