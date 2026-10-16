@@ -215,6 +215,23 @@ def import_answer_key(db: sqlite3.Connection, pdf_path: Path, questions_path: Pa
             "unkeyed_questions": sorted(set(questions) - set(parsed))}
 
 
+def set_reviewed_answer(db: sqlite3.Connection, source_id: str, number: int, answer: str) -> None:
+    """Gabarito corrigido na revisão humana: letra A–E, "*" para anulada ou "" para remover."""
+    answer = str(answer or "").strip().upper()
+    if answer and (len(answer) != 1 or answer not in "ABCDE*"):
+        raise ValueError("gabarito deve ser A, B, C, D, E ou * (anulada)")
+    with db:
+        if not answer:
+            db.execute("DELETE FROM answer_keys WHERE source_id=? AND question_number=?", (source_id, number))
+            return
+        db.execute("""INSERT INTO answer_keys(source_id,question_number,answer,source_pdf,imported_at,is_annulled,variant,association_method)
+            VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(source_id,question_number) DO UPDATE SET
+            answer=excluded.answer,imported_at=excluded.imported_at,is_annulled=excluded.is_annulled,
+            association_method=excluded.association_method""",
+                   (source_id, number, answer, "revisao", datetime.now(timezone.utc).isoformat(),
+                    int(answer == "*"), None, "review"))
+
+
 def parse_answer_key(path: Path, variant: str | None = None) -> dict[int, str]:
     """Lê gabarito PDF ou JSON no formato {número: alternativa}."""
     if path.suffix.lower() == ".pdf":

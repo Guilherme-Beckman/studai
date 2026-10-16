@@ -250,11 +250,119 @@ async function openExamReview(examId) {
   workspace.innerHTML = `<div class="loading-card">Carregando questões da prova…</div>`;
   try {
     currentExamReview = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+    loadReviewFilters(examId);
+    reviewSelection = new Set();
     renderExamReview();
     workspace.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     workspace.innerHTML = `<div class="exam-quiz-error">Não foi possível abrir a prova: ${escapeHtml(error.message)}</div>`;
   }
+}
+
+const REVIEW_STATUS_LABELS = { pending: "Pendente", reviewed: "Aprovada", unusable: "Inutilizável", bad_crop: "Recorte ruim" };
+const REVIEW_FILTER_DEFAULTS = { status: "", reason: "", subject: "", content: "", lowConfidence: false, hasImage: false, noAnswer: false, edited: false, query: "" };
+const LOW_CONFIDENCE = 0.7;
+let reviewFilters = { ...REVIEW_FILTER_DEFAULTS };
+let reviewSelection = new Set();
+
+function reviewFilterKey(examId) { return `studai-review-filters:${examId}`; }
+
+function loadReviewFilters(examId) {
+  try { reviewFilters = { ...REVIEW_FILTER_DEFAULTS, ...JSON.parse(localStorage.getItem(reviewFilterKey(examId)) || "{}") }; }
+  catch { reviewFilters = { ...REVIEW_FILTER_DEFAULTS }; }
+}
+
+function storeReviewFilters(examId) {
+  try { localStorage.setItem(reviewFilterKey(examId), JSON.stringify(reviewFilters)); } catch { /* preferência só deste navegador */ }
+}
+
+function reviewStatusOf(question) { return question.review?.status || "pending"; }
+
+// Matéria e conteúdo vigentes: a escolha humana (aprovada ou salva sem aprovar) vale sobre a da IA.
+function questionLabel(question) {
+  const review = question.review || {};
+  const classification = question.classificacao || {};
+  if (review.subject) return { subject: review.subject, contentId: review.content_id || "", path: review.content_path || review.topic || "" };
+  return { subject: question.materia || classification.materia || "", contentId: classification.conteudo_principal_id || "",
+    path: classification.caminho_conteudo || classification.assunto || "" };
+}
+
+function questionHasImages(question) {
+  return Boolean((question.figuras_enunciado || []).length ||
+    Object.values(question.alternativas || {}).some(option => typeof option === "object" && option?.figuras?.length));
+}
+
+function questionMatchesFilters(question) {
+  const f = reviewFilters;
+  const label = questionLabel(question);
+  const confidence = Number(question.classificacao?.confianca);
+  if (f.status && reviewStatusOf(question) !== f.status) return false;
+  if (f.reason && !(question.reviewReasons || []).includes(f.reason)) return false;
+  if (f.subject && label.subject !== f.subject) return false;
+  if (f.content && label.path !== f.content) return false;
+  if (f.lowConfidence && !(Number.isFinite(confidence) && confidence < LOW_CONFIDENCE)) return false;
+  if (f.hasImage && !questionHasImages(question)) return false;
+  if (f.noAnswer && currentExamReview.answerKeys?.[String(question.numero)]) return false;
+  if (f.edited && !question.review?.edits) return false;
+  const query = f.query.trim().toLocaleLowerCase("pt-BR");
+  if (query) {
+    if (/^\d+$/.test(query)) return String(question.numero) === query;
+    const options = Object.values(question.alternativas || {}).map(option => typeof option === "string" ? option : option?.texto || "");
+    const haystack = [question.enunciado, label.path, question.review?.note, ...options].join(" ").toLocaleLowerCase("pt-BR");
+    if (!haystack.includes(query)) return false;
+  }
+  return true;
+}
+
+function reviewFilterBar(questions) {
+  const f = reviewFilters;
+  const reasons = [...new Set(questions.flatMap(question => question.reviewReasons || []))].sort();
+  const subjects = [...new Set(questions.map(question => questionLabel(question).subject).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const contents = [...new Set(questions.filter(question => !f.subject || questionLabel(question).subject === f.subject)
+    .map(question => questionLabel(question).path).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const option = (value, label, selected) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  const check = (key, label) => `<label class="check-row review-filter-check"><input type="checkbox" data-review-filter="${key}" ${f[key] ? "checked" : ""}>${escapeHtml(label)}</label>`;
+  return `<div class="review-filters" role="search">
+    <label>Buscar<input type="search" data-review-filter="query" value="${escapeHtml(f.query)}" placeholder="Número ou trecho do texto"></label>
+    <label>Status<select data-review-filter="status">${option("", "Todos", f.status)}${Object.entries(REVIEW_STATUS_LABELS).map(([value, label]) => option(value, label, f.status)).join("")}</select></label>
+    <label>Sinalização<select data-review-filter="reason">${option("", "Todas", f.reason)}${reasons.map(reason => option(reason, reviewReasonLabel(reason), f.reason)).join("")}</select></label>
+    <label>Matéria<select data-review-filter="subject">${option("", "Todas", f.subject)}${subjects.map(subject => option(subject, subject, f.subject)).join("")}</select></label>
+    <label>Conteúdo<select data-review-filter="content">${option("", "Todos", f.content)}${contents.map(path => option(path, path, f.content)).join("")}</select></label>
+    <div class="review-filter-checks">${check("lowConfidence", `Confiança IA < ${Math.round(LOW_CONFIDENCE * 100)}%`)}${check("hasImage", "Com imagem")}${check("noAnswer", "Sem gabarito")}${check("edited", "Editadas")}</div>
+    <div class="review-filter-summary"><span data-review-visible></span><button class="text-button" type="button" data-clear-review-filters>Limpar filtros</button></div>
+  </div>
+  <div class="review-bulk-bar"><label class="check-row"><input type="checkbox" data-select-visible>Selecionar visíveis</label><span data-selection-count></span><button class="button button-primary" type="button" data-bulk-approve disabled>Aprovar selecionadas</button></div>`;
+}
+
+function applyReviewFilters() {
+  const workspace = $("#exam-question-workspace");
+  const questions = currentExamReview?.questions || [];
+  let visible = 0;
+  questions.forEach(question => {
+    const card = $(`[data-question-card="${question.numero}"]`, workspace);
+    const show = questionMatchesFilters(question);
+    if (card) card.classList.toggle("hidden", !show);
+    if (show) visible += 1;
+  });
+  const counter = $("[data-review-visible]", workspace);
+  if (counter) counter.textContent = `${visible} de ${questions.length} questões visíveis`;
+  updateSelectionBar();
+}
+
+function visibleReviewNumbers() {
+  return (currentExamReview?.questions || []).filter(questionMatchesFilters).map(question => String(question.numero));
+}
+
+function updateSelectionBar() {
+  const workspace = $("#exam-question-workspace");
+  const count = reviewSelection.size;
+  const label = $("[data-selection-count]", workspace);
+  if (label) label.textContent = count ? `${count} selecionada(s)` : "Nenhuma selecionada";
+  const button = $("[data-bulk-approve]", workspace);
+  if (button) button.disabled = !count;
+  const all = $("[data-select-visible]", workspace);
+  const visible = visibleReviewNumbers();
+  if (all) all.checked = visible.length > 0 && visible.every(number => reviewSelection.has(number));
 }
 
 function renderExamReview() {
@@ -263,50 +371,81 @@ function renderExamReview() {
   if (!data) return;
   const { exam, questions, sharedTexts = {}, reviewProgress = {}, ragStatus = {} } = data;
   const progress = Number(reviewProgress.reviewProgress ?? exam.reviewProgress ?? 100);
-  const ragLabel = ragStatus.status === "ready" ? `${ragStatus.examples || 0} exemplo(s) no RAG local` :
+  const ragLabel = ragStatus.status === "ready" ? `${ragStatus.examples || 0} exemplo(s) aprovados no RAG local` :
     ragStatus.status === "indexing" || ragStatus.status === "queued" ? "Indexação local em andamento" :
-      ragStatus.status === "pending" ? `Índice pendente: ${ragStatus.error || "Ollama de embeddings indisponível"}` : "Nenhum exemplo revisado no índice";
+      ragStatus.status === "pending" ? `Índice pendente: ${ragStatus.error || "Ollama de embeddings indisponível"}` : "Nenhum exemplo aprovado no índice";
+  const known = new Set(questions.map(question => String(question.numero)));
+  reviewSelection = new Set([...reviewSelection].filter(number => known.has(number)));
   const cards = questions.map(question => renderReviewQuestion(exam.id, question, sharedTexts)).join("");
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA E GABARITO</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} questões sinalizadas revisadas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
-    <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="workspace-meta">${reviewProgress.pendingReview ?? 0} questão(ões) sinalizadas pendentes · ${escapeHtml(ragLabel)}</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
+  const counter = (key, label, cls = "") => `<span class="review-count ${cls}"><strong>${reviewProgress[key] ?? 0}</strong>${label}</span>`;
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA E GABARITO</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
+    <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="review-counts">${counter("approved", "aprovadas", "is-approved")}${counter("pending", "pendentes", "is-pending")}${counter("unusable", "inutilizáveis")}${counter("badCrop", "recorte ruim", "is-bad-crop")}</div><div class="workspace-meta">${escapeHtml(ragLabel)} · só questões aprovadas entram no RAG</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
+    ${questions.length ? reviewFilterBar(questions) : ""}
     <div class="exam-review-list">${cards || `<div class="loading-card">Esta prova não contém questões extraídas.</div>`}</div>`;
   bindExamReviewActions();
+  applyReviewFilters();
 }
 
 function reviewReasonLabel(reason) {
-  return ({ classificacao_baixa_confianca: "Baixa confiança", topico_revisar: "Tópico sem correspondência", erro_classificacao: "Erro de classificação", classificacao_ausente: "Sem classificação", formula_matematica: "Fórmula pode ter sido extraída incorretamente", glifo_estranho: "Símbolo incomum na extração", alternativas_incompletas: "Alternativas incompletas", enunciado_vazio: "Enunciado vazio", alternativa_vazia: "Alternativa vazia" })[reason] || reason.replaceAll("_", " ");
+  return ({ classificacao_baixa_confianca: "Baixa confiança", topico_revisar: "Tópico sem correspondência", erro_classificacao: "Erro de classificação", classificacao_ausente: "Sem classificação", subconteudo_pendente: "Subconteúdo pendente", formula_matematica: "Fórmula pode ter sido extraída incorretamente", glifo_estranho: "Símbolo incomum na extração", alternativas_incompletas: "Alternativas incompletas", enunciado_vazio: "Enunciado vazio", alternativa_vazia: "Alternativa vazia" })[reason] || reason.replaceAll("_", " ");
+}
+
+function figureEditorItems(examId, paths) {
+  return (paths || []).map(path => `<span class="review-figure" data-figure-path="${escapeHtml(path)}"><img src="${examAssetUrl(examId, path)}" alt="Figura" loading="lazy"><button type="button" class="blank-button" data-remove-figure title="Remover figura">Remover</button></span>`).join("");
+}
+
+function figureEditor(examId, number, target, paths) {
+  return `<div class="review-figures" data-figures="${escapeHtml(target)}">${figureEditorItems(examId, paths)}<label class="review-figure-upload">+ Enviar imagem<input type="file" accept="image/png,image/jpeg,image/webp" data-upload-figure="${escapeHtml(target)}" data-upload-question="${number}"></label></div>`;
+}
+
+function renderReviewEditor(examId, question) {
+  const number = String(question.numero);
+  const review = question.review || {};
+  const label = questionLabel(question);
+  const answer = currentExamReview.answerKeys?.[number]?.answer || "";
+  const letters = [...new Set([...Object.keys(question.alternativas || {}), ..."ABCDE"])].sort();
+  const options = Object.fromEntries(Object.entries(question.alternativas || {}));
+  return `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar questão ${escapeHtml(number)}</strong><span>As correções ficam salvas na revisão; a extração original do PDF é mantida.</span></div>
+    <div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}"><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${item === label.subject ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><label>Conteúdo principal<select data-review-topic="${number}"><option value="">Selecione uma matéria primeiro</option></select></label></div>
+    <label>Gabarito<select data-review-answer="${number}"><option value="" ${answer ? "" : "selected"}>Sem gabarito</option>${"ABCDE".split("").map(letter => `<option value="${letter}" ${answer === letter ? "selected" : ""}>${letter}</option>`).join("")}<option value="*" ${answer === "*" ? "selected" : ""}>Anulada</option></select></label>
+    <label>Enunciado<textarea data-edit-stem rows="5">${escapeHtml(question.enunciado || "")}</textarea></label>
+    ${figureEditor(examId, number, "stem", question.figuras_enunciado)}
+    <div class="review-edit-options">${letters.map(letter => { const option = options[letter]; const text = typeof option === "string" ? option : option?.texto || ""; const figures = typeof option === "object" ? option?.figuras : []; return `<div class="review-edit-option" data-edit-option="${letter}"><span class="exam-option-letter">${letter}</span><div><textarea rows="2" data-edit-option-text placeholder="${option ? "" : "Alternativa ausente na extração"}">${escapeHtml(text)}</textarea>${figureEditor(examId, number, `option:${letter}`, figures)}</div></div>`; }).join("")}</div>
+    <label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label>
+    <div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar e aprovar</button><button class="button button-secondary" type="button" data-save-draft="${number}">Salvar sem aprovar</button>${review.edits ? `<button class="blank-button" type="button" data-discard-edits="${number}">Descartar correções</button>` : ""}</div></form>`;
 }
 
 function renderReviewQuestion(examId, question, sharedTexts) {
   const number = String(question.numero);
   const review = question.review || {};
-  const reviewed = review.status === "reviewed";
-  const unusable = review.status === "unusable";
-  const needsReview = Boolean(question.needsReview);
+  const status = reviewStatusOf(question);
+  const unusable = status === "unusable";
   const reprocessReasons = new Set([...(question.revisar || []), ...(question.reviewReasons || [])]);
-  const canReprocess = unusable || (!reviewed && ["alternativas_incompletas", "alternativa_vazia", "enunciado_vazio", "glifo_estranho", "formula_matematica"].some(reason => reprocessReasons.has(reason)));
+  const canReprocess = question.canReprocess ?? (unusable || ["alternativas_incompletas", "alternativa_vazia", "enunciado_vazio", "glifo_estranho", "formula_matematica"].some(reason => reprocessReasons.has(reason)));
   const classification = question.classificacao || {};
-  const subject = reviewed ? review.subject : (question.materia || classification.materia || "Não classificada");
-  const topic = reviewed ? (review.content_path || review.topic) : (classification.caminho_conteudo || classification.assunto || "Tópico não definido");
+  const label = questionLabel(question);
   const confidence = Number.isFinite(Number(classification.confianca)) ? `${Math.round(Number(classification.confianca) * 100)}%` : "—";
   const shared = question.texto_id != null ? sharedTexts[String(question.texto_id)] : null;
   const sharedText = typeof shared === "string" ? shared : shared?.texto;
   const sharedImages = shared && typeof shared === "object" ? shared.figuras : [];
   const options = Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b));
   const reasons = (question.reviewReasons || []).map(reason => `<span class="review-reason-tag">${escapeHtml(reviewReasonLabel(reason))}</span>`).join("");
-  const state = unusable ? `<span class="badge review-unusable">Inutilizável</span>` : reviewed ? `<span class="badge">Revisada</span>` : needsReview ? `<span class="badge pending">Precisa revisar</span>` : `<span class="badge">Sem pendências</span>`;
-  const panel = needsReview ? `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar classificação</strong><span>Confirme matéria e conteúdo principal; o caminho mostra a posição na árvore.</span></div><div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}" required><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${review.subject === item || (!review.subject && item === classification.materia) ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><label>Conteúdo principal<select data-review-topic="${number}" required><option value="">Selecione uma matéria primeiro</option></select></label></div><label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label><div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar revisão</button><button class="button button-danger" type="button" data-mark-unusable="${number}">Marcar como inutilizável</button></div></form>` : "";
+  const answer = currentExamReview.answerKeys?.[number];
+  const stateClass = { reviewed: "", pending: "pending", unusable: "review-unusable", bad_crop: "review-bad-crop" }[status];
+  const state = `<span class="badge ${stateClass}">${REVIEW_STATUS_LABELS[status]}</span>${review.edits ? `<span class="badge review-edited" title="Corrigida na revisão">Editada</span>` : ""}`;
   const imagePaths = question.figuras_enunciado || [];
-  const display = questionDisplayState(question);
+  // Texto corrigido à mão é exibido mesmo que a extração original tenha sido sinalizada.
+  const display = review.edits ? { showSource: false, sourceImages: [], showStem: true, showAlternativeText: true } : questionDisplayState(question);
   const hasInlineImages = imagePaths.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
   const fallbackImages = !display.showSource && !hasInlineImages ? (question.imagens_completas || []) : [];
-  return `<article class="exam-review-question" data-question-card="${number}"><div class="exam-review-question-top"><div><strong>Questão ${escapeHtml(number)}</strong><span class="exam-review-subject">${escapeHtml(subject)} · ${escapeHtml(topic)}</span></div><div class="exam-review-state">${state}<span class="confidence-chip">Confiança IA: ${confidence}</span></div></div>
+  const actions = `<div class="exam-review-actions">${status !== "reviewed" ? `<button class="button button-primary" type="button" data-quick-approve="${number}" title="Aprova com a matéria e o conteúdo mostrados">✓ Aprovar</button>` : ""}<button class="button button-secondary" type="button" data-toggle-review="${number}">Editar</button>${status !== "bad_crop" ? `<button class="button button-secondary" type="button" data-set-status="bad_crop" data-status-question="${number}">Recorte ruim</button>` : ""}${status !== "unusable" ? `<button class="button button-danger" type="button" data-set-status="unusable" data-status-question="${number}">Inutilizável</button>` : ""}${status !== "pending" ? `<button class="blank-button" type="button" data-set-status="pending" data-status-question="${number}">Voltar para pendente</button>` : ""}</div>`;
+  return `<article class="exam-review-question review-status-${status}" data-question-card="${number}"><div class="exam-review-question-top"><div><label class="check-row review-select"><input type="checkbox" data-select-question="${number}" ${reviewSelection.has(number) ? "checked" : ""}><strong>Questão ${escapeHtml(number)}</strong></label><span class="exam-review-subject">${escapeHtml(label.subject || "Não classificada")} · ${escapeHtml(label.path || "Tópico não definido")}</span></div><div class="exam-review-state">${state}<span class="confidence-chip">Confiança IA: ${confidence}</span><span class="confidence-chip">Gabarito: ${answer ? (answer.annulled ? "anulada" : escapeHtml(answer.answer)) : "—"}</span></div></div>
     ${reasons ? `<div class="review-reasons">${reasons}</div>` : ""}
     ${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(examId, sharedImages, "passage-image")}</div>` : ""}
     <div class="question-body exam-prompt">${display.showStem ? stemMarkup(question, paths => examImageMarkup(examId, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(examId, imagePaths)}${renderSourceQuestionImage(examId, display.sourceImages)}${fallbackImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(examId, fallbackImages)}</details>` : ""}</div>
     <div class="exam-review-options">${options.map(([letter, option]) => { const text = display.showAlternativeText ? (typeof option === "string" ? option : (option?.texto || "Alternativa apresentada como imagem")) : "Alternativa apresentada na imagem da questão"; const figures = typeof option === "object" ? option.figuras : []; return `<div class="exam-review-option"><span class="exam-option-letter">${escapeHtml(letter)}</span><div>${escapeHtml(text)}${examImageMarkup(examId, figures, "option-image")}</div></div>`; }).join("")}</div>
     ${review.note ? `<p class="review-saved-note"><strong>Observação:</strong> ${escapeHtml(review.note)}</p>` : ""}
-    ${needsReview ? `<div class="exam-review-actions"><button class="text-button" type="button" data-toggle-review="${number}">${reviewed || unusable ? "Editar revisão" : "Revisar questão"}</button></div>${panel}` : ""}
+    ${actions}${renderReviewEditor(examId, question)}
     ${canReprocess ? `<div class="reprocess-actions"><button class="button button-primary" type="button" data-reprocess="${number}">Reprocessar detalhadamente pelo PDF</button><label class="reprocess-upload">PDF ausente ou diferente? Enviar PDF<input type="file" accept="application/pdf,.pdf" data-reprocess-file="${number}"></label></div><div data-reprocess-preview="${number}"></div>` : ""}</article>`;
 }
 
@@ -318,37 +457,163 @@ function refreshReviewTopic(number, selectedTopic = "") {
   topicSelect.innerHTML = `<option value="">Selecione</option>` + contents.map(content => `<option value="${escapeHtml(content.id)}" ${content.id === selectedTopic ? "selected" : ""}>${escapeHtml(content.path)}</option>`).join("");
 }
 
+function figurePaths(container) {
+  return $$("[data-figure-path]", container).map(item => item.dataset.figurePath);
+}
+
+// Só manda a camada de correções quando algo mudou em relação ao que está exibido.
+function collectReviewEdits(form, question) {
+  const stemFigures = figurePaths($('[data-figures="stem"]', form));
+  const alternatives = {};
+  $$("[data-edit-option]", form).forEach(row => {
+    const letter = row.dataset.editOption;
+    const text = $("[data-edit-option-text]", row).value;
+    const figures = figurePaths($(`[data-figures="option:${letter}"]`, row));
+    if (text.trim() || figures.length || question.alternativas?.[letter]) alternatives[letter] = { texto: text, figuras: figures };
+  });
+  const edits = { enunciado: $("[data-edit-stem]", form).value, figuras_enunciado: stemFigures, alternativas: alternatives };
+  const current = { enunciado: question.enunciado || "", figuras_enunciado: question.figuras_enunciado || [],
+    alternativas: Object.fromEntries(Object.entries(question.alternativas || {}).map(([letter, option]) =>
+      [letter, { texto: typeof option === "string" ? option : option?.texto || "", figuras: typeof option === "object" ? option?.figuras || [] : [] }])) };
+  const sameOptions = Object.keys({ ...alternatives, ...current.alternativas }).every(letter =>
+    JSON.stringify(alternatives[letter] || null) === JSON.stringify(current.alternativas[letter] || null));
+  const changed = edits.enunciado !== current.enunciado || JSON.stringify(stemFigures) !== JSON.stringify(current.figuras_enunciado) || !sameOptions;
+  return changed ? edits : undefined;
+}
+
+function reviewPayloadFromForm(form, status) {
+  const number = form.dataset.reviewForm;
+  const question = currentExamReview.questions.find(q => String(q.numero) === number);
+  const payload = { status, subject: $(`[data-review-subject="${number}"]`, form).value || undefined,
+    content_id: $(`[data-review-topic="${number}"]`, form).value || undefined, note: $(`[data-review-note="${number}"]`, form).value };
+  const edits = collectReviewEdits(form, question);
+  if (edits) payload.edits = edits;
+  const answer = $(`[data-review-answer="${number}"]`, form).value;
+  if (answer !== (currentExamReview.answerKeys?.[number]?.answer || "")) payload.answer = answer;
+  return payload;
+}
+
+async function uploadReviewFigure(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const examId = currentExamReview.exam.id;
+  try {
+    const { path } = await api(`/api/exams/${encodeURIComponent(examId)}/questions/${encodeURIComponent(input.dataset.uploadQuestion)}/images`,
+      { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file });
+    input.closest(".review-figure-upload").insertAdjacentHTML("beforebegin", figureEditorItems(examId, [path]));
+    bindFigureRemoval(input.closest("[data-figures]"));
+  } catch (error) { toast(error.message, true); }
+  input.value = "";
+}
+
+function bindFigureRemoval(root) {
+  $$("[data-remove-figure]", root).forEach(button => { button.onclick = () => button.closest("[data-figure-path]").remove(); });
+}
+
 function bindExamReviewActions() {
   const workspace = $("#exam-question-workspace");
+  const examId = currentExamReview.exam.id;
   $("[data-close-exam-review]", workspace)?.addEventListener("click", () => {
-    workspace.classList.add("hidden"); currentExamReview = null;
+    workspace.classList.add("hidden"); currentExamReview = null; reviewSelection = new Set();
   });
-  $("[data-start-quiz]", workspace)?.addEventListener("click", () => openExamQuiz(currentExamReview.exam.id));
-  $("[data-retry-rag]", workspace)?.addEventListener("click", () => retryReviewIndex(currentExamReview.exam.id));
+  $("[data-start-quiz]", workspace)?.addEventListener("click", () => openExamQuiz(examId));
+  $("[data-retry-rag]", workspace)?.addEventListener("click", () => retryReviewIndex(examId));
+  $$("[data-review-filter]", workspace).forEach(control => control.addEventListener(control.type === "search" ? "input" : "change", () => {
+    const key = control.dataset.reviewFilter;
+    reviewFilters[key] = control.type === "checkbox" ? control.checked : control.value;
+    if (key === "subject") reviewFilters.content = "";
+    storeReviewFilters(examId);
+    if (key === "subject") { renderExamReview(); return; }  // a lista de conteúdos depende da matéria
+    applyReviewFilters();
+  }));
+  $("[data-clear-review-filters]", workspace)?.addEventListener("click", () => {
+    reviewFilters = { ...REVIEW_FILTER_DEFAULTS }; storeReviewFilters(examId); renderExamReview();
+  });
+  $$("[data-select-question]", workspace).forEach(box => box.addEventListener("change", () => {
+    if (box.checked) reviewSelection.add(box.dataset.selectQuestion); else reviewSelection.delete(box.dataset.selectQuestion);
+    updateSelectionBar();
+  }));
+  $("[data-select-visible]", workspace)?.addEventListener("change", event => {
+    const visible = visibleReviewNumbers();
+    visible.forEach(number => event.target.checked ? reviewSelection.add(number) : reviewSelection.delete(number));
+    visible.forEach(number => { const box = $(`[data-select-question="${number}"]`, workspace); if (box) box.checked = event.target.checked; });
+    updateSelectionBar();
+  });
+  $("[data-bulk-approve]", workspace)?.addEventListener("click", () => bulkApproveQuestions([...reviewSelection]));
+  $$("[data-quick-approve]", workspace).forEach(button => button.addEventListener("click", () => {
+    const number = button.dataset.quickApprove;
+    const question = currentExamReview.questions.find(q => String(q.numero) === number);
+    const label = questionLabel(question);
+    if (!label.subject || !label.contentId) {
+      toast("Escolha matéria e conteúdo antes de aprovar.", true);
+      $(`[data-toggle-review="${number}"]`, workspace)?.click();
+      return;
+    }
+    saveQuestionReview(number, { status: "reviewed", subject: label.subject, content_id: label.contentId, note: question.review?.note || "" });
+  }));
+  $$("[data-set-status]", workspace).forEach(button => button.addEventListener("click", () => {
+    const number = button.dataset.statusQuestion;
+    const question = currentExamReview.questions.find(q => String(q.numero) === number);
+    saveQuestionReview(number, { status: button.dataset.setStatus, note: $(`[data-review-note="${number}"]`, workspace)?.value ?? question?.review?.note ?? "" });
+  }));
   $$('[data-toggle-review]', workspace).forEach(button => button.addEventListener("click", () => {
     const number = button.dataset.toggleReview;
     const form = $(`[data-review-form="${number}"]`, workspace);
     form.classList.toggle("hidden");
     const question = currentExamReview.questions.find(q => String(q.numero) === number);
-    refreshReviewTopic(number, question?.review?.content_id || question?.classificacao?.conteudo_principal_id || "");
+    refreshReviewTopic(number, questionLabel(question).contentId);
   }));
   $$('[data-review-subject]', workspace).forEach(select => select.addEventListener("change", () => refreshReviewTopic(select.dataset.reviewSubject)));
-  $$('[data-review-form]', workspace).forEach(form => form.addEventListener("submit", event => {
-    event.preventDefault();
-    const number = form.dataset.reviewForm;
-    saveQuestionReview(number, { status: "reviewed", subject: $(`[data-review-subject="${number}"]`, form).value,
-      content_id: $(`[data-review-topic="${number}"]`, form).value, note: $(`[data-review-note="${number}"]`, form).value });
+  $$('[data-review-form]', workspace).forEach(form => {
+    bindFigureRemoval(form);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      const payload = reviewPayloadFromForm(form, "reviewed");
+      if (!payload.subject || !payload.content_id) { toast("Escolha matéria e conteúdo para aprovar.", true); return; }
+      saveQuestionReview(form.dataset.reviewForm, payload);
+    });
+  });
+  $$("[data-save-draft]", workspace).forEach(button => button.addEventListener("click", () => {
+    const form = button.closest("[data-review-form]");
+    const question = currentExamReview.questions.find(q => String(q.numero) === form.dataset.reviewForm);
+    const status = reviewStatusOf(question);
+    const payload = reviewPayloadFromForm(form, status);
+    if (status === "reviewed" && (!payload.subject || !payload.content_id)) { toast("Questão aprovada precisa de matéria e conteúdo.", true); return; }
+    if (payload.subject && !payload.content_id) delete payload.subject;
+    saveQuestionReview(form.dataset.reviewForm, payload);
   }));
-  $$('[data-mark-unusable]', workspace).forEach(button => button.addEventListener("click", () => {
-    const number = button.dataset.markUnusable;
-    saveQuestionReview(number, { status: "unusable", note: $(`[data-review-note="${number}"]`, workspace).value });
+  $$("[data-discard-edits]", workspace).forEach(button => button.addEventListener("click", () => {
+    const number = button.dataset.discardEdits;
+    const question = currentExamReview.questions.find(q => String(q.numero) === number);
+    const label = questionLabel(question);
+    if (!window.confirm("Descartar as correções e voltar ao texto extraído do PDF?")) return;
+    saveQuestionReview(number, { status: reviewStatusOf(question), subject: label.subject || undefined,
+      content_id: label.contentId || undefined, note: question.review?.note || "", edits: null });
   }));
+  $$("[data-upload-figure]", workspace).forEach(input => input.addEventListener("change", () => uploadReviewFigure(input)));
   $$('[data-reprocess]', workspace).forEach(button => button.addEventListener("click", () =>
     reprocessUnusableQuestion(button.dataset.reprocess)));
   $$('[data-reprocess-file]', workspace).forEach(input => input.addEventListener("change", () => {
     const file = input.files?.[0];
     if (file) reprocessUnusableQuestion(input.dataset.reprocessFile, file);
   }));
+}
+
+async function bulkApproveQuestions(numbers) {
+  if (!numbers.length) return;
+  const examId = currentExamReview.exam.id;
+  if (!window.confirm(`Aprovar ${numbers.length} questão(ões) com a matéria e o conteúdo mostrados?`)) return;
+  try {
+    const result = await api(`/api/exams/${encodeURIComponent(examId)}/reviews/bulk`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ numbers: numbers.map(Number) }),
+    });
+    reviewSelection = new Set(result.skipped.map(item => String(item.numero)));
+    currentExamReview = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+    renderExamReview();
+    await refreshExams();
+    const skipped = result.skipped.length ? ` ${result.skipped.length} ficaram de fora (seguem selecionadas): ${result.skipped.map(item => `Q${item.numero} – ${item.motivo}`).join("; ")}.` : "";
+    toast(`${result.approved.length} questão(ões) aprovada(s).${skipped}`, Boolean(result.skipped.length));
+  } catch (error) { toast(error.message, true); }
 }
 
 async function reprocessUnusableQuestion(number, file = null) {
@@ -444,7 +709,7 @@ async function openExamQuiz(examId) {
     const storageKey = `studai-exam-answers:${examId}`;
     let answers = {};
     try { answers = JSON.parse(sessionStorage.getItem(storageKey) || "{}"); } catch { answers = {}; }
-    currentExamQuiz = { ...data, questions: data.questions.filter(question => question.review?.status !== "unusable"), index: 0, selected: null, answers, storageKey };
+    currentExamQuiz = { ...data, questions: data.questions.filter(question => !["unusable", "bad_crop"].includes(question.review?.status)), index: 0, selected: null, answers, storageKey };
     renderExamQuiz();
     workspace.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
