@@ -105,6 +105,13 @@ class Row:
     col: int
     fonts: set[str] = field(default_factory=set)
     parts: list[tuple[pymupdf.Rect, str]] = field(default_factory=list)
+    n_math: int = 0                 # glifos de fonte matemática (para achar fórmulas em destaque)
+    n_chars: int = 0
+    display: bool = False           # fórmula em destaque (recuada e quase só matemática)
+    short: bool = False             # termina antes da margem direita: a próxima linha abre parágrafo
+    indent: bool = False            # começa recuada: abre parágrafo
+    size: float = 0.0               # corpo dominante (fonte/legenda costumam ser menores)
+    ink: pymupdf.Rect | None = None # área desenhada, com índices soltos (recorte de fórmula)
 
 
 @dataclass
@@ -352,6 +359,9 @@ def _merge_script_lines(lines) -> None:
             host = min(hosts, key=lambda h: h[0])[1]
             host["chars"] = sorted(host["chars"] + ln["chars"], key=lambda ch: ch["bbox"].x0)
             host["fonts"] |= ln["fonts"]
+            # A caixa da linha fica como está (mudá-la funde linhas vizinhas); o
+            # recorte da fórmula usa "ink" para incluir o limite do ∑.
+            host["ink"] = pymupdf.Rect(host.get("ink", host["bbox"])) | ln["bbox"]
             lines.remove(ln)
 
 
@@ -491,7 +501,10 @@ def _build_rows(page: pymupdf.Page) -> tuple[list[Row], list[tuple[int, float]]]
         # imagens laterais; classificá-las pelo centro alterna de coluna e
         # desordena enunciados e alternativas que continuam na linha seguinte.
         row_col = 0 if b.width >= pw * 0.55 else _col_of(b, pw)
-        cands.append(Row(txt, b, row_col, set(ln["fonts"])))
+        solid = [c for c in ln["chars"] if c["c"].strip()]
+        cands.append(Row(txt, b, row_col, set(ln["fonts"]),
+                         n_math=sum(_is_math(c) for c in solid), n_chars=len(solid),
+                         size=_ref_size(ln["chars"]), ink=pymupdf.Rect(ln.get("ink", b))))
 
     # funde linhas na mesma altura e mesma coluna (linhas de tabela, "(A)" + célula etc.)
     cands.sort(key=lambda r: (r.col, (r.bbox.y0 + r.bbox.y1) / 2, r.bbox.x0))
@@ -516,6 +529,9 @@ def _build_rows(page: pymupdf.Page) -> tuple[list[Row], list[tuple[int, float]]]
             best.text = _clean(text)
             best.bbox |= r.bbox
             best.fonts |= r.fonts
+            best.n_math += r.n_math
+            best.ink |= r.ink
+            best.n_chars += r.n_chars
         else:
             r.parts = [(pymupdf.Rect(r.bbox), r.text)]
             rows.append(r)
@@ -562,9 +578,33 @@ def _figure_rects(page: pymupdf.Page) -> list[pymupdf.Rect]:
     return [r for r in _merge_rects(rects) if r.y0 >= HEADER_Y - 5]
 
 
+def _mark_layout(rows: list[Row], pw: float) -> None:
+    """Marca fórmulas em destaque e fins de parágrafo, relativos às margens da coluna."""
+    for col in (0, 1):
+        narrow = [r for r in rows if r.col == col and r.bbox.width < pw * 0.55]
+        if len(narrow) < 3:
+            continue
+        lefts = sorted(r.bbox.x0 for r in narrow)
+        rights = sorted(r.bbox.x1 for r in narrow)
+        left, right = lefts[len(lefts) // 10], rights[len(rights) * 9 // 10]
+        # Coluna sem justificação (provas antigas): quase toda linha termina antes da
+        # margem e o fim curto deixa de indicar parágrafo.
+        prose = [r for r in narrow if r.n_chars >= 25 and r.n_math < 0.3 * r.n_chars
+                 and r.bbox.x0 - left <= 12]
+        ragged = len(prose) >= 5 and sum(r.bbox.x1 < right - 20 for r in prose) > 0.4 * len(prose)
+        for r in narrow:
+            r.indent = r.bbox.x0 - left > 12
+            # Linha centralizada ou alinhada à direita (fonte, legenda) é um bloco à parte.
+            r.short = ((not ragged and r.bbox.x1 < right - 20)
+                       or r.bbox.x0 - left > 0.25 * (right - left))
+            r.display = (r.n_chars > 0 and r.n_math >= 0.6 * r.n_chars and r.bbox.x0 - left > 12
+                         and not ALT_RE.match(r.text) and not MARKER_RE.match(r.text))
+
+
 def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
     pw = page.rect.width
     rows, ends = _build_rows(page)
+    _mark_layout(rows, pw)
     frects = _figure_rects(page)
 
     # caixas "Note e adote": retângulo que contém uma linha começando assim
@@ -643,7 +683,7 @@ def new_question(num: int, page: int) -> dict:
         "numero": num, "pagina": page + 1, "texto_id": None,
         "enunciado": [], "nota": [], "alternativas": {},
         "figuras_enunciado": [], "imagens_completas": [], "revisar": [],
-        "_segs": {}, "_fonts": set(),
+        "_segs": {}, "_fonts": set(), "_stem": [], "_short": False, "_size": 0.0,
     }
 
 
@@ -657,9 +697,10 @@ def parse(doc: pymupdf.Document):
     expected = 1
 
     def touch(q, it):
-        seg = q["_segs"].setdefault((it.page, it.col), [1e9, -1e9])
+        seg = q["_segs"].setdefault((it.page, it.col), [1e9, -1e9, 1e9, -1e9])
         b = it.row.bbox if it.row else it.fig.bbox
         seg[0], seg[1] = min(seg[0], b.y0), max(seg[1], b.y1)
+        seg[2], seg[3] = min(seg[2], b.x0), max(seg[3], b.x1)
 
     for pno in range(len(doc)):
         for it in extract_page(doc[pno], pno):
@@ -706,6 +747,11 @@ def parse(doc: pymupdf.Document):
                         cur["alternativas"][cur_alt]["texto"].append(t)
                     else:
                         cur["enunciado"].append(t)
+                        cur["_stem"].append({"text": t, "page": it.page, "bbox": it.row.ink or it.row.bbox,
+                                             "display": it.row.display,
+                                             "para": (cur["_short"] or it.row.indent
+                                                      or abs(it.row.size - cur["_size"]) > 0.6)})
+                        cur["_short"], cur["_size"] = it.row.short, it.row.size
 
             elif it.kind == "note" and cur is not None:
                 touch(cur, it)
@@ -717,6 +763,7 @@ def parse(doc: pymupdf.Document):
                 elif cur is not None:
                     touch(cur, it)
                     letter = it.fig.alt or (cur_alt if mode == "alts" else None)
+                    cur["_short"] = True             # texto depois de figura começa parágrafo novo
                     cur.setdefault("_figs", []).append((it.page, it.fig.bbox, letter))
     return questions, shared
 
@@ -726,6 +773,39 @@ def crop(doc, pno: int, rect: pymupdf.Rect, path: Path, dpi: int):
     r = pymupdf.Rect(rect.x0 - CROP_PAD, rect.y0 - CROP_PAD, rect.x1 + CROP_PAD, rect.y1 + CROP_PAD)
     r &= doc[pno].rect
     doc[pno].get_pixmap(dpi=dpi, clip=r).save(str(path))
+
+
+def _stem_blocks(doc, stem: list[dict], imgdir: Path, n: str, dpi: int) -> list[dict]:
+    """
+    Mantém a estrutura do enunciado: parágrafos e fórmulas em destaque viram blocos
+    próprios. A fórmula leva o texto reconstruído e o recorte dela no PDF.
+    """
+    blocks: list[dict] = []
+    for e in stem:
+        last = blocks[-1] if blocks else None
+        if e["display"]:
+            if (last and last["tipo"] == "formula" and last["_page"] == e["page"]
+                    and e["bbox"].y0 - last["_rect"].y1 < 1.6 * e["bbox"].height):
+                last["_parts"].append(e["text"])
+                last["_rect"] |= e["bbox"]
+            else:
+                blocks.append({"tipo": "formula", "_parts": [e["text"]], "_page": e["page"],
+                               "_rect": pymupdf.Rect(e["bbox"])})
+        elif last and last["tipo"] == "texto" and (not e["para"] or last["_parts"][-1].endswith("-")):
+            last["_parts"].append(e["text"])
+        else:
+            blocks.append({"tipo": "texto", "_parts": [e["text"]]})
+    out, k = [], 0
+    for b in blocks:
+        if b["tipo"] == "texto":
+            out.append({"tipo": "texto", "texto": _join(b["_parts"])})
+            continue
+        k += 1
+        name = f"q{n}_formula{k}.png"
+        r = b["_rect"]
+        crop(doc, b["_page"], pymupdf.Rect(r.x0 - 4, r.y0 - 2, r.x1 + 4, r.y1 + 2), imgdir / name, dpi)
+        out.append({"tipo": "formula", "texto": "\n".join(b["_parts"]), "imagem": f"img/{name}"})
+    return out
 
 
 def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
@@ -759,26 +839,28 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
 
         if full_crops:
             if detailed_crops:
-                # A revisão detalhada preserva toda a geometria da questão em
-                # cada página, inclusive imagem, legenda e alternativas largas.
-                by_page: dict[int, list[tuple[float, float]]] = {}
-                for (p, _col), (y0, y1) in q["_segs"].items():
-                    by_page.setdefault(p, []).append((y0, y1))
-                segments = [(p, (min(y0 for y0, _ in bounds), max(y1 for _, y1 in bounds)))
-                            for p, bounds in sorted(by_page.items())]
-                for k, (p, (y0, y1)) in enumerate(segments, 1):
+                # A revisão detalhada preserva toda a geometria da questão:
+                # parte da coluna e só alarga onde o próprio conteúdo é mais
+                # largo (imagem, legenda ou alternativas que cruzam a página).
+                # A página inteira traria junto a questão da outra coluna.
+                for k, ((p, col), (y0, y1, x0, x1)) in enumerate(sorted(q["_segs"].items()), 1):
                     name = f"q{n}_completa_detalhada{k}.png"
-                    crop(doc, p, pymupdf.Rect(22, y0 - 3, doc[p].rect.width - 22, y1 + 3),
-                         imgdir / name, dpi)
+                    cx0, cx1 = colx[col]
+                    rect = pymupdf.Rect(max(22, min(cx0, x0 - 3)), y0 - 3,
+                                        min(doc[p].rect.width - 22, max(cx1, x1 + 3)), y1 + 3)
+                    crop(doc, p, rect, imgdir / name, dpi)
                     q["imagens_completas"].append(f"img/{name}")
             else:
-                for k, ((p, col), (y0, y1)) in enumerate(sorted(q["_segs"].items()), 1):
+                for k, ((p, col), (y0, y1, _x0, _x1)) in enumerate(sorted(q["_segs"].items()), 1):
                     x0, x1 = colx[col]
                     name = f"q{n}_completa{k}.png"
                     crop(doc, p, pymupdf.Rect(x0, y0 - 3, x1, y1 + 3), imgdir / name, dpi)
                     q["imagens_completas"].append(f"img/{name}")
 
-        q["enunciado"] = _join(q["enunciado"])
+        q["blocos"] = _stem_blocks(doc, q.pop("_stem"), imgdir, n, dpi)
+        q.pop("_short")
+        q.pop("_size")
+        q["enunciado"] = "\n".join(b["texto"] for b in q["blocos"]) if q["blocos"] else _join(q["enunciado"])
         q["nota"] = _join(q["nota"])
         for a in q["alternativas"].values():
             a["texto"] = _join(a["texto"])

@@ -174,7 +174,12 @@ class QuestionReprocessingTests(unittest.TestCase):
             crop_path = outdir / question["imagens_completas"][0]
             self.assertIn("detalhada", crop_path.name)
             with pymupdf.open(crop_path) as crop_doc:
-                self.assertGreater(crop_doc[0].rect.width, 400)
+                # 1 e 26 têm conteúdo que cruza a página; a 10 cabe numa coluna e
+                # o recorte não pode trazer a questão 12, que está ao lado.
+                if number == 10:
+                    self.assertLess(crop_doc[0].rect.width, 300)
+                else:
+                    self.assertGreater(crop_doc[0].rect.width, 400)
         self.assertEqual(questions[10]["texto_id"], "10-11")
         self.assertIn("cultura do", data["textos_compartilhados"]["10-11"]["texto"])
 
