@@ -770,6 +770,9 @@ def _confirm_question_reprocess(exam_id: str, number: int, preview_id: str) -> d
     path_map = {}
     for old in (new_question.get("figuras_enunciado", []) + new_question.get("imagens_completas", [])):
         path_map[old] = None
+    for block in new_question.get("blocos") or []:
+        if block.get("imagem"):
+            path_map[block["imagem"]] = None
     for option in (new_question.get("alternativas") or {}).values():
         for old in option.get("figuras", []):
             path_map[old] = None
@@ -789,13 +792,16 @@ def _confirm_question_reprocess(exam_id: str, number: int, preview_id: str) -> d
         return [path_map.get(path, path) for path in paths or []]
     new_question["figuras_enunciado"] = remap(new_question.get("figuras_enunciado"))
     new_question["imagens_completas"] = remap(new_question.get("imagens_completas"))
+    for block in new_question.get("blocos") or []:
+        if block.get("imagem"):
+            block["imagem"] = path_map.get(block["imagem"], block["imagem"])
     for option in (new_question.get("alternativas") or {}).values():
         option["figuras"] = remap(option.get("figuras"))
     if new_shared:
         new_shared["figuras"] = remap(new_shared.get("figuras"))
 
     for field in ("pagina", "texto_id", "enunciado", "alternativas", "figuras_enunciado",
-                  "imagens_completas", "revisar"):
+                  "imagens_completas", "blocos", "revisar"):
         question[field] = new_question.get(field)
     data["arquivo_sha256"] = preview["sourceSha256"]
     # Sincroniza a extração base, se a prova também mantém esse JSON.
@@ -818,7 +824,7 @@ def _confirm_question_reprocess(exam_id: str, number: int, preview_id: str) -> d
         if target is None:
             raise ValueError("a extração base não contém a questão para sincronização")
         for field in ("pagina", "texto_id", "enunciado", "alternativas", "figuras_enunciado",
-                      "imagens_completas", "revisar"):
+                      "imagens_completas", "blocos", "revisar"):
             target[field] = new_question.get(field)
         temporary = path.with_name(path.name + f".{preview_id}.tmp")
         temporary.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

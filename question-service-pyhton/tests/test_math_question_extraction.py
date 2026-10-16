@@ -91,6 +91,14 @@ class MathQuestionExtractionTests(unittest.TestCase):
                 self.assertIn("∑ᵢPᵢ(x)log₂Pᵢ(x)", q4["enunciado"])
                 self.assertIn("−([azul: 1/2 log₂ 1/2] + [vermelho: 1/2 log₂ 1/2] )= 1", q4["enunciado"])
                 self.assertIn("([azul: AAA][vermelho: A])", q4["enunciado"])
+                # A estrutura da prova é mantida: parágrafos e fórmulas em destaque como blocos.
+                self.assertIn("a saber\nE= −∑ᵢPᵢ(x)log₂Pᵢ(x)\nem que", q4["enunciado"])
+                self.assertIn("variável x.\nPor exemplo", q4["enunciado"])
+                formulas = [b for b in q4["blocos"] if b["tipo"] == "formula"]
+                self.assertEqual(len(formulas), 3)
+                self.assertIn("\n= −([azul: 1/2 log₂ 1/2] +", formulas[2]["texto"])
+                self.assertTrue(all((outdir / b["imagem"]).is_file() for b in formulas))
+                self.assertEqual("\n".join(b["texto"] for b in q4["blocos"]), q4["enunciado"])
                 self.assertEqual({k: a["texto"] for k, a in q4["alternativas"].items()},
                                  {"A": "5 − 9/4 log₂3", "B": "1/2 − 5/2 log₂3", "C": "3/2",
                                   "D": "9/4 log₂3", "E": "3"})
