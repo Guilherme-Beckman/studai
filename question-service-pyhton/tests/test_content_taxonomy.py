@@ -110,6 +110,36 @@ class ContentTaxonomyTests(unittest.TestCase):
         from studai.features.questions.review import review_reasons
         self.assertIn("subconteudo_pendente", review_reasons({"classificacao": result}))
 
+    def test_routed_classifier_keeps_parent_when_ai_says_it_is_enough(self):
+        # Q88 FUVEST 2025: moda = mediana = média = amplitude; o conteúdo pai já é a resposta.
+        parent = "matematica.content.estatistica-descritiva-media-mediana-e-moda"
+        from studai.features.questions.review import review_reasons
+        for answer in ("MANTER", parent):
+            with self.subTest(answer=answer):
+                provider = ScriptedProvider([
+                    {"materia": "Matemática", "materias_secundarias": [], "confianca": 0.9},
+                    {"conteudo_principal_id": parent, "conteudos_relacionados_ids": [], "confianca": 0.85},
+                    {"subconteudo_id": answer, "confianca": 0.8}])
+                question = {"numero": 88, "enunciado": "Listas de 5 inteiros com moda = mediana = média "
+                                                       "= amplitude = 23", "alternativas": {}}
+                result = service.classify_routed(provider, question, None, service.DEFAULT_TAXONOMY, [])
+                self.assertEqual(result["conteudo_principal_id"], parent)
+                self.assertEqual(result["conteudo_etapa1_id"], parent)
+                self.assertEqual(result["caminho_conteudo"], content_path(parent))
+                self.assertTrue(result["subconteudo_mantido"])
+                self.assertNotIn("subconteudo_pendente", result)
+                self.assertEqual(result["confianca"], 0.8)
+                self.assertIn("MANTER", provider.systems[2])
+                self.assertNotIn("subconteudo_pendente", review_reasons({"classificacao": result}))
+
+    def test_batch_routing_keeps_parent_when_ai_says_it_is_enough(self):
+        provider = BatchProvider(refine_answer="MANTER")
+        entries = [("q1", "<questao>Lei dos senos num triângulo</questao>")]
+        result = service.classify_batch_routed(provider, entries, service.DEFAULT_TAXONOMY)["q1"]
+        self.assertEqual(result["conteudo_principal_id"], "matematica.content.trigonometria-no-triangulo")
+        self.assertTrue(result["subconteudo_mantido"])
+        self.assertNotIn("subconteudo_pendente", result)
+
     def test_routed_classifier_uses_short_per_subject_prompts(self):
         parent = "matematica.content.trigonometria-no-triangulo"
         leaf = "matematica.trigonometria-no-triangulo.lei-dos-senos"
@@ -520,10 +550,11 @@ class BatchProvider(Provider):
                "pêndulo": ("Física", "fisica.content.movimento-harmonico-simples",
                            "fisica.movimento-harmonico-simples.pendulo-simples")}
 
-    def __init__(self, drop_ids=()):
+    def __init__(self, drop_ids=(), refine_answer=None):
         super().__init__(model="batch")
         self.calls = []
         self.drop_ids = set(drop_ids)
+        self.refine_answer = refine_answer
 
     def _label(self, text):
         return next(value for key, value in self.SUBJECT.items() if key in text)
@@ -534,7 +565,7 @@ class BatchProvider(Provider):
             return {"materia": subject, "materias_secundarias": [], "confianca": 0.9}
         if "classifica o conteúdo" in system:
             return {"conteudo_principal_id": content, "conteudos_relacionados_ids": [], "confianca": 0.8}
-        return {"subconteudo_id": leaf, "confianca": 0.7}
+        return {"subconteudo_id": self.refine_answer or leaf, "confianca": 0.7}
 
     def complete(self, system, user, images=None):
         self.calls.append((system, user))

@@ -70,7 +70,8 @@ def _load_reviewed(path: Path) -> list[dict]:
         content = CONTENT_INDEX.get(content_id)
         if row.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION:
             continue
-        if not content or not content["is_leaf"] or content["subject"] != subject:
+        if (not content or not (content["is_leaf"] or content["refinable"])
+                or content["subject"] != subject):
             raise ValueError(f"linha {line_number}: content_id inválido para {subject}: {content_id!r}")
         rows.append({**row, "subject": subject, "content_id": content_id, "topic": content["name"],
                      "content_path": " → ".join(content["path"])})

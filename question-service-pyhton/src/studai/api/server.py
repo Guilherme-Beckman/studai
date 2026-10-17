@@ -612,7 +612,9 @@ def _classification_label(subject: str, content_id: str | None, topic: str = "")
     """Matéria e conteúdo validados contra a taxonomia, no formato gravado na revisão."""
     if subject not in DEFAULT_TAXONOMY:
         raise ValueError("selecione uma matéria válida")
-    content_id = canonical_content_id(str(content_id), subject=subject) if content_id else None
+    # Conteúdo intermediário (com subconteúdos) também é rótulo final válido.
+    content_id = (canonical_content_id(str(content_id), subject=subject, allow_refinable=True)
+                  if content_id else None)
     if content_id:
         return {"subject": subject, "topic": CONTENT_INDEX[content_id]["name"], "content_id": content_id,
                 "taxonomy_version": CONTENT_TAXONOMY_VERSION,

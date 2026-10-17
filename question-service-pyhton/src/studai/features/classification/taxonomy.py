@@ -163,11 +163,15 @@ def public_content_taxonomy() -> dict[str, Any]:
     return {key: value for key, value in DEFAULT_CONTENT_TAXONOMY.items() if key != "index"}
 
 
-def public_content_options() -> dict[str, list[dict[str, str]]]:
-    return {subject: [{"id": node["id"], "name": node["name"],
-                       "path": " → ".join(node["path"])}
-                      for node in nodes]
-            for subject, nodes in DEFAULT_CONTENTS_BY_SUBJECT.items()}
+def public_content_options() -> dict[str, list[dict[str, Any]]]:
+    """Opções da revisão: folhas e conteúdos com subconteúdos (marcados como intermediários)."""
+    return {subject["name"]: [{"id": node["id"], "name": node["name"],
+                               "path": " → ".join(node["path"]),
+                               "intermediate": not node["is_leaf"]}
+                              for node in CONTENT_INDEX.values()
+                              if node["subject_id"] == subject["id"] and not node.get("deprecated")
+                              and (node["is_leaf"] or node["refinable"])]
+            for subject in DEFAULT_CONTENT_TAXONOMY["subjects"]}
 
 
 def canonical_content_id(value: str, *, subject: str | None = None,

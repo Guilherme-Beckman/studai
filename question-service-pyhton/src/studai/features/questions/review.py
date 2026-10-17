@@ -286,7 +286,8 @@ def reviewed_examples(root: Path) -> list[dict]:
             from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
             content = CONTENT_INDEX.get(str(review["content_id"]))
             if (review.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION or not content
-                    or not content["is_leaf"] or content["subject"] != review["subject"]):
+                    or not (content["is_leaf"] or content["refinable"])
+                    or content["subject"] != review["subject"]):
                 continue
             support = shared.get(str(question.get("texto_id") or ""), {})
             if isinstance(support, str):

@@ -454,8 +454,11 @@ function foldText(value) {
 
 // Caminho "matéria → área → conteúdo → subconteúdo": a matéria já está no outro campo,
 // então o grupo mostra "área › conteúdo" e a opção só o subconteúdo.
+// Um conteúdo intermediário (que tem subconteúdos) entra no grupo dos próprios filhos,
+// como primeira opção, para aprovar a questão no nível geral sem descer.
 function contentParts(content) {
   const parts = String(content.path || "").split(" → ").slice(1);
+  if (content.intermediate && parts.length) return { group: parts.join(" › "), name: `${parts[parts.length - 1]} (conteúdo geral)` };
   const name = parts.pop() || content.name || content.id;
   return { group: parts.join(" › ") || "Geral", name };
 }

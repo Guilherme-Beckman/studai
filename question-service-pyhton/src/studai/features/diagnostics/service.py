@@ -170,7 +170,8 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
             if human_review.get("status") == "reviewed" and human_review.get("content_id"):
                 reviewed_content = CONTENT_INDEX.get(str(human_review["content_id"]))
                 if (human_review.get("taxonomy_version") == CONTENT_TAXONOMY_VERSION and reviewed_content
-                        and reviewed_content["is_leaf"] and reviewed_content["subject"] == subject):
+                        and (reviewed_content["is_leaf"] or reviewed_content["refinable"])
+                        and reviewed_content["subject"] == subject):
                     classification.update(materia=subject, assunto=reviewed_content["name"],
                                            conteudo_principal_id=reviewed_content["id"],
                                            conteudos_relacionados_ids=human_review.get("related_content_ids", []),

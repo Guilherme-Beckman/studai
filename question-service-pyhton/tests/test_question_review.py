@@ -11,7 +11,7 @@ from unittest.mock import patch
 from studai.api import server
 from studai.features.classification.service import DEFAULT_TOPIC_TAXONOMY
 from studai.features.classification.taxonomy import (
-    CONTENT_TAXONOMY_VERSION, DEFAULT_CONTENTS_BY_SUBJECT,
+    CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, DEFAULT_CONTENTS_BY_SUBJECT,
 )
 from studai.features.questions import review
 
@@ -260,6 +260,18 @@ class QuestionReviewApiTests(unittest.TestCase):
                          DEFAULT_CONTENTS_BY_SUBJECT["Biologia"][0]["id"])
         listed = self.request("/api/exams")
         self.assertEqual(listed[0]["reviewProgress"], 50)
+
+    def test_intermediate_content_can_be_approved_without_pending_flag(self):
+        parent = "biologia.content.celulas-procarioticas-e-eucarioticas"
+        saved = self.request("/api/exams/exam-id/questions/1/review", method="PATCH", payload={
+            "status": "reviewed", "subject": "Biologia", "content_id": parent})
+        self.assertEqual(saved["status"], "reviewed")
+        detail = self.request("/api/exams/exam-id/questions")
+        review = detail["questions"][0]["review"]
+        self.assertEqual(review["content_id"], parent)
+        self.assertEqual(review["content_path"], " → ".join(CONTENT_INDEX[parent]["path"]))
+        options = {item["id"]: item for item in detail["contents"]["Biologia"]}
+        self.assertTrue(options[parent]["intermediate"])
 
     def test_patch_rejects_topic_outside_selected_subject(self):
         with self.assertRaises(urllib.error.HTTPError) as error:
