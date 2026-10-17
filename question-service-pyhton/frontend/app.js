@@ -406,7 +406,7 @@ function renderReviewEditor(examId, question) {
   const letters = [...new Set([...Object.keys(question.alternativas || {}), ..."ABCDE"])].sort();
   const options = Object.fromEntries(Object.entries(question.alternativas || {}));
   return `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar questão ${escapeHtml(number)}</strong><span>As correções ficam salvas na revisão; a extração original do PDF é mantida.</span></div>
-    <div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}"><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${item === label.subject ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><label>Conteúdo principal<select data-review-topic="${number}"><option value="">Selecione uma matéria primeiro</option></select></label></div>
+    <div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}"><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${item === label.subject ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><div class="review-topic-field"><label for="review-topic-search-${number}">Conteúdo principal</label><input id="review-topic-search-${number}" type="search" data-review-topic-search="${number}" placeholder="Buscar: logaritmo, Clarice, ecologia…" autocomplete="off"><select data-review-topic="${number}" size="9" aria-label="Conteúdo principal"><option value="">Selecione uma matéria primeiro</option></select><span class="review-topic-path" data-review-topic-path="${number}"></span></div></div>
     <label>Gabarito<select data-review-answer="${number}"><option value="" ${answer ? "" : "selected"}>Sem gabarito</option>${"ABCDE".split("").map(letter => `<option value="${letter}" ${answer === letter ? "selected" : ""}>${letter}</option>`).join("")}<option value="*" ${answer === "*" ? "selected" : ""}>Anulada</option></select></label>
     <label>Enunciado<textarea data-edit-stem rows="5">${escapeHtml(question.enunciado || "")}</textarea></label>
     ${figureEditor(examId, number, "stem", question.figuras_enunciado)}
@@ -449,12 +449,55 @@ function renderReviewQuestion(examId, question, sharedTexts) {
     ${canReprocess ? `<div class="reprocess-actions"><button class="button button-primary" type="button" data-reprocess="${number}">Reprocessar detalhadamente pelo PDF</button><label class="reprocess-upload">PDF ausente ou diferente? Enviar PDF<input type="file" accept="application/pdf,.pdf" data-reprocess-file="${number}"></label></div><div data-reprocess-preview="${number}"></div>` : ""}</article>`;
 }
 
-function refreshReviewTopic(number, selectedTopic = "") {
+function foldText(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+}
+
+// Caminho "matéria → área → conteúdo → subconteúdo": a matéria já está no outro campo,
+// então o grupo mostra "área › conteúdo" e a opção só o subconteúdo.
+function contentParts(content) {
+  const parts = String(content.path || "").split(" → ").slice(1);
+  const name = parts.pop() || content.name || content.id;
+  return { group: parts.join(" › ") || "Geral", name };
+}
+
+function refreshReviewTopic(number, selectedTopic) {
   const subjectSelect = $(`[data-review-subject="${number}"]`);
   const topicSelect = $(`[data-review-topic="${number}"]`);
+  const search = $(`[data-review-topic-search="${number}"]`);
   if (!subjectSelect || !topicSelect) return;
+  const selected = selectedTopic ?? topicSelect.value;
   const contents = currentExamReview.contents?.[subjectSelect.value] || [];
-  topicSelect.innerHTML = `<option value="">Selecione</option>` + contents.map(content => `<option value="${escapeHtml(content.id)}" ${content.id === selectedTopic ? "selected" : ""}>${escapeHtml(content.path)}</option>`).join("");
+  const query = foldText(search?.value).trim();
+  const question = currentExamReview.questions.find(q => String(q.numero) === String(number));
+  const suggestedId = question?.classificacao?.conteudo_principal_id;
+  const suggested = contents.find(content => content.id === suggestedId);
+  const option = (content, label) => `<option value="${escapeHtml(content.id)}" title="${escapeHtml(content.path)}" ${content.id === selected ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  const groups = new Map();
+  contents.forEach(content => {
+    if (query && !foldText(content.path).includes(query) && content.id !== selected) return;
+    const { group, name } = contentParts(content);
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(option(content, name));
+  });
+  const head = !subjectSelect.value ? `<option value="">Selecione uma matéria primeiro</option>`
+    : !groups.size ? `<option value="" disabled>Nenhum conteúdo encontrado</option>` : "";
+  const suggestion = suggested && !query ? `<optgroup label="Sugestão da IA">${option({ ...suggested, id: suggested.id }, contentParts(suggested).name)}</optgroup>` : "";
+  topicSelect.innerHTML = head + suggestion + [...groups].map(([group, items]) => `<optgroup label="${escapeHtml(group)}">${items.join("")}</optgroup>`).join("");
+  // A sugestão repete um item da lista; mantém marcada só a primeira ocorrência.
+  const marked = $$("option[selected]", topicSelect);
+  marked.slice(1).forEach(item => item.removeAttribute("selected"));
+  if (marked[0]) topicSelect.value = marked[0].value;
+  updateReviewTopicPath(number);
+}
+
+function updateReviewTopicPath(number) {
+  const topicSelect = $(`[data-review-topic="${number}"]`);
+  const target = $(`[data-review-topic-path="${number}"]`);
+  if (!topicSelect || !target) return;
+  const option = topicSelect.selectedOptions[0];
+  target.textContent = option?.value ? `Selecionado: ${option.title}` : "Nenhum conteúdo selecionado";
+  target.classList.toggle("is-empty", !option?.value);
 }
 
 function figurePaths(container) {
@@ -563,7 +606,13 @@ function bindExamReviewActions() {
     const question = currentExamReview.questions.find(q => String(q.numero) === number);
     refreshReviewTopic(number, questionLabel(question).contentId);
   }));
-  $$('[data-review-subject]', workspace).forEach(select => select.addEventListener("change", () => refreshReviewTopic(select.dataset.reviewSubject)));
+  $$('[data-review-subject]', workspace).forEach(select => select.addEventListener("change", () => {
+    const search = $(`[data-review-topic-search="${select.dataset.reviewSubject}"]`, workspace);
+    if (search) search.value = "";
+    refreshReviewTopic(select.dataset.reviewSubject, "");
+  }));
+  $$('[data-review-topic-search]', workspace).forEach(input => input.addEventListener("input", () => refreshReviewTopic(input.dataset.reviewTopicSearch)));
+  $$('[data-review-topic]', workspace).forEach(select => select.addEventListener("change", () => updateReviewTopicPath(select.dataset.reviewTopic)));
   $$('[data-review-form]', workspace).forEach(form => {
     bindFigureRemoval(form);
     form.addEventListener("submit", event => {
