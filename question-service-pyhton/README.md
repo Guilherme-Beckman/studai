@@ -202,7 +202,7 @@ Cada chave Gemini aceita até quatro chamadas simultâneas por padrão, inclusiv
 
 ### Faixas grátis de nuvem (Groq, OpenRouter e Hugging Face)
 
-Além de Ollama e Gemini, o pool aceita faixas compatíveis com a API da OpenAI. Cada chave configurada vira **uma faixa que alterna entre vários modelos**, como no Gemini: cada pedido começa no próximo modelo da lista e, se receber 429, 404 ou erro do servidor, tenta o seguinte. Sem `STUDAI_*_MODELS` no `.env`, Groq e OpenRouter usam os modelos padrão abaixo (catálogos grátis de outubro de 2026; eles mudam com frequência, então sobrescreva no `.env` quando algum sair do ar). O Hugging Face só entra com modelos explícitos, porque a cota grátis do roteador é muito pequena.
+Além de Ollama e Gemini, o pool aceita faixas compatíveis com a API da OpenAI. Cada chave configurada vira **uma faixa que alterna entre vários modelos**, como no Gemini: cada pedido começa no próximo modelo da lista e, se receber 400, 404, 429 ou erro do servidor, tenta o seguinte. Sem `STUDAI_*_MODELS` no `.env`, Groq e OpenRouter usam os modelos padrão abaixo (catálogos grátis de outubro de 2026; eles mudam com frequência, então sobrescreva no `.env` quando algum sair do ar). O Hugging Face só entra com modelos explícitos, porque a cota grátis do roteador é muito pequena.
 
 | Serviço | Modelos padrão |
 |---|---|
@@ -225,6 +225,10 @@ STUDAI_GEMINI_RPM=0                    # limite por minuto opcional para cada ch
 ```
 
 Quando uma faixa recebe 429 indicando cota **diária** esgotada, ela sai do pool até a meia-noite local, em vez de ser testada em toda questão. Um 429 por minuto só faz a questão tentar outra faixa. Uploads simultâneos com a mesma configuração compartilham o mesmo pool, para respeitar a capacidade de cada faixa. Envie `useFreeCloud=false` no processamento para ignorar essas faixas.
+
+Erros de conta (401, 402 sem crédito, 403) tiram a faixa do pool. Qualquer outro erro só faz a questão tentar a próxima faixa.
+
+**Nenhuma questão é descartada.** Se uma questão falhar em todas as faixas, ela vai para uma fila de reprocessamento. Ao fim de cada rodada, as questões com falha são processadas de novo depois de 5, 15, 30, 60 e 120 s, dando preferência às faixas que ainda não foram usadas para elas. `STUDAI_CLASSIFICATION_RETRY_ROUNDS` define quantas rodadas extras são feitas (padrão 5; `0` desliga). Só ficam com erro as questões que falharem em todas as rodadas, ou todas as pendentes quando o pool fica sem nenhuma faixa ativa. Na próxima execução, o cache pula o que já deu certo e só essas são refeitas. O resultado registra `tentativas` em cada questão recuperada e `rodadas_reprocessamento` e `questoes_recuperadas` em `processamento_cache`.
 
 ### Velocidade da classificação
 

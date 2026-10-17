@@ -72,6 +72,10 @@ from studai.features.classification.rag import (
 # "hierarchical" faz 3 chamadas curtas (matéria → conteúdo da matéria → subconteúdo);
 # "flat" mantém a chamada única com a árvore inteira no prompt.
 CLASSIFICATION_ROUTING = os.environ.get("STUDAI_CLASSIFICATION_ROUTING", "hierarchical").strip().lower()
+# Rodadas extras para as questões que falharam; cada uma espera mais antes de recomeçar
+# e prefere outra IA. Só desiste quando acabam as rodadas ou o pool fica sem faixas vivas.
+CLASSIFICATION_RETRY_ROUNDS = max(0, int(os.environ.get("STUDAI_CLASSIFICATION_RETRY_ROUNDS", "5")))
+CLASSIFICATION_RETRY_DELAYS = (5, 15, 30, 60, 120)
 if CLASSIFICATION_ROUTING not in {"hierarchical", "flat"}:
     raise ValueError("STUDAI_CLASSIFICATION_ROUTING deve ser 'hierarchical' ou 'flat'")
 PROMPT_VERSION = "v8-hierarchical-routing" if CLASSIFICATION_ROUTING == "hierarchical" else "v7-two-stage-content"
@@ -742,7 +746,9 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                 use_cache: bool = True, min_conf: float = 0.6, log=print, progress=None,
                 cancel_check=None, topics_by_subject: dict[str, list[str]] | None = None,
                 use_rag: bool = True, embedding_model: str = DEFAULT_EMBEDDING_MODEL,
-                rag_examples: int = 3, batch_size: int | None = None) -> dict:
+                rag_examples: int = 3, batch_size: int | None = None,
+                retry_rounds: int | None = None, retry_delays=CLASSIFICATION_RETRY_DELAYS,
+                sleep=time.sleep) -> dict:
     data = json.loads(input_json.read_text(encoding="utf-8"))
     base = input_json.parent
     if batch_size is None:
@@ -821,6 +827,9 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
     errors: dict[int, str] = {}
     active: dict[int, float] = {}
     active_routes: dict[int, str] = {}
+    # Faixas do pool já usadas por questão: numa nova tentativa elas ficam por último.
+    tried_lanes: dict[int, set[str]] = {}
+    attempts: dict[int, int] = {}
     cached_hits = 0
 
     def work(q):
@@ -836,6 +845,7 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
             return q["numero"], result, True, cached[1] or provider.label
         numero = q["numero"]
         with lock:
+            attempts[numero] = attempts.get(numero, 0) + 1
             active[numero] = time.monotonic()
             active_routes[numero] = "Atribuindo modelo"
         try:
@@ -866,9 +876,15 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                     def on_route(label):
                         with lock:
                             active_routes[numero] = label
-                    with request_context(numero, on_route):
-                        res = classify_question(provider, q, shared, taxonomy, imgs, topics_by_subject,
-                                                examples, candidate_topics, question_system)
+                    with lock:
+                        avoid = set(tried_lanes.get(numero, ()))
+                    with request_context(numero, on_route, avoid=avoid) as used_lanes:
+                        try:
+                            res = classify_question(provider, q, shared, taxonomy, imgs, topics_by_subject,
+                                                    examples, candidate_topics, question_system)
+                        finally:
+                            with lock:
+                                tried_lanes.setdefault(numero, set()).update(used_lanes)
                 else:
                     res = classify_question(provider, q, shared, taxonomy, imgs, topics_by_subject,
                                             examples, candidate_topics, question_system)
@@ -882,6 +898,8 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                 ]
             if retrieval_error:
                 res["rag_erro"] = retrieval_error
+            if attempts.get(numero, 1) > 1:
+                res["tentativas"] = attempts[numero]
             # Em lote, o uso de tokens pertence ao request do grupo, não a esta thread.
             usage = None if batched else getattr(getattr(provider, "_thread_state", None), "usage", None)
             if usage:
@@ -896,69 +914,107 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                 active.pop(numero, None)
                 active_routes.pop(numero, None)
 
-    with cf.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
-        futs = {ex.submit(work, q): q["numero"] for q in todo}
-        pending = set(futs)
-        started = time.monotonic()
-        finished = 0
-        spinner = "|/-\\"
-        spin_index = 0
-        show_progress = getattr(sys.stderr, "isatty", lambda: False)()
-        while pending:
-            done, pending = cf.wait(pending, timeout=1, return_when=cf.FIRST_COMPLETED)
-            for fut in done:
-                n = futs[fut]
-                finished += 1
-                try:
-                    _, res, cached, model = fut.result()
-                    results[n] = res
-                    result_models[n] = model
-                    if cached:
-                        cached_hits += 1
-                    message = (f"[{finished}/{len(todo)}] Q{n:02d} -> {res['materia']} ({res['confianca']}) [{model}]"
-                               f"{' [cache]' if cached else ''}")
-                except Exception as e:                  # uma questão com erro não derruba o lote
-                    errors[n] = str(e)
-                    message = f"[{finished}/{len(todo)}] Q{n:02d} ERRO: {e}"
-                if show_progress:
-                    sys.stderr.write("\r\033[K")
-                log(message)
-                if progress:
-                    progress({"completed": finished, "total": len(todo), "question": n,
-                              "errors": len(errors), "cached": cached_hits,
-                              "cache_misses": finished - cached_hits - len(errors),
-                              "message": message, "active": []})
+    started = time.monotonic()
+    finished = 0
+    spinner = "|/-\\"
+    spin_index = 0
+    show_progress = getattr(sys.stderr, "isatty", lambda: False)()
 
-            if pending:
-                now = time.monotonic()
-                with lock:
-                    current = sorted(active.items())
-                if progress:
-                    progress({"completed": finished, "total": len(todo), "active": [
-                        {"question": numero, "seconds": int(now - began),
-                         "provider": active_routes.get(numero, "Atribuindo modelo")}
-                        for numero, began in current
-                    ], "errors": len(errors), "cached": cached_hits,
-                    "cache_misses": max(0, finished - cached_hits - len(errors)),
-                    "message": ("Aguardando início das próximas questões" if not current else
-                                   "A IA está analisando " + ", ".join(f"Q{n:02d}" for n, _ in current))})
-                if current:
-                    active_text = ", ".join(
-                        f"Q{numero:02d} {int(now - began)}s" for numero, began in current
+    def run_round(queue):
+        nonlocal finished, cached_hits, spin_index
+        with cf.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+            futs = {ex.submit(work, q): q["numero"] for q in queue}
+            pending = set(futs)
+            while pending:
+                done, pending = cf.wait(pending, timeout=1, return_when=cf.FIRST_COMPLETED)
+                for fut in done:
+                    n = futs[fut]
+                    finished += 1
+                    try:
+                        _, res, cached, model = fut.result()
+                        results[n] = res
+                        result_models[n] = model
+                        if cached:
+                            cached_hits += 1
+                        message = (f"[{finished}/{len(todo)}] Q{n:02d} -> {res['materia']} ({res['confianca']}) [{model}]"
+                                   f"{' [cache]' if cached else ''}")
+                    except Exception as e:                  # uma questão com erro não derruba o lote
+                        errors[n] = str(e)
+                        message = f"[{finished}/{len(todo)}] Q{n:02d} ERRO: {e}"
+                    if show_progress:
+                        sys.stderr.write("\r\033[K")
+                    log(message)
+                    if progress:
+                        progress({"completed": finished, "total": len(todo), "question": n,
+                                  "errors": len(errors), "cached": cached_hits,
+                                  "cache_misses": finished - cached_hits - len(errors),
+                                  "message": message, "active": []})
+
+                if pending:
+                    now = time.monotonic()
+                    with lock:
+                        current = sorted(active.items())
+                    if progress:
+                        progress({"completed": finished, "total": len(todo), "active": [
+                            {"question": numero, "seconds": int(now - began),
+                             "provider": active_routes.get(numero, "Atribuindo modelo")}
+                            for numero, began in current
+                        ], "errors": len(errors), "cached": cached_hits,
+                        "cache_misses": max(0, finished - cached_hits - len(errors)),
+                        "message": ("Aguardando início das próximas questões" if not current else
+                                       "A IA está analisando " + ", ".join(f"Q{n:02d}" for n, _ in current))})
+                    if current:
+                        active_text = ", ".join(
+                            f"Q{numero:02d} {int(now - began)}s" for numero, began in current
+                        )
+                        status = f"IA processando {active_text}"
+                    else:
+                        status = "preparando próximas questões"
+                    elapsed = int(now - started)
+                    sys.stderr.write(
+                        f"\r\033[K{spinner[spin_index % len(spinner)]} "
+                        f"{finished}/{len(todo)} concluídas | {status} | total {elapsed}s"
                     )
-                    status = f"IA processando {active_text}"
-                else:
-                    status = "preparando próximas questões"
-                elapsed = int(now - started)
-                sys.stderr.write(
-                    f"\r\033[K{spinner[spin_index % len(spinner)]} "
-                    f"{finished}/{len(todo)} concluídas | {status} | total {elapsed}s"
-                )
+                    sys.stderr.flush()
+                    spin_index += 1
+            if show_progress:
+                sys.stderr.write("\r\033[K")
                 sys.stderr.flush()
-                spin_index += 1
-        if show_progress:
-            sys.stderr.write("\r\033[K")
-            sys.stderr.flush()
+
+    def report(message):
+        log(message)
+        if progress:
+            progress({"completed": finished, "total": len(todo), "errors": len(errors),
+                      "cached": cached_hits, "cache_misses": max(0, finished - cached_hits - len(errors)),
+                      "message": message, "active": []})
+
+    # Fila de reprocessamento: questão com falha não é esquecida, volta para outra rodada.
+    max_rounds = CLASSIFICATION_RETRY_ROUNDS if retry_rounds is None else max(0, retry_rounds)
+    queue = list(todo)
+    retry_round = 0
+    while queue:
+        run_round(queue)
+        failed = [q for q in queue if q["numero"] in errors]
+        if not failed or retry_round >= max_rounds or (cancel_check and cancel_check()):
+            break
+        if not getattr(provider, "has_live_lanes", True):
+            report("Nenhuma faixa de IA disponível; questões com falha ficam para a próxima execução.")
+            break
+        delay = retry_delays[min(retry_round, len(retry_delays) - 1)] if retry_delays else 0
+        retry_round += 1
+        numbers = ", ".join(f"Q{q['numero']:02d}" for q in failed)
+        report(f"Reprocessando {len(failed)} questões com falha (rodada {retry_round}/{max_rounds}"
+               f" em {delay}s, tentando outra IA): {numbers}")
+        waited = 0.0
+        while waited < delay and not (cancel_check and cancel_check()):
+            sleep(min(1.0, delay - waited))
+            waited += 1.0
+        if cancel_check and cancel_check():
+            break
+        for q in failed:
+            errors.pop(q["numero"], None)
+        finished -= len(failed)
+        queue = failed
 
     for q in data["questoes"]:
         r = results.get(q["numero"])
@@ -984,6 +1040,8 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
     data["processamento_cache"] = {"questoes_reutilizadas": cached_hits,
                                    "cache_misses": max(0, len(todo) - cached_hits - len(errors)),
                                    "questoes_processadas": len(todo), "erros": len(errors),
+                                   "rodadas_reprocessamento": retry_round,
+                                   "questoes_recuperadas": sum(1 for n in results if attempts.get(n, 1) > 1),
                                    "estimated_saved_calls": cached_hits}
     if cache_db:
         cache_db.close()

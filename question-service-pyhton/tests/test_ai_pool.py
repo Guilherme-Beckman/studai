@@ -131,13 +131,38 @@ class AIPoolTests(unittest.TestCase):
         self.assertEqual(invalid_key.calls, 1)
         self.assertEqual(backup.calls, 2)
 
-    def test_pool_does_not_retry_invalid_request(self):
-        invalid = StubProvider("invalid", fail=LLMError("bad request", status_code=400))
+    def test_pool_moves_invalid_request_to_another_lane(self):
+        invalid = StubProvider("invalid", fail=LLMError("json_validate_failed", status_code=400))
         backup = StubProvider("backup")
-        pool = RotatingPoolProvider([("Gemini", invalid), ("Ollama", backup)])
+        pool = RotatingPoolProvider([("Groq", invalid), ("Ollama", backup)])
+        self.assertEqual(pool.complete("system", "user"), "backup")
+        self.assertEqual(backup.calls, 1)
+
+    def test_pool_disables_lane_without_credit(self):
+        broke = StubProvider("broke", fail=LLMError("HTTP 402: no remaining credits", status_code=402))
+        backup = StubProvider("backup")
+        pool = RotatingPoolProvider([("Hugging Face", broke), ("Ollama", backup)])
+        self.assertEqual(pool.complete("system", "first"), "backup")
+        self.assertEqual(pool.complete("system", "second"), "backup")
+        self.assertEqual(broke.calls, 1)
+        self.assertTrue(pool.has_live_lanes)
+
+    def test_pool_reports_no_live_lanes_when_all_are_disabled(self):
+        pool = RotatingPoolProvider([("A", StubProvider("a", fail=LLMError("x", status_code=402)))])
         with self.assertRaises(LLMError):
             pool.complete("system", "user")
-        self.assertEqual(backup.calls, 0)
+        self.assertFalse(pool.has_live_lanes)
+
+    def test_request_context_prefers_lanes_not_yet_tried_and_reports_them(self):
+        first, second = StubProvider("first"), StubProvider("second")
+        pool = RotatingPoolProvider([("A", first), ("B", second)])
+        with pool.request_context(7, avoid={"A"}) as used:
+            self.assertEqual(pool.complete("system", "user"), "second")
+        self.assertEqual(used, ["B"])
+        # Se só sobrou a faixa evitada, ela ainda é usada.
+        pool = RotatingPoolProvider([("A", first)])
+        with pool.request_context(7, avoid={"A"}):
+            self.assertEqual(pool.complete("system", "user"), "first")
 
     def test_pool_never_runs_two_questions_on_same_lane_at_once(self):
         first, second = StubProvider("first", pause=0.03), StubProvider("second", pause=0.03)
@@ -316,6 +341,15 @@ class AIPoolTests(unittest.TestCase):
         models = [call.args[2]["model"] for call in request.call_args_list]
         self.assertEqual(models, ["model-a", "model-b", "model-b"])
         self.assertTrue(all(call.kwargs["attempts"] == 1 for call in request.call_args_list))
+
+    def test_openai_compatible_rotation_tries_next_model_after_bad_request(self):
+        responses = [LLMError("HTTP 400: json_validate_failed", status_code=400),
+                     {"choices": [{"message": {"content": "ok"}}]}]
+        with patch("studai.integrations.llm.http_post", side_effect=responses) as request:
+            provider = OpenAICompatProvider(model="model-a,model-b", api_key="k",
+                                            base_url="https://example.test/v1")
+            self.assertEqual(provider.complete("system", "user"), "ok")
+        self.assertEqual(request.call_count, 2)
 
     def test_openai_compatible_rotation_stops_on_non_retryable_error(self):
         with patch("studai.integrations.llm.http_post",

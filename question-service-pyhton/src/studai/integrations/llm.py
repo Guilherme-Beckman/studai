@@ -145,7 +145,9 @@ class AnthropicProvider(Provider):
                         body, self.timeout)
         return "".join(b.get("text", "") for b in out.get("content", []) if b.get("type") == "text")
 
-_ROTATION_RETRYABLE = (None, 404, 408, 409, 429, 500, 502, 503, 504, 529)
+# 400/413/422 costumam ser do modelo (JSON inválido, contexto curto), então vale tentar o próximo;
+# 401/402/403 são da conta e sobem direto para o pool desativar a faixa.
+_ROTATION_RETRYABLE = (None, 400, 404, 408, 409, 413, 422, 429, 500, 502, 503, 504, 529)
 
 
 class ModelRotation:
@@ -313,12 +315,22 @@ class RotatingPoolProvider(Provider):
     def last_used_model(self) -> str:
         return getattr(self._thread_state, "model", self.label)
 
+    @property
+    def has_live_lanes(self) -> bool:
+        """False when every lane is disabled (bad key, no credit), so retrying is pointless."""
+        with self._condition:
+            return len(self._disabled) < len(self.lanes)
+
     @contextlib.contextmanager
-    def request_context(self, question: int, on_route=None):
+    def request_context(self, question: int, on_route=None, avoid=()):
+        """Routes the calls of one question; ``avoid`` lists lane names to skip while others remain.
+
+        Yields the list of lane names this question touched, so a retry can ask for another AI."""
         previous = getattr(self._thread_state, "context", None)
-        self._thread_state.context = (question, on_route)
+        used: list[str] = []
+        self._thread_state.context = (question, on_route, frozenset(avoid), used)
         try:
-            yield
+            yield used
         finally:
             self._thread_state.context = previous
 
@@ -340,13 +352,16 @@ class RotatingPoolProvider(Provider):
         self._recent_starts[index] = starts
         return 0.0 if len(starts) < rpm else 60 - (now - starts[0])
 
-    def _acquire_lane(self, excluded: set[int]) -> int | None:
+    def _acquire_lane(self, excluded: set[int], avoid: frozenset[str] = frozenset()) -> int | None:
         with self._condition:
             while True:
                 candidates = [i for i in range(len(self.lanes))
                               if i not in self._disabled and i not in excluded and not self._out_of_quota(i)]
                 if not candidates:
                     return None
+                # Numa nova tentativa, prefere faixas que ainda não falharam nesta questão.
+                preferred = [i for i in candidates if self.lanes[i][0] not in avoid]
+                candidates = preferred or candidates
                 now = self._clock()
                 free = [i for i in candidates if self._busy.get(i, 0) < self._lane_capacities[i]]
                 waits = {i: self._rate_wait(i, now) for i in free}
@@ -370,11 +385,13 @@ class RotatingPoolProvider(Provider):
         excluded: set[int] = set()
         failures: list[str] = []
         while len(excluded | self._disabled) < len(self.lanes):
-            index = self._acquire_lane(excluded)
+            context = getattr(self._thread_state, "context", None)
+            index = self._acquire_lane(excluded, context[2] if context else frozenset())
             if index is None:
                 break
             name, provider = self.lanes[index]
-            context = getattr(self._thread_state, "context", None)
+            if context:
+                context[3].append(name)
             try:
                 if context and context[1]:
                     context[1](name)
@@ -387,16 +404,15 @@ class RotatingPoolProvider(Provider):
                 excluded.add(index)
                 if context and context[1]:
                     context[1](f"Falha em {name}; buscando faixa alternativa")
-                if error.status_code in (401, 403, 404):
+                # 402 = sem crédito: como chave inválida, a faixa não volta neste pool.
+                if error.status_code in (401, 402, 403, 404):
                     with self._condition:
                         self._disabled.add(index)
                 elif is_daily_quota_error(error):
                     with self._condition:
                         self._quota_until[index] = _next_local_midnight(self._wall_clock())
-                if (error.status_code is not None
-                        and error.status_code not in (401, 403, 404, 408, 409, 429)
-                        and not 500 <= error.status_code < 600):
-                    raise
+                # Qualquer outro erro (inclusive 400) é tentado na próxima faixa: o mesmo pedido
+                # costuma funcionar em outro modelo.
             except Exception as error:
                 failures.append(f"{name}: {error}")
                 excluded.add(index)
