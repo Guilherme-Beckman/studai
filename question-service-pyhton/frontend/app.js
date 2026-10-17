@@ -139,14 +139,13 @@ function stageLabel(stage) {
 
 function examCard(exam, compact = false) {
   const progress = Number(exam.reviewProgress ?? 100);
-  // A prova pode ter falhas na classificação automática mesmo depois de todas
-  // as questões sinalizadas terem sido revisadas manualmente.
-  const manuallyReviewed = !exam.classified && Number(exam.reviewRequired) > 0 &&
-    Number(exam.pendingReview) === 0 && progress === 100;
-  const state = exam.classified
-    ? `<span class="badge">Classificada</span>`
-    : manuallyReviewed
-      ? `<span class="badge" title="Todas as questões sinalizadas foram revisadas">Revisada</span>`
+  // Revisão completa vale mais que a classificação automática: a prova pode ter sido
+  // classificada sem erros ou ter falhas que a revisão manual resolveu.
+  const manuallyReviewed = Number(exam.pendingReview) === 0 && progress === 100;
+  const state = manuallyReviewed
+    ? `<span class="badge" title="Todas as questões foram revisadas">Revisada</span>`
+    : exam.classified
+      ? `<span class="badge">Classificada</span>`
       : `<span class="badge pending">Pendente</span>`;
   const element = `<div class="exam-item exam-item-row"><button class="exam-open-button" type="button" data-open-exam="${escapeHtml(exam.id)}"><span class="exam-file-icon">▤</span><span class="exam-item-main"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}% · ${exam.importedAnswers || 0} respostas do gabarito</span></span>${state}<span class="exam-open-arrow" aria-hidden="true">›</span></button><button class="exam-remove-button" type="button" data-delete-exam="${escapeHtml(exam.id)}" aria-label="Remover ${escapeHtml(exam.name)}" title="Remover prova e questões">Remover</button></div>`;
   return compact ? `<div class="exam-mini"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}%</span></div>` : element;
