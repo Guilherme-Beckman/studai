@@ -37,12 +37,15 @@ SEP_MAX_H = 12.0       # imagens/desenhos mais baixos que isso e largos = separa
 TINY_W, TINY_H = 15.0, 18.0   # imagens minúsculas = glifos faltando (ex.: "ℓ")
 MERGE_TOL = 4.0        # tolerância p/ juntar pedaços de uma mesma figura
 CROP_PAD = 2.0
+SIDE_FIG_GAP = 90.0     # distância máxima entre "(A)" e a imagem da alternativa à direita (2024 Q50: 63)
 
 MARKER_RE = re.compile(r"^\{?\s*(\d{1,2})\s*\}?$")
 SHARED_RE = re.compile(
     r"^Texto para as quest(?:ões|ão)\s+(?:de\s+)?(\d+)\s*(?:e|a|à|-|–)\s*(\d+)", re.I
 )
 ALT_RE = re.compile(r"^\(([A-E])\)\s*(.*)$", re.S)
+# Legenda de alternativa desenhada ("Figura A" sob a imagem da alternativa A).
+ALT_CAPTION_RE = re.compile(r"^(?:Figura|Fig\.|Gráfico|Imagem|Esquema)\s+([A-E])$", re.I)
 NOTE_RE = re.compile(r"^Note e adote", re.I)
 
 MATH_FONTS = ("cambria", "math", "symbol", "mt-extra")
@@ -87,6 +90,7 @@ _SYMBOL_EXTRA = {
     0xB0: "°", 0xB1: "±", 0xB3: "≥", 0xB4: "×", 0xB6: "∂", 0xB7: "•", 0xB9: "≠",
     0xBB: "≈", 0xCE: "∈", 0xD6: "√", 0xD7: "·", 0xE5: "∑",
 }
+_MMETC = {",": "ℓ", "c": "°"}                     # conferido em todo o acervo 2026
 _WINGDINGS = {0x6C: "●", 0x6D: "❍", 0x6E: "■", 0x6F: "□", 0x71: "❑", 0x75: "◆",
               0x9F: "•", 0xA7: "▪", 0xFB: "✗", 0xFC: "✓"}
 
@@ -142,6 +146,12 @@ def _overlap_ratio(a: pymupdf.Rect, b: pymupdf.Rect) -> float:
 
 def _col_of(rect: pymupdf.Rect, page_w: float) -> int:
     return 0 if (rect.x0 + rect.x1) / 2 < page_w / 2 else 1
+
+
+def _fig_col(rect: pymupdf.Rect, page_w: float) -> int:
+    """Figura que atravessa as duas colunas segue a regra das linhas largas: coluna 0.
+    Pelo centro, um mapa de 95 a 500 pt (2026 Q52) caía na coluna da direita."""
+    return 0 if rect.width >= page_w * 0.55 else _col_of(rect, page_w)
 
 
 def _raw_lines(page: pymupdf.Page):
@@ -226,6 +236,8 @@ def _decode_char(c: str, font: str) -> str:
             return _SYMBOL_EXTRA.get(code, c)
         if "wingdings" in font:
             return _WINGDINGS.get(code, c)
+    if "mmetc" in font:                                # MathMagic: "HC," = HCℓ, "20 cC" = 20 °C
+        return _MMETC.get(c, c)
     return c
 
 
@@ -518,6 +530,11 @@ def _build_rows(page: pymupdf.Page) -> tuple[list[Row], list[tuple[int, float]]]
             # Compara com cada pedaço já fundido: fórmulas chegam picadas em
             # várias linhas e a caixa acumulada engoliria os pedaços do meio.
             side_by_side = all(r.bbox.x0 >= b.x1 - 1 or b.x0 >= r.bbox.x1 - 1 for b, _ in prev.parts)
+            # Alternativas em grade ("(A) img  (D) img") e suas legendas ("Figura A  Figura D")
+            # ficam na mesma altura, mas cada uma é uma linha própria.
+            label = ALT_RE.match(r.text) or ALT_CAPTION_RE.match(r.text)
+            if label and any(ALT_RE.match(t) or ALT_CAPTION_RE.match(t) for _, t in prev.parts):
+                continue
             if ov >= 0.5 and side_by_side and ov > best_ov:
                 best, best_ov = prev, ov
         if best:
@@ -545,10 +562,12 @@ def _merge_rects(rects: list[pymupdf.Rect]) -> list[pymupdf.Rect]:
         changed = False
         out: list[pymupdf.Rect] = []
         for r in rects:
-            for o in out:
+            for k, o in enumerate(out):
                 grown = pymupdf.Rect(o.x0 - MERGE_TOL, o.y0 - MERGE_TOL, o.x1 + MERGE_TOL, o.y1 + MERGE_TOL)
                 if grown.intersects(r):
-                    o |= r
+                    # Rect não tem |= no lugar: "o |= r" só trocava a variável e o
+                    # retângulo r sumia (ex.: alternativas B e D da 2022 K Q48).
+                    out[k] = o | r
                     changed = True
                     break
             else:
@@ -557,7 +576,8 @@ def _merge_rects(rects: list[pymupdf.Rect]) -> list[pymupdf.Rect]:
     return rects
 
 
-def _figure_rects(page: pymupdf.Page) -> list[pymupdf.Rect]:
+def _figure_parts(page: pymupdf.Page) -> list[pymupdf.Rect]:
+    """Imagens e grupos de desenho que podem ser figura, antes de juntar os vizinhos."""
     rects: list[pymupdf.Rect] = []
     for im in page.get_image_info():
         r = pymupdf.Rect(im["bbox"])
@@ -572,10 +592,16 @@ def _figure_rects(page: pymupdf.Page) -> list[pymupdf.Rect]:
             continue                                  # linha divisória de coluna / filete
         if r.width >= page.rect.width * 0.9 and r.height >= page.rect.height * 0.85:
             continue                                  # moldura/contorno de página, não uma figura da questão
+        if r.height >= page.rect.height * 0.6:
+            continue                                  # moldura/fio de coluna inteira (ex.: 2019 Q32)
         if r.height < SEP_MAX_H and r.width > 40:
             continue                                  # bolinhas do separador
         rects.append(r)
-    return [r for r in _merge_rects(rects) if r.y0 >= HEADER_Y - 5]
+    return [r for r in rects if r.y0 >= HEADER_Y - 5]
+
+
+def _figure_rects(page: pymupdf.Page) -> list[pymupdf.Rect]:
+    return _merge_rects(_figure_parts(page))
 
 
 def _mark_layout(rows: list[Row], pw: float) -> None:
@@ -601,18 +627,138 @@ def _mark_layout(rows: list[Row], pw: float) -> None:
                          and not ALT_RE.match(r.text) and not MARKER_RE.match(r.text))
 
 
+def _split_by_markers(fig: Fig, markers: list[tuple[str, pymupdf.Rect]],
+                      parts: list[pymupdf.Rect]) -> list[Fig]:
+    """
+    Fatia uma figura apontada por várias letras. Usa as peças originais (cada imagem
+    ou desenho antes da fusão) que cobrem a altura de cada letra; se não der para
+    separar assim, corta pela altura das letras.
+    """
+    inner = [r for r in parts if fig.bbox.contains(r)]
+    owned: dict[str, list[pymupdf.Rect]] = {}
+    for letter, mb in markers:
+        cy = (mb.y0 + mb.y1) / 2
+        owned[letter] = [r for r in inner if r.y0 - 2 <= cy <= r.y1 + 2]
+    claimed = [id(r) for rs in owned.values() for r in rs]
+    out: list[Fig] = []
+    if all(owned.values()) and len(claimed) == len(set(claimed)):
+        for letter, rs in owned.items():
+            box = pymupdf.Rect(rs[0])
+            for r in rs[1:]:
+                box |= r
+            out.append(Fig(box, fig.col, alt=letter))
+        first = min(r.y0 for rs in owned.values() for r in rs)
+        above = [r for r in inner if id(r) not in set(claimed) and r.y1 <= first + 2]
+        if above:                                     # figura do enunciado colada às alternativas
+            box = pymupdf.Rect(above[0])
+            for r in above[1:]:
+                box |= r
+            out.append(Fig(box, fig.col))
+        return out
+    for k, (letter, mb) in enumerate(markers):
+        y0 = fig.bbox.y0 if k == 0 else mb.y0 - 4
+        y1 = markers[k + 1][1].y0 - 4 if k + 1 < len(markers) else fig.bbox.y1
+        out.append(Fig(pymupdf.Rect(fig.bbox.x0, y0, fig.bbox.x1, y1), fig.col, alt=letter))
+    return out
+
+
+def _attach_side_figures(rows: list[Row], figs: list[Fig], parts: list[pymupdf.Rect]) -> set[int]:
+    """
+    Alternativas desenhadas (FUVEST 2026 Q05, 2024 Q50, 2020 Q08): "(A)" sozinho à
+    esquerda da imagem, às vezes com "Figura A" logo abaixo. Na ordem de leitura a
+    imagem vem antes ou junto da letra, então a ligação é feita aqui pela posição.
+    Altera ``figs`` no lugar e devolve os ids das legendas, que não entram no texto.
+    """
+    hits: dict[int, list[tuple[str, pymupdf.Rect]]] = {}
+    letters = [r for r in rows if (m := ALT_RE.match(r.text)) and not m.group(2).strip()]
+    for r in rows:
+        m = ALT_RE.match(r.text)
+        if not m or m.group(2).strip():
+            continue
+        cy = (r.bbox.y0 + r.bbox.y1) / 2
+        # Em grade, a imagem da letra vai só até a próxima letra da mesma linha ("(A) img (D) img").
+        limit = min((o.bbox.x0 for o in letters if o is not r and o.col == r.col and o.bbox.x0 > r.bbox.x1
+                     and abs((o.bbox.y0 + o.bbox.y1) / 2 - cy) <= 10), default=float("inf"))
+        center = pymupdf.Point((r.bbox.x0 + r.bbox.x1) / 2, (r.bbox.y0 + r.bbox.y1) / 2)
+        host = next((f for f in figs if f.bbox.contains(center)), None)
+        if host:
+            # Várias letras dentro da figura já foram fatiadas; uma só, no canto de cima
+            # da moldura da própria alternativa (2023 K Q44), é a dona da figura.
+            if host.alt is None and r.bbox.y0 - host.bbox.y0 < 20 and r.bbox.x0 - host.bbox.x0 < 20:
+                host.alt = m.group(1)
+            continue
+        side = [f for f in figs if f.alt is None and f.col == r.col
+                and f.bbox.y0 - 2 <= center.y <= f.bbox.y1 + 2 and f.bbox.x0 >= r.bbox.x1 - 2
+                and f.bbox.x1 <= limit + 2]
+        # A imagem mais próxima precisa estar colada à letra; as demais da mesma faixa
+        # (tabela de alternativas com duas imagens por linha) vêm junto.
+        if not side or min(f.bbox.x0 for f in side) - r.bbox.x1 > SIDE_FIG_GAP:
+            continue
+        for f in side:
+            hits.setdefault(id(f), []).append((m.group(1), pymupdf.Rect(r.bbox)))
+
+    result: list[Fig] = []
+    for f in figs:
+        markers = sorted(hits.get(id(f), []), key=lambda lm: lm[1].y0)
+        if not markers:
+            result.append(f)
+        elif len(markers) == 1:
+            f.alt = markers[0][0]
+            result.append(f)
+        else:
+            result.extend(_split_by_markers(f, markers, parts))
+    # Uma letra com pedaços em mais de uma imagem da mesma faixa vira um recorte só.
+    # Só junta na mesma coluna e altura: a outra coluna (ou outra questão) tem seu próprio "(A)".
+    kept: list[Fig] = []
+    for f in result:
+        twin = next((k for k in kept if f.alt and k.alt == f.alt and k.col == f.col
+                     and _overlap_ratio(k.bbox, f.bbox) > 0.5), None)
+        if twin:
+            twin.bbox = twin.bbox | f.bbox
+        else:
+            kept.append(f)
+    figs[:] = kept
+
+    # Moldura (tabela, caixa) da alternativa que começa na linha do "(B) texto", com a letra
+    # logo à esquerda (2019 Q40): na leitura ela vem antes da letra e ficaria com a anterior.
+    for r in rows:
+        m = ALT_RE.match(r.text)
+        if not m:
+            continue
+        for f in figs:
+            if (f.alt is None and f.col == r.col and -3 <= r.bbox.y0 - f.bbox.y0 <= 12
+                    and 0 < f.bbox.x0 - r.bbox.x0 <= SIDE_FIG_GAP):
+                f.alt = m.group(1)
+
+    captions: set[int] = set()
+    for f in figs:
+        if not f.alt:
+            continue
+        for c in rows:
+            cm = ALT_CAPTION_RE.match(c.text)
+            if (cm and cm.group(1).upper() == f.alt and 0 <= c.bbox.y0 - f.bbox.y1 <= 15
+                    and c.bbox.x1 >= f.bbox.x0 and c.bbox.x0 <= f.bbox.x1):
+                captions.add(id(c))
+    return captions
+
+
 def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
     pw = page.rect.width
     rows, ends = _build_rows(page)
     _mark_layout(rows, pw)
-    frects = _figure_rects(page)
+    parts = _figure_parts(page)
 
-    # caixas "Note e adote": retângulo que contém uma linha começando assim
-    note_rects, fig_rects = [], []
-    for fr in frects:
-        is_note = any(NOTE_RE.match(r.text) and fr.contains(pymupdf.Point(r.bbox.x0 + 1, r.bbox.y0 + 1))
-                      for r in rows)
-        (note_rects if is_note else fig_rects).append(fr)
+    # caixas "Note e adote": retângulo que contém uma linha começando assim. Separadas
+    # antes da fusão: uma imagem encostada na caixa (2019 Q39) não pode virar nota.
+    def is_note(rect: pymupdf.Rect) -> bool:
+        return any(NOTE_RE.match(r.text) and rect.contains(pymupdf.Point(r.bbox.x0 + 1, r.bbox.y0 + 1))
+                   for r in rows)
+
+    note_parts = [r for r in parts if is_note(r)]
+    merged = _merge_rects([r for r in parts if not is_note(r)])
+    note_rects = _merge_rects(note_parts)
+    fig_rects = [fr for fr in merged if not is_note(fr)]
+    note_rects += [fr for fr in merged if is_note(fr)]
 
     figs: list[Fig] = []
     for fr in fig_rects:
@@ -625,14 +771,16 @@ def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
             # fatia por alternativa
             first_y = bare[0].bbox.y0 - 4
             if first_y - fr.y0 > 20:   # sobra algo acima do "(A)" => figura do enunciado
-                figs.append(Fig(pymupdf.Rect(fr.x0, fr.y0, fr.x1, first_y), _col_of(fr, pw)))
+                figs.append(Fig(pymupdf.Rect(fr.x0, fr.y0, fr.x1, first_y), _fig_col(fr, pw)))
             for k, mk in enumerate(bare):
                 y0 = mk.bbox.y0 - 4
                 y1 = (bare[k + 1].bbox.y0 - 4) if k + 1 < len(bare) else fr.y1
                 letter = ALT_RE.match(mk.text).group(1)
-                figs.append(Fig(pymupdf.Rect(fr.x0, y0, fr.x1, y1), _col_of(fr, pw), alt=letter))
+                figs.append(Fig(pymupdf.Rect(fr.x0, y0, fr.x1, y1), _fig_col(fr, pw), alt=letter))
         else:
-            figs.append(Fig(fr, _col_of(fr, pw)))
+            figs.append(Fig(fr, _fig_col(fr, pw)))
+
+    captions = _attach_side_figures(rows, figs, parts)
 
     items: list[Item] = []
     for f in figs:
@@ -644,6 +792,8 @@ def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
         # uma imagem; ele continua sendo texto estrutural e não pode sumir.
         if MARKER_RE.match(r.text):
             items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
+            continue
+        if id(r) in captions:
             continue
         if ALT_RE.match(r.text) and not any(nr.contains(center) for nr in note_rects):
             # linha de alternativa nunca é "texto da figura" (cobre tabelas de alternativas)
@@ -862,6 +1012,8 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
         q.pop("_size")
         q["enunciado"] = "\n".join(b["texto"] for b in q["blocos"]) if q["blocos"] else _join(q["enunciado"])
         q["nota"] = _join(q["nota"])
+        # Em grade, a leitura por linha dá A, D, B, E, C.
+        q["alternativas"] = dict(sorted(q["alternativas"].items()))
         for a in q["alternativas"].values():
             a["texto"] = _join(a["texto"])
 
