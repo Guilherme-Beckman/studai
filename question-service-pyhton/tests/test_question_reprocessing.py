@@ -106,13 +106,26 @@ class QuestionReprocessingTests(unittest.TestCase):
         self.assertIn("probabilidade", json.loads(self.classified.read_text(encoding="utf-8"))
                       ["questoes"][0]["enunciado"].lower())
 
+    def test_any_question_can_be_reprocessed_even_without_flags(self):
+        # Correções no extrator (ex.: alternativas em imagem) valem para questões que a
+        # extração antiga não sinalizou e que já foram revisadas.
+        data = json.loads(self.classified.read_text(encoding="utf-8"))
+        data["questoes"][0]["revisar"] = []
+        self.classified.write_text(json.dumps(data), encoding="utf-8")
+        review.save_review(self.classified, 1, {"status": "reviewed", "subject": "Matemática",
+                                                "topic": "Probabilidade"})
+        self.assertFalse(server._reprocess_recommended(data["questoes"][0], {"status": "reviewed"}))
+        preview = self.run_preview()
+        server._confirm_question_reprocess("exam-id", 1, preview["previewId"])
+        self.assertEqual(review.read_reviews(self.classified)["questions"]["1"]["status"], "reviewed")
+
     def test_stale_glyphs_make_unflagged_question_reprocessable(self):
         clean = {"numero": 3, "enunciado": "Calcule f(x)", "alternativas": {"A": {"texto": "2"}}, "revisar": []}
-        self.assertFalse(server._can_reprocess(clean, None))
+        self.assertFalse(server._reprocess_recommended(clean, None))
         # "ܣ" (U+0723) vinha de provas 2012–2019 e só passou a ser reconhecido depois.
         stale = {**clean, "alternativas": {"A": {"texto": "\u0723 = 2"}}}
-        self.assertTrue(server._can_reprocess(stale, {"status": "reviewed"}))
-        self.assertTrue(server._can_reprocess(clean, {"status": "unusable"}))
+        self.assertTrue(server._reprocess_recommended(stale, {"status": "reviewed"}))
+        self.assertTrue(server._reprocess_recommended(clean, {"status": "unusable"}))
 
     def test_missing_pdf_and_wrong_question_leave_original_unchanged(self):
         self.pdf.unlink()

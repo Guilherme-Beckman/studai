@@ -684,9 +684,10 @@ REPROCESS_ISSUES = {"alternativas_incompletas", "alternativa_vazia", "enunciado_
                     "glifo_estranho", "formula_matematica"}
 
 
-def _can_reprocess(question: dict, review: dict | None) -> bool:
+def _reprocess_recommended(question: dict, review: dict | None) -> bool:
     """Questão inutilizável, com falha de extração sinalizada, ou cujo texto salvo ainda tem
-    glifos que a extração atual reconhece (provas extraídas antes de um ajuste no decodificador)."""
+    glifos que a extração atual reconhece (provas extraídas antes de um ajuste no decodificador).
+    Qualquer questão pode ser reprocessada; estas ganham o destaque na revisão."""
     if (review or {}).get("status") in ("unusable", "bad_crop"):
         return True
     if REPROCESS_ISSUES.intersection(question_review.review_reasons(question)):
@@ -706,10 +707,8 @@ def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
     if old_question is None:
         raise FileNotFoundError(f"questão {number} não encontrada nesta prova")
     review = question_review.read_reviews(exam_json).get("questions", {}).get(str(number), {})
-    # Questões já revisadas também podem ser reextraídas (p. ex. após correção de fórmulas):
-    # a revisão humana é preservada na confirmação.
-    if not _can_reprocess(old_question, review):
-        raise ValueError("esta questão não tem uma falha de extração elegível para reprocessamento")
+    # Qualquer questão pode ser reextraída (p. ex. depois de uma correção no extrator, mesmo
+    # sem sinalização): nada muda até a confirmação, que preserva a revisão humana.
 
     workdir = QUESTION_REPROCESS_ROOT / uuid.uuid4().hex
     workdir.mkdir(parents=True, exist_ok=False)
@@ -1250,7 +1249,7 @@ class Handler(BaseHTTPRequestHandler):
                                       "review": human_reviews.get(number),
                                       "reviewReasons": question_review.review_reasons(question),
                                       "needsReview": bool(question_review.review_reasons(question)),
-                                      "canReprocess": _can_reprocess(question, human_reviews.get(number))})
+                                      "reprocessRecommended": _reprocess_recommended(question, human_reviews.get(number))})
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
                     answer_keys = {str(row[0]): {"answer": row[1], "annulled": bool(row[2])}
