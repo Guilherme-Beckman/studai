@@ -2,19 +2,24 @@
 from __future__ import annotations
 
 import base64
+import collections
 import contextlib
 import contextvars
+import hashlib
 import importlib
 import json
 import os
 import random
+import re
 import sys
 import threading
 import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 OPENAI_COMPAT_PRESETS = {
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY"),
@@ -43,6 +48,16 @@ def _next_local_midnight(now: float | None = None) -> float:
     tomorrow = time.mktime((current.tm_year, current.tm_mon, current.tm_mday + 1, 0, 0, 0, 0, 0, -1))
     return tomorrow
 
+
+_PACIFIC = ZoneInfo("America/Los_Angeles")
+
+
+def next_pacific_midnight(now: float | None = None) -> float:
+    """Gemini zera a cota diária à meia-noite do Pacífico, não à meia-noite local."""
+    current = datetime.fromtimestamp(now if now is not None else time.time(), _PACIFIC)
+    tomorrow = (current + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return tomorrow.timestamp()
+
 def load_dotenv(path: Path) -> None:
     """Carrega pares simples KEY=VALUE sem sobrescrever variáveis já exportadas."""
     if not path.is_file():
@@ -64,9 +79,11 @@ REQUEST_STAGE: contextvars.ContextVar[str] = contextvars.ContextVar("studai_requ
 
 
 class LLMError(Exception):
-    def __init__(self, message: str, status_code: int | None = None):
+    def __init__(self, message: str, status_code: int | None = None, retry_at: float | None = None):
         super().__init__(message)
         self.status_code = status_code
+        # Horário de parede (epoch) em que a cota volta, quando o provedor sabe.
+        self.retry_at = retry_at
 
 def http_post(url: str, headers: dict, body: dict, timeout: float, attempts: int = 4) -> dict:
     data = json.dumps(body).encode("utf-8")
@@ -79,7 +96,8 @@ def http_post(url: str, headers: dict, body: dict, timeout: float, attempts: int
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read())
         except urllib.error.HTTPError as e:
-            payload = e.read().decode("utf-8", "replace")[:500]
+            # Em 429 o Gemini põe o tipo de cota (por minuto/por dia) no fim do corpo.
+            payload = e.read().decode("utf-8", "replace")[:4000 if e.code == 429 else 500]
             if e.code in (408, 409, 429, 500, 502, 503, 504, 529) and i < attempts - 1:
                 ra = e.headers.get("Retry-After") if e.headers else None
                 delay = float(ra) if ra and ra.replace(".", "", 1).isdigit() else 2 ** i + random.random()
@@ -145,6 +163,132 @@ class AnthropicProvider(Provider):
                         body, self.timeout)
         return "".join(b.get("text", "") for b in out.get("content", []) if b.get("type") == "text")
 
+# Limites do nível gratuito do Gemini (pedidos por minuto, pedidos por dia), conferidos no
+# AI Studio em 2026-10. Modelos fora da tabela só aprendem o limite pelos 429.
+# STUDAI_GEMINI_LIMITS=modelo=rpm/rpd,... substitui; STUDAI_GEMINI_LIMITS=off desliga a tabela.
+GEMINI_FREE_TIER_LIMITS = {
+    "gemini-2.5-flash": (5, 20),
+    "gemini-3-flash-preview": (5, 20),
+    "gemini-3.6-flash": (5, 20),
+    "gemini-3.7-flash": (5, 20),
+    "gemini-3.8-flash": (5, 20),
+    "gemini-3.1-flash-lite": (15, 500),
+    "gemini-3.1-flash-lite-preview": (15, 500),
+    "gemini-3.5-flash-lite": (15, 500),
+}
+
+
+def gemini_limits_from_env() -> dict[str, tuple[int, int]]:
+    raw = os.environ.get("STUDAI_GEMINI_LIMITS", "").strip()
+    if raw.casefold() in {"off", "0", "none", "false"}:
+        return {}
+    limits = dict(GEMINI_FREE_TIER_LIMITS)
+    for item in filter(None, (part.strip() for part in raw.split(","))):
+        try:
+            model, values = item.split("=", 1)
+            rpm, rpd = values.split("/", 1)
+            limits[model.strip()] = (max(0, int(rpm)), max(0, int(rpd)))
+        except ValueError:
+            raise ValueError(f"STUDAI_GEMINI_LIMITS inválido em {item!r}; use modelo=rpm/rpd") from None
+    return limits
+
+
+_RETRY_IN = re.compile(r"(?:retry in|\"retryDelay\":\s*\")\s*([\d.]+)\s*s", re.IGNORECASE)
+
+
+class ModelQuota:
+    """Controla pedidos por minuto e por dia de cada modelo, e o que os 429 ensinam.
+
+    O limite do Google é por projeto, então a mesma chave compartilha um único controle
+    entre todos os pools (ver ``gemini_quota_for_key``). ``rpm``/``rpd`` 0 = sem limite."""
+
+    def __init__(self, limits: dict[str, tuple[int, int]], *, clock=time.monotonic, wall_clock=time.time,
+                 reset_at=next_pacific_midnight):
+        self.limits = dict(limits)
+        self._clock = clock
+        self._wall_clock = wall_clock
+        self._reset_at = reset_at
+        self._lock = threading.Lock()
+        self._starts: dict[str, collections.deque] = {}
+        self._day_count: dict[str, int] = {}
+        self._day_ends = reset_at(wall_clock())
+        self._cool_until: dict[str, float] = {}
+        self._exhausted: set[str] = set()
+
+    def _roll_day(self) -> None:
+        if self._wall_clock() >= self._day_ends:
+            self._day_ends = self._reset_at(self._wall_clock())
+            self._day_count.clear()
+            self._exhausted.clear()
+
+    @property
+    def day_ends(self) -> float:
+        with self._lock:
+            self._roll_day()
+            return self._day_ends
+
+    def wait_time(self, model: str) -> float | None:
+        """0 = pode usar já; >0 = segundos até liberar; None = sem cota até amanhã."""
+        with self._lock:
+            self._roll_day()
+            rpm, rpd = self.limits.get(model, (0, 0))
+            if model in self._exhausted or (rpd and self._day_count.get(model, 0) >= rpd):
+                return None
+            now = self._clock()
+            wait = max(0.0, self._cool_until.get(model, 0.0) - now)
+            starts = self._starts.setdefault(model, collections.deque())
+            while starts and now - starts[0] >= 60:
+                starts.popleft()
+            if rpm and len(starts) >= rpm:
+                wait = max(wait, 60 - (now - starts[0]))
+            return wait
+
+    def reserve(self, model: str) -> None:
+        with self._lock:
+            self._roll_day()
+            self._starts.setdefault(model, collections.deque()).append(self._clock())
+            self._day_count[model] = self._day_count.get(model, 0) + 1
+
+    def remaining_today(self, model: str) -> int | None:
+        with self._lock:
+            self._roll_day()
+            rpd = self.limits.get(model, (0, 0))[1]
+            if model in self._exhausted:
+                return 0
+            return max(0, rpd - self._day_count.get(model, 0)) if rpd else None
+
+    def record_error(self, model: str, error: "LLMError") -> None:
+        if error.status_code != 429:
+            return
+        text = str(error)
+        with self._lock:
+            self._roll_day()
+            if "PerDay" in text or is_daily_quota_error(error):
+                self._exhausted.add(model)
+                return
+            match = _RETRY_IN.search(text)
+            delay = float(match.group(1)) if match else 60.0
+            self._cool_until[model] = self._clock() + min(max(delay, 1.0), 120.0)
+
+
+_GEMINI_QUOTAS: dict[str, ModelQuota] = {}
+_GEMINI_QUOTAS_LOCK = threading.Lock()
+
+
+def gemini_quota_for_key(api_key: str | None) -> ModelQuota | None:
+    limits = gemini_limits_from_env()
+    if not api_key:
+        return None
+    fingerprint = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:16]
+    with _GEMINI_QUOTAS_LOCK:
+        quota = _GEMINI_QUOTAS.get(fingerprint)
+        if quota is None:
+            quota = _GEMINI_QUOTAS[fingerprint] = ModelQuota(limits)
+        else:
+            quota.limits = limits
+        return quota
+
+
 # 400/413/422 costumam ser do modelo (JSON inválido, contexto curto), então vale tentar o próximo;
 # 401/402/403 são da conta e sobem direto para o pool desativar a faixa.
 _ROTATION_RETRYABLE = (None, 400, 404, 408, 409, 413, 422, 429, 500, 502, 503, 504, 529)
@@ -155,6 +299,10 @@ class ModelRotation:
     modelo e, em erro de cota, indisponibilidade ou modelo inexistente, tenta o seguinte."""
 
     rotation_family = "modelos"
+    # Espera máxima por um modelo limitado por minuto antes de desistir do pedido.
+    max_quota_wait = 65.0
+    _quota: ModelQuota | None = None
+    _sleep = staticmethod(time.sleep)
 
     def _init_rotation(self) -> None:
         self.models = list(dict.fromkeys(m.strip() for m in self.model.split(",") if m.strip()))
@@ -184,21 +332,49 @@ class ModelRotation:
 
     def _rotate(self, call) -> str:
         first = self._next_model_index()
+        order = [self.models[(first + offset) % len(self.models)] for offset in range(len(self.models))]
+        quota = self._quota
         failures: list[tuple[str, LLMError]] = []
-        for offset in range(len(self.models)):
-            model = self.models[(first + offset) % len(self.models)]
+        tried: set[str] = set()
+        # Um modelo limitado por minuto pode voltar à fila; o teto evita laço infinito.
+        for _ in range(3 * len(order)):
+            ready, waits = [], []
+            for model in order:
+                if model in tried:
+                    continue
+                wait = quota.wait_time(model) if quota else 0.0
+                if wait is None:
+                    continue
+                (ready if wait <= 0 else waits).append((wait, model))
+            if not ready:
+                if waits and min(waits)[0] <= self.max_quota_wait:
+                    self._sleep(min(waits)[0])
+                    continue
+                break
+            model = ready[0][1]
+            if quota:
+                quota.reserve(model)
             try:
                 answer = call(model)
                 self._thread_state.model = model
                 return answer
             except LLMError as e:
+                if quota:
+                    quota.record_error(model, e)
                 if e.status_code not in _ROTATION_RETRYABLE:
                     raise
                 failures.append((model, e))
+                # 429 por minuto: o controle de cota sabe quando o modelo volta.
+                if not (quota and e.status_code == 429 and quota.wait_time(model) is not None):
+                    tried.add(model)
+        if quota and all(quota.wait_time(model) is None for model in order):
+            raise LLMError(f"todos os {self.rotation_family} sem cota diária (requests per day) até "
+                           + time.strftime("%d/%m %H:%M", time.localtime(quota.day_ends)),
+                           status_code=429, retry_at=quota.day_ends)
         codes = {error.status_code for _, error in failures}
         status_code = next(iter(codes)) if len(codes) == 1 else None
         detail = " | ".join(f"{model}: {error}" for model, error in failures)
-        raise LLMError(f"todos os {self.rotation_family} da rotação falharam: " + detail,
+        raise LLMError(f"todos os {self.rotation_family} da rotação falharam: " + (detail or "sem modelo livre"),
                        status_code=status_code)
 
 
@@ -247,9 +423,10 @@ class GeminiProvider(ModelRotation, Provider):
     default_base_url = "https://generativelanguage.googleapis.com/v1beta"
     rotation_family = "modelos Gemini"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, quota: ModelQuota | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._init_rotation()
+        self._quota = quota or gemini_quota_for_key(self.api_key)
 
     def complete(self, system, user, images=None):
         parts: list[dict] = [{"text": user}] + [
@@ -268,7 +445,8 @@ class GeminiProvider(ModelRotation, Provider):
         def call(model: str) -> str:
             out = http_post(f"{self.base_url}/models/{model}:generateContent",
                             {"x-goog-api-key": self.api_key or ""}, body, self.timeout,
-                            attempts=self._rotation_attempts(4))
+                            # Com controle de cota, a espera do 429 fica com a rotação.
+                            attempts=1 if self._quota else self._rotation_attempts(4))
             try:
                 return "".join(p.get("text", "") for p in out["candidates"][0]["content"]["parts"])
             except (KeyError, IndexError, TypeError):
@@ -410,7 +588,8 @@ class RotatingPoolProvider(Provider):
                         self._disabled.add(index)
                 elif is_daily_quota_error(error):
                     with self._condition:
-                        self._quota_until[index] = _next_local_midnight(self._wall_clock())
+                        self._quota_until[index] = (error.retry_at
+                                                    or _next_local_midnight(self._wall_clock()))
                 # Qualquer outro erro (inclusive 400) é tentado na próxima faixa: o mesmo pedido
                 # costuma funcionar em outro modelo.
             except Exception as error:

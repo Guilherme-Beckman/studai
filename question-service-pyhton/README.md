@@ -224,6 +224,14 @@ STUDAI_HF_RPM=0
 STUDAI_GEMINI_RPM=0                    # limite por minuto opcional para cada chave Gemini
 ```
 
+**Cota por modelo no Gemini.** No nível gratuito, cada modelo tem um limite próprio por minuto e por dia. Os Flash têm 5 por minuto e 20 por dia; os Flash Lite têm 15 por minuto e 500 por dia. A rotação do Gemini conta os pedidos de cada modelo:
+- Um modelo que chegou ao limite do dia é pulado sem ser chamado.
+- Um modelo no limite do minuto passa a vez para o próximo. Se todos estiverem nesse limite, a rotação espera o primeiro liberar, até 65 s.
+- Um 429 do Google ensina o mesmo: por minuto, o modelo descansa o tempo que o Google pedir; por dia, ele fica fora até o reset.
+- Quando todos os modelos esgotam o dia, a faixa sai do pool até a **meia-noite do Pacífico**, horário em que o Google zera a cota.
+
+A contagem fica em memória e é compartilhada por todos os pools que usam a mesma chave. Depois de reiniciar o servidor, ela recomeça do zero e se ajusta pelos 429. `STUDAI_GEMINI_LIMITS=modelo=rpm/rpd,...` ajusta a tabela, por exemplo depois de ativar o faturamento; `STUDAI_GEMINI_LIMITS=off` desliga a tabela.
+
 Quando uma faixa recebe 429 indicando cota **diária** esgotada, ela sai do pool até a meia-noite local, em vez de ser testada em toda questão. Um 429 por minuto só faz a questão tentar outra faixa. Uploads simultâneos com a mesma configuração compartilham o mesmo pool, para respeitar a capacidade de cada faixa. Envie `useFreeCloud=false` no processamento para ignorar essas faixas.
 
 Erros de conta (401, 402 sem crédito, 403) tiram a faixa do pool. Qualquer outro erro só faz a questão tentar a próxima faixa.
