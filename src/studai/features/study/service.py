@@ -11,6 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from studai.features.classification.taxonomy import CONTENT_INDEX, aggregate_content_ids, live_id
+from studai.features.diagnostics import depth, mastery
 from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
 from studai.features.study import scheduler
@@ -18,6 +19,7 @@ from studai.features.study import scheduler
 STUDY_SCHEMA_VERSION = 1
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 GAP_ACCURACY = 0.7
+HALF_LIFE_DAYS = 30
 REASONS = ("overdue_question", "due_content", "new_gap", "new_content")
 
 
@@ -183,6 +185,91 @@ def _gap_nodes(db: sqlite3.Connection, course_id: str) -> set[str]:
     return gaps
 
 
+def course_responses(db: sqlite3.Connection, course_id: str) -> list[dict]:
+    """Respostas do curso no formato de ``mastery``: diagnósticos, provas e estudo diário.
+
+    Cada resposta leva também ``kind`` (``diagnostic``/``exam``/``daily``) e os dados da
+    questão (``source_id``, ``number``, ``selected``, ``correct_answer``, ``reason``).
+    """
+    responses = []
+    for row in db.execute("""SELECT aq.*, a.mode AS attempt_mode FROM attempt_questions aq
+            JOIN attempts a ON a.id = aq.attempt_id
+            WHERE a.course_id = ? AND aq.answered_at IS NOT NULL""", (course_id,)):
+        row = dict(row)
+        responses.append({**mastery.response_from_row(row),
+                          "kind": "exam" if row["attempt_mode"] == "exam" else "diagnostic",
+                          "source_id": row["source_id"], "number": int(row["question_number"]),
+                          "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
+                          "reason": row["error_reason"]})
+    for row in db.execute("""SELECT sa.* FROM study_answers sa JOIN study_sessions s ON s.id = sa.session_id
+            WHERE s.course_id = ?""", (course_id,)):
+        responses.append({"correct": bool(row["is_correct"]), "subject": row["subject"],
+                          "principal_id": live_id(row["content_id"]), "related_ids": [],
+                          "answered_at": row["answered_at"], "kind": "daily",
+                          "source_id": row["source_id"], "number": int(row["question_number"]),
+                          "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
+                          "reason": row["error_reason"]})
+    responses.sort(key=lambda response: response["answered_at"] or "")
+    return responses
+
+
+def _new_leaves(db: sqlite3.Connection, pool: list[dict], fresh: list[str], weights: dict[str, float],
+                course_id: str, now: datetime, budget: int, rng: random.Random) -> list[tuple[str, str]]:
+    """Folhas novas do dia, escolhidas de cima para baixo.
+
+    A unidade é o conteúdo (3º nível): lacunas primeiro, depois conteúdos já começados
+    e ainda não consolidados, depois conteúdos nunca vistos e, por último, os
+    consolidados. Em cada rodada entra uma folha por conteúdo — a irmã ainda não
+    praticada de maior incidência —, então o conteúdo é coberto por inteiro antes de
+    se abrir outro, em vez de sortear subconteúdos soltos.
+    """
+    incidence = mastery.node_incidence(pool)
+    nodes = depth.compute_depth(course_responses(db, course_id), subject_weights=weights, incidence=incidence,
+                                half_life_days=HALF_LIFE_DAYS, now=now)
+    gaps = _gap_nodes(db, course_id) | {identity for identity, node in nodes.items()
+                                        if node["status"] == "gap" and node["level"] not in ("subject", "area")}
+    groups: dict[str, list[str]] = defaultdict(list)
+    for content_id in fresh:
+        groups[depth.content_ancestor(content_id)].append(content_id)
+
+    def tier(content: str) -> int:
+        # Matéria e área são amplas demais para marcar lacuna: só conta do conteúdo para baixo.
+        if any(gaps & set(aggregate_content_ids([leaf])[2:]) for leaf in groups[content]):
+            return 0
+        node = nodes.get(content)
+        if not node or node["coverage"] == 0:
+            return 2
+        return 1 if node["depth"] < depth.CONSOLIDATED_DEPTH else 3
+
+    def score(content: str) -> float:
+        node = nodes.get(content) or {"depth": 0.0}
+        subject = CONTENT_INDEX[content]["subject"]
+        return weights.get(subject, 0.0) * (incidence.get(content, 0.0) + 1e-3) * (1 - node["depth"])
+
+    contents = sorted(groups)
+    rng.shuffle(contents)  # desempate estável e determinístico no dia
+    contents.sort(key=lambda content: (tier(content), -score(content)))
+    for content in contents:
+        rng.shuffle(groups[content])
+        groups[content].sort(key=lambda leaf: (nodes.get(leaf, {}).get("evidence", 0) > 0,
+                                               -incidence.get(leaf, 0.0)))
+    sequence = []  # rodadas: a n-ésima folha de cada conteúdo antes da (n+1)-ésima de qualquer um
+    for depth_index in range(max(len(leaves) for leaves in groups.values())):
+        sequence += [(tier(content), groups[content][depth_index]) for content in contents
+                     if depth_index < len(groups[content])]
+    subject_of = {leaf: CONTENT_INDEX[leaf]["subject"] for _, leaf in sequence}
+    chosen = [("new_gap", leaf) for level, leaf in sequence if level == 0][:budget]
+    remaining = budget - len(chosen)
+    others = [leaf for level, leaf in sequence if level > 0 and subject_of[leaf] in weights]
+    if remaining > 0 and others:
+        quotas = diagnostics.allocate_counts(Counter(subject_of[leaf] for leaf in others), weights, remaining)
+        for leaf in others:
+            if quotas.get(subject_of[leaf], 0) > 0:
+                quotas[subject_of[leaf]] -= 1
+                chosen.append(("new_content", leaf))
+    return chosen
+
+
 def _item(reason: str, entry: dict, content_id: str) -> dict:
     node = CONTENT_INDEX[content_id]
     return {"reason": reason, "sourceId": entry["source_id"], "number": entry["number"],
@@ -239,26 +326,11 @@ def build_plan(db: sqlite3.Connection, pool: list[dict], profile: dict, course_i
             used.add((entry["source_id"], entry["number"]))
             items.append(_item("due_content", entry, row["content_id"]))
 
-    # 3. Conteúdos novos: lacunas do último diagnóstico primeiro, depois pelos pesos do curso.
+    # 3. Conteúdos novos, de cima para baixo (veja ``_new_leaves``).
     known = {row[0] for row in db.execute("SELECT content_id FROM review_cards WHERE kind='content'")}
-    gaps = _gap_nodes(db, course_id)
-    fresh_contents = sorted(content_id for content_id in by_content if content_id not in known)
-    rng.shuffle(fresh_contents)
-    # Matéria e área são amplas demais para marcar lacuna: só conta do conteúdo para baixo.
-    is_gap = {c: bool(gaps & set(aggregate_content_ids([c])[2:])) for c in fresh_contents}
-    subject_of = {c: CONTENT_INDEX[c]["subject"] for c in fresh_contents}
+    fresh = sorted(content_id for content_id in by_content if content_id not in known)
     budget = min(new_per_day, size - len(items))
-    gap_first = sorted((c for c in fresh_contents if is_gap[c]), key=lambda c: -weights.get(subject_of[c], 0))
-    chosen = [("new_gap", c) for c in gap_first[:max(budget, 0)]]
-    remaining = budget - len(chosen)
-    if remaining > 0:
-        others = [c for c in fresh_contents if not is_gap[c] and subject_of[c] in weights]
-        available = Counter(subject_of[c] for c in others)
-        quotas = diagnostics.allocate_counts(available, weights, remaining) if others else {}
-        for content_id in others:
-            if quotas.get(subject_of[content_id], 0) > 0:
-                quotas[subject_of[content_id]] -= 1
-                chosen.append(("new_content", content_id))
+    chosen = _new_leaves(db, pool, fresh, weights, course_id, now, budget, rng) if fresh and budget > 0 else []
     for reason, content_id in chosen:
         entry = pick(content_id)
         if entry:

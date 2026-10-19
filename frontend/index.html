@@ -20,6 +20,7 @@
       <button class="nav-item" data-view="exams"><span>▤</span> Provas e gabaritos</button>
       <button class="nav-item" data-view="diagnostics"><span>◉</span> Diagnósticos</button>
       <button class="nav-item" data-view="reports"><span>↗</span> Relatórios</button>
+      <button class="nav-item" data-view="map"><span>✺</span> Mapa</button>
       <div class="sidebar-note"><span class="note-icon">✳</span><div><strong>Modo de teste</strong><p>Use a demonstração offline para experimentar os fluxos sem configurar um modelo.</p></div></div>
       <div class="sidebar-foot">STUDAI <span>·</span> LOCAL</div>
     </aside>
@@ -90,10 +91,16 @@
         <div class="page-heading reports-heading"><div><p class="eyebrow">EVOLUÇÃO</p><h1>Relatórios</h1><p class="muted" id="reports-course-name">Seu domínio estimado por conteúdo, ponderado pelo peso de cada matéria no curso.</p></div><label class="reports-course-picker">Curso<select id="reports-course" aria-label="Curso do relatório"><option value="">Carregando cursos…</option></select></label></div>
         <div id="reports-root" class="reports-root"><div class="loading-card">Carregando relatórios…</div></div>
       </section>
+
+      <section class="view" id="view-map">
+        <div class="page-heading reports-heading"><div><p class="eyebrow">MAPA DO CONHECIMENTO</p><h1>Mapa</h1><p class="muted">A taxonomia como um grafo: veja onde você já aprofundou e o que ainda falta cobrir. Conta diagnósticos, provas e o estudo de hoje.</p></div><label class="reports-course-picker">Curso<select id="km-course" aria-label="Curso do mapa"><option value="">Carregando cursos…</option></select></label></div>
+        <div id="km-root" class="reports-root"><div class="loading-card">Carregando o mapa…</div></div>
+      </section>
     </section>
   </main>
   <div id="toast" class="toast" role="status"></div>
   <script src="/app.js" defer></script>
   <script src="/reports.js" defer></script>
+  <script src="/knowledge-map.js" defer></script>
 </body>
 </html>

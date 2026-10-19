@@ -108,6 +108,7 @@ function showView(name) {
   if (name === "exams") refreshExams();
   if (name === "diagnostics") refreshDiagnostics();
   if (name === "reports") window.refreshReports?.();
+  if (name === "map") window.refreshKnowledgeMap?.();
   if (name === "today") refreshToday();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
