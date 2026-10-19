@@ -104,6 +104,22 @@ class StudyServiceTests(unittest.TestCase):
         reasons = [(i["reason"], i["sourceId"], i["number"]) for i in next_day["items"]]
         self.assertEqual(reasons[0], ("overdue_question", item["sourceId"], item["number"]))
 
+    def test_session_mirrors_questions_fixed_after_the_plan(self):
+        session = self.today(T0, new_per_day=1)
+        item = session["items"][0]
+        fixed = next(e for e in self.pool if (e["source_id"], e["number"]) == (item["sourceId"], item["number"]))
+        fixed["question"] = {**fixed["question"], "enunciado": "Enunciado corrigido", "nota": "Note e adote"}
+        fixed["correct_answer"] = "B"
+        again = self.today(T0 + timedelta(hours=1), new_per_day=1)
+        self.assertEqual(again["id"], session["id"])
+        self.assertEqual(again["items"][0]["question"]["enunciado"], "Enunciado corrigido")
+        self.assertEqual(again["items"][0]["question"]["nota"], "Note e adote")
+        result = study.record_study_answer(self.db, session["id"], item["id"], "B", None, T0, self.pool)
+        self.assertTrue(result["correct"])
+        # Questão que saiu do acervo continua com a cópia gravada no plano.
+        self.assertEqual(study.session_payload(self.db, session["id"], [])["items"][0]["question"]["enunciado"],
+                         f"Enunciado {item['number']}")
+
     def test_correct_answer_schedules_content_for_later(self):
         session = self.today(T0, new_per_day=1)
         result = self.answer(session, session["items"][0], "A")
