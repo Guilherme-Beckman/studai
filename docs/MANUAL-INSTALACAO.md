@@ -14,7 +14,7 @@ Requisitos: Python 3.10 ou superior e Git. No Windows, use PowerShell; no macOS/
 
 ```bash
 git clone https://github.com/Guilherme-Beckman/studai.git
-cd studai/question-service-pyhton
+cd studai
 python -m venv .venv
 ```
 
@@ -71,7 +71,7 @@ Quando adicionar provas ou imagens, confira o tamanho antes de publicar. O GitHu
 ## Problemas comuns
 
 - **A página não abre:** confirme que o comando `python api.py` segue ativo e use `http://127.0.0.1:8787`.
-- **Não encontra o Python:** instale Python 3.11+ e tente `python3` no macOS/Linux ou `py` no Windows nos comandos de instalação.
+- **Não encontra o Python:** instale Python 3.10+ e tente `python3` no macOS/Linux ou `py` no Windows nos comandos de instalação.
 - **A interface abre, mas não há modelos Ollama:** inicie o Ollama e confira `http://localhost:11434`; o acervo revisado ainda pode ser consultado sem ele.
 - **Alterei `.env`, mas não mudou:** encerre o servidor com `Ctrl+C` e inicie novamente.
 - **Clone muito grande/demorado:** o repositório traz o acervo Fuvest e PDFs públicos usados pelo projeto; o primeiro clone pode levar alguns minutos.

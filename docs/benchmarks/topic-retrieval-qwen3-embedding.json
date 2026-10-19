@@ -10,7 +10,7 @@
     "count": 477,
     "taxonomy_hash": "b940d9c1937b6661189263ff8601931bf088a54cc9670daf4715eef1c2ed3cab",
     "model": "qwen3-embedding:0.6b",
-    "path": "/home/beckman/projects/studai/backend-studai/question-service-pyhton/simulados/cache/topic-embeddings.json"
+    "path": "simulados/cache/topic-embeddings.json"
   },
   "recall_at_k": {
     "5": {

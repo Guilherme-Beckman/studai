@@ -7,7 +7,7 @@ Medição: 2026-10-15T16:45:46.775359+00:00.
 - Modelo de embeddings: `qwen3-embedding:0.6b` em `http://localhost:11434`.
 - Taxonomia: 477 tópicos; hash `b940d9c1937b6661189263ff8601931bf088a54cc9670daf4715eef1c2ed3cab`.
 - Questões revisadas: 41; dataset `simulados/cache/reviewed-topic-eval.jsonl`.
-- Cache: `/home/beckman/projects/studai/backend-studai/question-service-pyhton/simulados/cache/topic-embeddings.json` (gerado nesta execução).
+- Cache: `simulados/cache/topic-embeddings.json` (gerado nesta execução).
 - O plano previa `bge-m3` ou `nomic-embed-text`. O servidor secundário estava indisponível e o download de Nomic ficou limitado a cerca de 85 KB/s; esta primeira medição usa o modelo Qwen já instalado e deve ser repetida com Nomic antes de escolher o modelo de embeddings.
 
 ## Recall

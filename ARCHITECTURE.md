@@ -28,7 +28,7 @@ O cache de classificação fica fora do código, em `simulados/cache/` por padr�
 
 ## Executar e desenvolver
 
-Instale dependências em `requirements.txt` e execute os comandos existentes no diretório `question-service-pyhton`. Os comandos `extract.py`, `classifier.py`, `processar_simulados.py`, `diagnostico.py` e `benchmark.py` mantêm compatibilidade e delegam ao pacote. Código novo deve importar `studai.*` e permanecer dentro de `src/`.
+O repositório tem o próprio serviço StudAI na raiz. Instale dependências em `requirements.txt` e execute `api.py` ou os demais comandos diretamente dali. Os comandos `extract.py`, `classifier.py`, `processar_simulados.py`, `diagnostico.py` e `benchmark.py` mantêm compatibilidade e delegam ao pacote. Código novo deve importar `studai.*` e permanecer dentro de `src/`.
 
 Para adicionar uma funcionalidade: defina o caso de uso no módulo correspondente, mantenha integrações atrás de interfaces explícitas, exponha-o sem dependência de CLI e adicione testes em `tests/`. A API traduz entrada/saída HTTP e o frontend consome essa API, sem acessar diretamente banco ou arquivos internos.
 

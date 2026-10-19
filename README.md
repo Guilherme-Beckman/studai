@@ -1,4 +1,6 @@
-# Serviço de extração e classificação de simulados
+# StudAI
+
+Aplicação local para processar provas, revisar questões e montar diagnósticos de estudo.
 
 > **Primeira instalação / compartilhar o acervo:** siga o [manual plug and play](docs/MANUAL-INSTALACAO.md). O repositório já inclui cinco provas Fuvest processadas e revisadas (450 questões com imagens); é possível abrir e usar esse acervo sem configurar IA. Para processar provas novas, configure Ollama ou Gemini.
 
@@ -6,7 +8,7 @@ O fluxo lê PDFs, extrai questões e imagens e classifica cada questão com um m
 
 ## Preparar o ambiente
 
-Na pasta `question-service-pyhton`, crie e ative o ambiente Python e instale as dependências:
+Na raiz do repositório, crie e ative o ambiente Python e instale as dependências:
 
 ```bash
 python3 -m venv .venv
