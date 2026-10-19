@@ -14,7 +14,7 @@
 | Regras de negócio | `src/studai/` | Toda lógica de domínio |
 | API HTTP | `src/studai/api/` | Tradução HTTP ↔ casos de uso |
 | Integrações IA | `src/studai/integrations/` | Provedores de IA, SQLite |
-| Features | `src/studai/features/` | questions, classification, answer_keys, diagnostics |
+| Features | `src/studai/features/` | questions, classification, answer_keys, diagnostics, study |
 | Frontend | `frontend/` | Interface web estática |
 | Scripts raiz | `*.py` na raiz | Compatibilidade retroativa; delegam para `src/` |
 
@@ -70,6 +70,7 @@ Cada agente deve declarar e respeitar um **domínio** de trabalho:
 | `classification` | `src/studai/features/classification/` |
 | `answer_keys` | `src/studai/features/answer_keys/` |
 | `diagnostics` | `src/studai/features/diagnostics/` |
+| `study` | `src/studai/features/study/` |
 | `api` | `src/studai/api/` |
 | `integrations` | `src/studai/integrations/` |
 | `frontend` | `frontend/` |

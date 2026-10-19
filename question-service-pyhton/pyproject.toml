@@ -7,7 +7,7 @@ name = "studai"
 version = "0.1.0"
 description = "Processamento de simulados e diagnóstico de estudos"
 requires-python = ">=3.10"
-dependencies = ["pymupdf"]
+dependencies = ["pymupdf", "fsrs==6.3.2"]
 
 [project.optional-dependencies]
 benchmark = ["datasets>=3.0"]

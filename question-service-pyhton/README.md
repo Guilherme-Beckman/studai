@@ -168,6 +168,18 @@ O padrão é 51 questões, ajustável com `--quantidade`, e uma semente aleatór
 
 A LLM só organiza a cobertura por tópicos disponíveis e interpreta métricas já calculadas; não recebe IDs de questões para selecionar nem define contagens. Se o planejamento temático falhar após correção, o código usa cobertura determinística. Se a análise falhar, os números permanecem salvos e o relatório indica a falha. A seleção usa apenas questões classificadas com gabarito importado; matérias sem cobertura suficiente são sinalizadas.
 
+## Estudo diário: o que estudar hoje
+
+A tela **Hoje** da interface (rotas `GET /api/study/today?courseId=…`, `POST /api/study/today/answers` e `GET /api/study/progress`) monta uma sessão por dia e por curso, com revisão espaçada FSRS (biblioteca `fsrs`, parâmetros padrão, sem passos em minutos: tudo volta em dias). Há dois tipos de cartão: um por conteúdo da taxonomia (o `conteudo_principal_id` da questão) e um por questão errada, para refazer a mesma questão.
+
+A sessão é montada em código, sem IA, nesta ordem e até 15 questões:
+
+1. questões erradas cujo cartão venceu;
+2. conteúdos com revisão vencida, primeiro os de menor probabilidade de lembrança e maior peso da matéria no curso;
+3. até 5 conteúdos novos: primeiro os vizinhos (mesmo conteúdo) dos pontos fracos do último diagnóstico concluído, depois os demais, distribuídos pelos pesos de `diagnostico/cursos.json`.
+
+As respostas dos diagnósticos entram no agendamento automaticamente, uma única vez cada. Erro pede motivo, como no diagnóstico. A sessão do dia (fuso de São Paulo) fica gravada e não muda ao recarregar. As tabelas `review_cards`, `review_logs`, `study_sessions` e `study_answers` ficam no mesmo `diagnostico/historico.sqlite3`. O código está em `src/studai/features/study/`.
+
 ## Executar etapas separadas
 
 Extrair um único PDF:
