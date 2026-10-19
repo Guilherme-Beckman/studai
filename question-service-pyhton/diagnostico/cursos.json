@@ -1,10 +1,18 @@
 {
-  "version": 1,
+  "version": 2,
   "cursos": {
     "eng-comp-sao-carlos": {
       "nome": "Engenharia de Computação — EESC/ICMC, São Carlos (curso 17)",
       "instituicao": "USP",
       "edital": "FUVEST 2027",
+      "carreira": 308,
+      "curso": 17,
+      "unidade": "EESC/ICMC",
+      "campus": "São Carlos",
+      "periodo": "Integral",
+      "vagas": {"AC": 22, "EP": 9, "PPI": 6, "total": 37},
+      "formula": "fuvest-2027",
+      "fase2": {"dia1": ["Língua Portuguesa", "Literatura"], "dia1_redacao": true, "dia2": ["Física", "Matemática"]},
       "pesos": {
         "Língua Portuguesa": 1,
         "Literatura": 1,
@@ -21,6 +29,44 @@
         "Educação Física": 1
       },
       "disciplinas_especificas": ["Física", "Matemática"]
+    },
+    "ciencias-computacao-sao-carlos": {
+      "nome": "Ciências de Computação — ICMC, São Carlos (curso 06)",
+      "instituicao": "USP",
+      "edital": "FUVEST 2027",
+      "carreira": 303,
+      "curso": 6,
+      "unidade": "ICMC",
+      "campus": "São Carlos",
+      "periodo": "Integral",
+      "vagas": {"AC": 37, "EP": 15, "PPI": 10, "total": 62},
+      "formula": "fuvest-2027",
+      "fase2": {"dia1": ["Língua Portuguesa", "Literatura"], "dia1_redacao": true, "dia2": ["Física", "Matemática"]},
+      "pesos": {
+        "Língua Portuguesa": 1, "Literatura": 1, "Inglês": 1, "Matemática": 3, "Física": 3,
+        "Química": 1, "Biologia": 1, "História": 1, "Geografia": 1, "Filosofia": 1,
+        "Sociologia": 1, "Arte": 1, "Educação Física": 1
+      },
+      "disciplinas_especificas": ["Física", "Matemática"]
+    },
+    "eng-comp-poli": {
+      "nome": "Engenharia de Computação — EP, São Paulo (curso 29)",
+      "instituicao": "USP",
+      "edital": "FUVEST 2027",
+      "carreira": 311,
+      "curso": 29,
+      "unidade": "EP",
+      "campus": "São Paulo — Butantã",
+      "periodo": "Integral",
+      "vagas": {"AC": 32, "EP": 13, "PPI": 8, "total": 53},
+      "formula": "fuvest-2027",
+      "fase2": {"dia1": ["Língua Portuguesa", "Literatura"], "dia1_redacao": true, "dia2": ["Física", "Matemática", "Química"]},
+      "pesos": {
+        "Língua Portuguesa": 1, "Literatura": 1, "Inglês": 1, "Matemática": 3, "Física": 3,
+        "Química": 2, "Biologia": 1, "História": 1, "Geografia": 1, "Filosofia": 1,
+        "Sociologia": 1, "Arte": 1, "Educação Física": 1
+      },
+      "disciplinas_especificas": ["Física", "Matemática", "Química"]
     }
   }
 }
