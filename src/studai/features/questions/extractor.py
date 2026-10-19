@@ -20,6 +20,7 @@ Dependência: pip install pymupdf
 from __future__ import annotations
 
 import argparse
+import collections
 import colorsys
 import json
 import re
@@ -33,20 +34,41 @@ import pymupdf  # pip install pymupdf
 # ----------------------------------------------------------------- constantes
 HEADER_Y = 35.0        # linhas acima disso são cabeçalho ("Simulado da Prova...")
 FOOTER_Y = 805.0
+A4_H = 842.0           # HEADER_Y/FOOTER_Y valem para A4; carta (2006) e páginas ampliadas (2013) se ajustam
 SEP_MAX_H = 12.0       # imagens/desenhos mais baixos que isso e largos = separador colorido
 TINY_W, TINY_H = 15.0, 18.0   # imagens minúsculas = glifos faltando (ex.: "ℓ")
+BITMAP_FONT_SIZE = 0.5   # corpo nominal das fontes Type3 em bitmap (texto ilegível)
+DIGIT_W, DIGIT_H = (3.0, 10.0), (6.0, 12.0)   # dígito do número da questão desenhado como imagem (2018)
 MERGE_TOL = 4.0        # tolerância p/ juntar pedaços de uma mesma figura
 CROP_PAD = 2.0
-SIDE_FIG_GAP = 90.0     # distância máxima entre "(A)" e a imagem da alternativa à direita (2024 Q50: 63)
+FRAGMENT_GAP = 6.0      # vão máximo entre pedaços de uma mesma linha (a calha entre colunas tem ~17 pt)
+FULL_ROW_W = 0.75       # fração da largura da página: linha de questão em página inteira (2015 Q13)
+SIDE_FIG_GAP = 90.0    # distância máxima entre "(A)" e a imagem da alternativa à direita (2024 Q50: 63)
 
-MARKER_RE = re.compile(r"^\{?\s*(\d{1,2})\s*\}?$")
+MARKER_RE = re.compile(r"^\{?\s*(\d{1,3})\s*\}?$")   # até 2006 a prova tinha 100 questões
 SHARED_RE = re.compile(
     r"^Texto para as quest(?:ões|ão)\s+(?:de\s+)?(\d+)\s*(?:e|a|à|-|–)\s*(\d+)", re.I
 )
 ALT_RE = re.compile(r"^\(([A-E])\)\s*(.*)$", re.S)
+# Provas até 2017 usam "a) texto"; a linha é reescrita como "(A) texto" ao ser lida.
+LOWER_ALT_RE = re.compile(r"^([a-e])\)\s*(.*)$", re.S)
+# Número colado ao começo do enunciado: "07 Na perspectiva..." (2001–2017) ou
+# "V.01 – Em relação..." (1998–2000, com a letra do dia).
+INLINE_MARKER_RE = re.compile(r"^\*?\s*(?:[A-Z]\s?\.\s?)?(\d{2,3})(?:\s*[–—-])?(?:\s+(.*)|$)", re.S)
 # Legenda de alternativa desenhada ("Figura A" sob a imagem da alternativa A).
 ALT_CAPTION_RE = re.compile(r"^(?:Figura|Fig\.|Gráfico|Imagem|Esquema)\s+([A-E])$", re.I)
-NOTE_RE = re.compile(r"^Note e adote", re.I)
+NOTE_RE = re.compile(r"^(?:Note e adote|Dados\b)", re.I)   # "Dados:" é a caixa equivalente nas provas antigas
+COVER_RE = re.compile(r"abra este caderno", re.I)    # capa com as instruções da prova
+# Título da capa e da contracapa; em 2021 é o único texto legível delas (o resto está em bitmap).
+COVER_TITLE_RE = re.compile(r"Fase\s*[−–-]\s*Conhecimentos Gerais", re.I)
+KEY_ENTRY_RE = re.compile(r"\b[VKQXZ]\s?\d{1,3}\s?-\s?[A-E]\b")  # gabarito no fim da prova (2003): "V 45- A"
+# Número de página ("3V", "4 V", "v") perto da margem e título de matéria entre questões.
+PAGE_MARK_RE = re.compile(r"^(?:\d{1,2}\s?)?[VTvt]$")
+SUBJECT_RE = re.compile(r"^(?:LÍNGUA PORTUGUESA|PORTUGUÊS|LITERATURA|INGLÊS|LÍNGUA INGLESA|MATEMÁTICA|"
+                        r"FÍSICA|QUÍMICA|BIOLOGIA|HISTÓRIA|GEOGRAFIA|ARTES|FILOSOFIA|SOCIOLOGIA|"
+                        r"HISTÓRIA GERAL|HISTÓRIA DO BRASIL|CIÊNCIAS)$")
+BOLD_FONT_RE = re.compile(r"bold|black|heavy|,bd\b", re.I)
+LEAD_NUM_RE = re.compile(r"^(?:[A-Z]\.)?(\d{2,3})[–—-]?$")
 
 MATH_FONTS = ("cambria", "math", "symbol", "mt-extra")
 # Alguns PDFs FUVEST mapeiam glifos de Cambria Math para blocos Unicode
@@ -116,6 +138,7 @@ class Row:
     indent: bool = False            # começa recuada: abre parágrafo
     size: float = 0.0               # corpo dominante (fonte/legenda costumam ser menores)
     ink: pymupdf.Rect | None = None # área desenhada, com índices soltos (recorte de fórmula)
+    lead_num: int | None = None     # número em destaque (negrito/maior) abrindo a linha: "07 Na..."
 
 
 @dataclass
@@ -137,6 +160,16 @@ class Item:
 
 
 # ------------------------------------------------------------ extração (página)
+def _margins(page: pymupdf.Page) -> tuple[float, float]:
+    """
+    Limites de cabeçalho e rodapé. O rodapé fica à mesma distância da base que no A4
+    (carta, 2006: "PAG 03/18 V" a 25 pt da base); páginas ampliadas (2013, 1191 pt)
+    escalam as duas margens, e páginas menores nunca as reduzem.
+    """
+    k = max(1.0, page.rect.height / A4_H)
+    return HEADER_Y * k, page.rect.height - (A4_H - FOOTER_Y) * k
+
+
 def _overlap_ratio(a: pymupdf.Rect, b: pymupdf.Rect) -> float:
     top, bot = max(a.y0, b.y0), min(a.y1, b.y1)
     if bot <= top:
@@ -164,8 +197,9 @@ def _raw_lines(page: pymupdf.Page):
             chars, fonts = [], set()
             for sp in ln["spans"]:
                 fonts.add(sp["font"])
+                bold = bool(sp["flags"] & 16) or bool(BOLD_FONT_RE.search(sp["font"]))
                 chars.extend({"c": c["c"], "bbox": pymupdf.Rect(c["bbox"]), "oy": c["origin"][1],
-                              "size": sp["size"], "color": sp["color"], "font": sp["font"]}
+                              "size": sp["size"], "color": sp["color"], "font": sp["font"], "bold": bold}
                              for c in sp["chars"])
             # Em linhas com texto e fórmula, o PDF pode devolver cada fonte como
             # um span separado e concatená-los por fonte. Ordenar pela posição
@@ -481,6 +515,9 @@ def _clean(s: str) -> str:
     s = re.sub(r"#{3,}", " ", s)          # "#####" escondido na camada de texto, marca fim de questão
     s = s.replace("\u00ac", " ")          # glifo usado pelo PDF no lugar de espaços
     s = s.replace("\u2011", "-").replace("\u00ad", "").replace("\u00a0", " ")
+    # Fontes sem ToUnicode (2014–2017) trazem o código do glifo: \x03 é o espaço e
+    # \x00/\x02 entre letras é o hífen ("põe\x00se", "Lembra\x02me").
+    s = re.sub(r"(?<=[^\W\d_])[\x00\x02](?=[^\W\d_])", "-", s).replace("\x03", " ")
     s = re.sub(r"[ \t]+", " ", s).strip()
     s = re.sub(r"ℓ \)", "ℓ)", s)
     s = re.sub(r"\[(\w+): \s*", r"[\1: ", s)
@@ -490,9 +527,76 @@ def _clean(s: str) -> str:
     return re.sub(r"ℓ ([.,;])", r"ℓ\1", s)
 
 
-def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None
-                ) -> tuple[list[Row], list[tuple[int, float]]]:
+def _lead_num(chars) -> int | None:
+    """
+    Número da questão no começo da linha, destacado do resto: em negrito ("08 Um
+    funcionário", 2013) ou em corpo maior ("07 Na perspectiva", 2006). Uma linha
+    só com o número em negrito ("V.04", 1998) também conta.
+    """
+    solid = [ch for ch in chars if ch["c"].strip() and ch["c"] != "\x03"]
+    k = 0
+    while k < len(solid) and k < 6 and not (k and solid[k]["bbox"].x0 - solid[k - 1]["bbox"].x1 > 1.5):
+        k += 1
+    lead, rest = solid[:k], solid[k:]
+    m = LEAD_NUM_RE.match("".join(ch["c"] for ch in lead))
+    if not m:
+        return None
+    if rest and rest[0]["c"] in "–—-":                 # "V.01 – Em relação..."
+        rest = rest[1:]
+    lead_size = min(ch.get("size") or 0 for ch in lead)
+    # Título em negrito na mesma linha ("47      Indicadores Sociais", 2005): o vão largo separa.
+    apart = not rest or rest[0]["bbox"].x0 - lead[-1]["bbox"].x1 >= 2 * lead_size
+    bold = all(ch.get("bold") for ch in lead) and (apart or not all(ch.get("bold") for ch in rest))
+    big = bool(rest) and lead_size >= 1.12 * _ref_size(rest)
+    return int(m.group(1)) if bold or big else None
+
+
+def _join_fragments(cands: list[Row], pw: float) -> list[Row]:
+    """
+    Uma linha de página inteira pode vir picada em pedaços colados (2017 Q46); pela
+    posição, o pedaço à direita do meio cairia na outra coluna. Pedaços na mesma
+    altura e separados só por um espaço viram uma linha, e a coluna é recalculada.
+    Entre as colunas há ~17 pt de calha, então colunas vizinhas não se juntam.
+    """
+    out: list[Row] = []
+    for r in sorted(cands, key=lambda r: r.bbox.x0):
+        # Na mesma coluna a fusão de _build_rows já cuida (e sabe lidar com índices soltos).
+        prev = next((o for o in out if o.col != r.col and _overlap_ratio(o.bbox, r.bbox) >= 0.6
+                     and -1 <= r.bbox.x0 - o.bbox.x1 <= FRAGMENT_GAP), None)
+        if prev is None:
+            out.append(r)
+            continue
+        prev.text = _clean(prev.text + ("" if r.bbox.x0 - prev.bbox.x1 < 1.5 else " ") + r.text)
+        prev.bbox |= r.bbox
+        prev.ink |= r.ink
+        prev.fonts |= r.fonts
+        prev.n_math += r.n_math
+        prev.n_chars += r.n_chars
+        prev.col = 0 if prev.bbox.width >= pw * 0.55 else _col_of(prev.bbox, pw)
+    return out
+
+
+def _unreadable(chars) -> bool:
+    """
+    Fonte Type3 em bitmap sem ToUnicode (prova de 2021 inteira, cabeçalhos de 2017–2018):
+    a camada de texto traz códigos sem relação com o glifo, num corpo nominal de ~0,1 pt.
+    A linha é descartada; a questão fica com o recorte da página e cai em
+    enunciado_vazio/alternativas_incompletas para revisão.
+    """
+    solid = [ch for ch in chars if ch["c"].strip()]
+    return bool(solid) and sum((ch.get("size") or 1) < BITMAP_FONT_SIZE for ch in solid) >= 0.5 * len(solid)
+
+
+def _normalize_alt(txt: str, alt_style: str) -> str:
+    """Na prova de alternativas "a)" a linha passa a ser "(A)", o formato do resto do código."""
+    m = LOWER_ALT_RE.match(txt) if alt_style == "lower" else None
+    return f"({m.group(1).upper()}) {m.group(2)}".strip() if m else txt
+
+
+def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
+                alt_style: str = "upper") -> tuple[list[Row], list[tuple[int, float]]]:
     pw = page.rect.width
+    header_y, footer_y = _margins(page)
     lines = _raw_lines(page)
     _patch_missing_glyphs(lines, page)
     _decode_glyphs(lines)
@@ -504,11 +608,13 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None
     ends: list[tuple[int, float]] = []     # "#####" = marca de fim de questão (texto oculto no PDF)
     for ln in lines:
         raw = "".join(c["c"] for c in ln["chars"])
-        txt = _clean(_line_text(ln))
+        txt = _normalize_alt(_clean(_line_text(ln)), alt_style)
         b = ln["bbox"]
-        if "###" in raw and HEADER_Y <= b.y0 <= FOOTER_Y:
+        if "###" in raw and header_y <= b.y0 <= footer_y:
             ends.append((_col_of(b, pw), b.y1))
-        if not txt or b.y0 < HEADER_Y or b.y0 > FOOTER_Y:
+        if not txt or b.y0 < header_y or b.y0 > footer_y or SUBJECT_RE.match(txt) or _unreadable(ln["chars"]):
+            continue
+        if PAGE_MARK_RE.match(txt) and not 0.06 < b.y0 / page.rect.height < 0.9:
             continue
         # Linhas longas atravessam a fronteira visual da página ao redor de
         # imagens laterais; classificá-las pelo centro alterna de coluna e
@@ -517,7 +623,9 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None
         solid = [c for c in ln["chars"] if c["c"].strip()]
         cands.append(Row(txt, b, row_col, set(ln["fonts"]),
                          n_math=sum(_is_math(c) for c in solid), n_chars=len(solid),
-                         size=_ref_size(ln["chars"]), ink=pymupdf.Rect(ln.get("ink", b))))
+                         size=_ref_size(ln["chars"]), ink=pymupdf.Rect(ln.get("ink", b)),
+                         lead_num=_lead_num(ln["chars"])))
+    cands = _join_fragments(cands, pw)
 
     # Caixa "Note e adote" ao lado das alternativas (2024 Q48/Q49): cada linha da caixa
     # está na altura de uma alternativa e seria fundida a ela ("(B) 28°C Note e adote:").
@@ -551,6 +659,8 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None
             if ov >= 0.5 and side_by_side and ov > best_ov:
                 best, best_ov = prev, ov
         if best:
+            if r.bbox.x0 < best.parts[0][0].x0:
+                best.lead_num = r.lead_num
             best.parts.append((r.bbox, r.text))
             best.parts.sort(key=lambda p: p[0].x0)
             text = best.parts[0][1]
@@ -610,7 +720,7 @@ def _figure_parts(page: pymupdf.Page) -> list[pymupdf.Rect]:
         if r.height < SEP_MAX_H and r.width > 40:
             continue                                  # bolinhas do separador
         rects.append(r)
-    return [r for r in rects if r.y0 >= HEADER_Y - 5]
+    return [r for r in rects if r.y0 >= _margins(page)[0] - 5]
 
 
 def _figure_rects(page: pymupdf.Page) -> list[pymupdf.Rect]:
@@ -755,10 +865,61 @@ def _attach_side_figures(rows: list[Row], figs: list[Fig], parts: list[pymupdf.R
     return captions
 
 
-def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
+def _digit_groups(page: pymupdf.Page) -> list[tuple[pymupdf.Rect, tuple[bytes, ...]]]:
+    """Imagens do tamanho de um dígito, lado a lado e fora do texto: candidatas a número de questão."""
+    ims = sorted(((pymupdf.Rect(i["bbox"]), i["digest"]) for i in page.get_image_info(hashes=True)
+                  if DIGIT_W[0] <= i["bbox"][2] - i["bbox"][0] <= DIGIT_W[1]
+                  and DIGIT_H[0] <= i["bbox"][3] - i["bbox"][1] <= DIGIT_H[1]),
+                 key=lambda im: (im[0].y0, im[0].x0))
+    groups: list[tuple[pymupdf.Rect, list[tuple[float, bytes]]]] = []
+    for r, digest in ims:
+        g = next((g for g in groups if abs(g[0].y0 - r.y0) <= 1.5
+                  and -1 <= max(r.x0 - g[0].x1, g[0].x0 - r.x1) <= 3), None)
+        if g:
+            g[0].include_rect(r)
+            g[1].append((r.x0, digest))
+        else:
+            groups.append((pymupdf.Rect(r), [(r.x0, digest)]))
+    words = [pymupdf.Rect(w[:4]) for w in page.get_text("words")]
+    return [(r, tuple(d for _, d in sorted(ds, key=lambda xd: xd[0]))) for r, ds in groups
+            if len(ds) <= 3 and not any(r.intersects(w) for w in words)]
+
+
+def _learn_digits(doc: pymupdf.Document, pages: list[int]) -> dict[bytes, str]:
+    """
+    Prova de 2018: o número de cada questão é um par de imagens ("0" e "5"), sem texto.
+    Como as questões vêm em ordem, o k-ésimo grupo de imagens é o número k; cada imagem
+    recebe o dígito em que mais votos caem. Sem sequência coerente, devolve {}.
+    """
+    seq: list[tuple[bytes, ...]] = []
+    for pno in pages:
+        pw = doc[pno].rect.width
+        seq += [ds for _, ds in sorted(_digit_groups(doc[pno]), key=lambda g: (_col_of(g[0], pw), g[0].y0))]
+    if len(seq) < 9:
+        return {}
+    votes: dict[bytes, collections.Counter] = collections.defaultdict(collections.Counter)
+    for k, ds in enumerate(seq, 1):
+        label = str(k).zfill(len(ds))
+        if len(label) == len(ds):
+            for digest, ch in zip(ds, label):
+                votes[digest][ch] += 1
+    digits = {d: c.most_common(1)[0][0] for d, c in votes.items()}
+    decoded = ["".join(digits.get(d, "?") for d in ds) for ds in seq]
+    ordered = sum(a.isdigit() and b.isdigit() and int(b) == int(a) + 1 for a, b in zip(decoded, decoded[1:]))
+    if len(set(digits.values())) < 5 or ordered < 0.8 * (len(decoded) - 1):
+        return {}
+    return digits
+
+
+def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
+                 digits: dict[bytes, str] | None = None) -> list[Item]:
     pw = page.rect.width
     parts = _figure_parts(page)
-    rows, ends = _build_rows(page, parts)
+    rows, ends = _build_rows(page, parts, alt_style)
+    for r, ds in _digit_groups(page) if digits else ():
+        if all(d in digits for d in ds):
+            text = "".join(digits[d] for d in ds)
+            rows.append(Row(text, r, _col_of(r, pw), parts=[(pymupdf.Rect(r), text)], size=r.height))
     _mark_layout(rows, pw)
 
     # caixas "Note e adote": retângulo que contém uma linha começando assim. Separadas
@@ -803,7 +964,8 @@ def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
         center = pymupdf.Point((r.bbox.x0 + r.bbox.x1) / 2, (r.bbox.y0 + r.bbox.y1) / 2)
         # Em alguns PDFs oficiais o marcador numérico fica dentro da caixa de
         # uma imagem; ele continua sendo texto estrutural e não pode sumir.
-        if MARKER_RE.match(r.text):
+        # Vale também para o número em negrito colado ao texto (2013 Q61).
+        if MARKER_RE.match(r.text) or r.lead_num is not None:
             items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
             continue
         if id(r) in captions:
@@ -824,8 +986,51 @@ def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
     for col, y in ends:
         items.append(Item("end", pno, col, y + 0.5))
 
-    items.sort(key=lambda it: (it.col, it.y0))
+    items.sort(key=_reading_order(items, pw))
     return items
+
+
+def _reading_order(items: list[Item], pw: float):
+    """
+    Chave de ordenação: coluna esquerda inteira, depois a direita — exceto nas faixas
+    de largura total (2015 Q13: duas colunas em cima e uma questão de página inteira
+    embaixo). Cada faixa é lida de cima para baixo depois das colunas acima dela.
+    """
+    def box(it: Item) -> pymupdf.Rect | None:
+        return it.row.bbox if it.row else it.fig.bbox if it.fig else None
+
+    right = [b for it in items if it.col == 1 and (b := box(it))]
+    full = sorted((it.row.bbox for it in items if it.row and it.row.bbox.width >= FULL_ROW_W * pw),
+                  key=lambda b: b.y0)
+    groups: list[list[pymupdf.Rect]] = []
+    for b in full:
+        # Duas linhas largas ficam na mesma faixa se nada da coluna direita aparece entre elas.
+        if groups and not any(groups[-1][-1].y1 - 2 < (r.y0 + r.y1) / 2 < b.y0 + 2 for r in right):
+            groups[-1].append(b)
+        else:
+            groups.append([b])
+    bands: list[tuple[float, float]] = []
+    prev = 0.0
+    for g in groups:
+        if len(g) < 2:
+            continue
+        y0, y1 = g[0].y0, max(b.y1 for b in g)
+        if any(r.y0 < y1 - 2 and r.y1 > y0 + 2 for r in right):
+            continue                                  # coluna direita ao lado: não é página inteira
+        # A faixa começa onde termina a coluna direita acima dela (o número da questão
+        # e a figura de abertura ficam na esquerda, logo acima da primeira linha larga).
+        top = max((r.y1 for r in right if prev <= r.y1 <= y0 + 2), default=prev)
+        bands.append((top, y1))
+        prev = y1
+
+    def key(it: Item):
+        for k, (top, bot) in enumerate(bands):
+            if it.y0 < top:
+                return (2 * k, it.col, it.y0)
+            if it.y0 <= bot + 1:
+                return (2 * k + 1, 0, it.y0)
+        return (2 * len(bands), it.col, it.y0)
+    return key
 
 
 # --------------------------------------------------------------- montagem
@@ -850,6 +1055,48 @@ def new_question(num: int, page: int) -> dict:
     }
 
 
+def _alt_style(doc: pymupdf.Document) -> str:
+    """"lower" quando a prova marca as alternativas com "a)" em vez de "(A)" (provas até 2017)."""
+    upper = lower = 0
+    for page in doc:
+        for line in page.get_text("text").splitlines():
+            line = line.strip()
+            upper += bool(ALT_RE.match(line))
+            lower += bool(LOWER_ALT_RE.match(line))
+    return "lower" if lower > upper else "upper"
+
+
+def _inline_marker(t: str, expected: int) -> str | None:
+    """Resto da linha quando ela abre a questão ``expected`` com o número colado ao texto."""
+    m = INLINE_MARKER_RE.match(t)
+    if not m or int(m.group(1)) != expected:
+        return None
+    return (m.group(2) or "").strip()
+
+
+def _order_by_markers(items: list[Item]) -> list[Item]:
+    """
+    Questão no alto da coluna direita ao lado de uma figura larga da esquerda (2005
+    Q45): a leitura por coluna traz a 46, que está embaixo à esquerda, antes da 45.
+    Quando os números da página formam uma sequência sem buracos e estão fora de
+    ordem, cada bloco (do número até o próximo) é reposicionado pelo número.
+    """
+    nums: list[int | None] = []
+    for it in items:
+        m = MARKER_RE.match(it.row.text) if it.kind == "text" else None
+        nums.append(int(m.group(1)) if m else it.row.lead_num if it.kind == "text" else None)
+    found = [n for n in nums if n is not None]
+    if (len(found) < 2 or found == sorted(found) or len(set(found)) != len(found)
+            or max(found) - min(found) != len(found) - 1):
+        return items
+    blocks: list[tuple[int, list[Item]]] = [(-1, [])]
+    for it, n in zip(items, nums):
+        if n is not None:
+            blocks.append((n, []))
+        blocks[-1][1].append(it)
+    return [it for _, block in sorted(blocks, key=lambda b: b[0]) for it in block]
+
+
 def parse(doc: pymupdf.Document):
     questions: dict[int, dict] = {}
     shared: dict[str, dict] = {}
@@ -858,6 +1105,14 @@ def parse(doc: pymupdf.Document):
     mode = "none"                      # none | stem | alts | shared
     active_shared: str | None = None
     expected = 1
+    alt_style = _alt_style(doc)
+    pages = []
+    for pno in range(len(doc)):
+        text = doc[pno].get_text()
+        cover = COVER_RE.search(text) or (pno in (0, len(doc) - 1) and COVER_TITLE_RE.search(text))
+        if not (cover or len(KEY_ENTRY_RE.findall(text)) >= 20):
+            pages.append(pno)
+    digits = _learn_digits(doc, pages)
 
     def touch(q, it):
         seg = q["_segs"].setdefault((it.page, it.col), [1e9, -1e9, 1e9, -1e9])
@@ -865,8 +1120,8 @@ def parse(doc: pymupdf.Document):
         seg[0], seg[1] = min(seg[0], b.y0), max(seg[1], b.y1)
         seg[2], seg[3] = min(seg[2], b.x0), max(seg[3], b.x1)
 
-    for pno in range(len(doc)):
-        for it in extract_page(doc[pno], pno):
+    for pno in pages:
+        for it in _order_by_markers(extract_page(doc[pno], pno, alt_style, digits)):
             if it.kind == "end":
                 if mode != "shared":       # fim da questão: ignora o que vier até o próximo marcador
                     cur, cur_alt, mode = None, None, "none"
@@ -884,7 +1139,15 @@ def parse(doc: pymupdf.Document):
                     continue
 
                 mk = MARKER_RE.match(t)
-                if mk and int(mk.group(1)) == expected:
+                rest = None
+                # Número colado ao texto abre questão quando vem destacado (negrito ou
+                # corpo maior) ou quando a anterior já chegou à alternativa E: "12 frascos..."
+                # no meio de um enunciado não é marcador.
+                if not (mk and int(mk.group(1)) == expected) and (
+                        it.row.lead_num == expected
+                        or cur is None or mode != "stem" and "E" in cur["alternativas"]):
+                    rest = _inline_marker(t, expected)
+                if (mk and int(mk.group(1)) == expected) or rest is not None:
                     num = expected
                     expected += 1
                     cur = questions[num] = new_question(num, pno)
@@ -894,6 +1157,12 @@ def parse(doc: pymupdf.Document):
                     else:
                         active_shared = None
                     touch(cur, it)
+                    if rest:
+                        cur["_fonts"] |= it.row.fonts
+                        cur["enunciado"].append(rest)
+                        cur["_stem"].append({"text": rest, "page": it.page, "bbox": it.row.ink or it.row.bbox,
+                                             "display": False, "para": True})
+                        cur["_short"], cur["_size"] = it.row.short, it.row.size
                     continue
 
                 if mode == "shared":
