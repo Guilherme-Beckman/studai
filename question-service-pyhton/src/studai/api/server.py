@@ -705,6 +705,11 @@ def _reprocess_recommended(question: dict, review: dict | None) -> bool:
     return bool(CORRUPT_GLYPH_RE.search("\n".join(texts)))
 
 
+# Campos que vêm da extração e são trocados ao confirmar a reextração de uma questão.
+REPROCESS_FIELDS = ("pagina", "texto_id", "enunciado", "nota", "alternativas", "figuras_enunciado",
+                    "imagens_completas", "blocos", "revisar")
+
+
 def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
                         filename: str | None, cancelled, job_id: str) -> dict:
     _, exam_json = _find_exam(exam_id)
@@ -756,7 +761,9 @@ def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
     if not replacement.get("enunciado", "").strip() and not replacement.get("imagens_completas"):
         shutil.rmtree(workdir, ignore_errors=True)
         raise ValueError(f"a questão {number} foi localizada, mas não gerou texto nem recorte legível")
-    replacement["nota"] = old_question.get("nota", "")
+    # Nota nova vem da reextração (caixa "Note e adote" que antes vazava para as
+    # alternativas); sem nota nova, mantém a que já existia.
+    replacement["nota"] = replacement.get("nota") or old_question.get("nota", "")
     shared_id = replacement.get("texto_id")
     shared_text = (extracted.get("textos_compartilhados") or {}).get(str(shared_id)) if shared_id is not None else None
 
@@ -836,8 +843,7 @@ def _confirm_question_reprocess(exam_id: str, number: int, preview_id: str) -> d
     if new_shared:
         new_shared["figuras"] = remap(new_shared.get("figuras"))
 
-    for field in ("pagina", "texto_id", "enunciado", "alternativas", "figuras_enunciado",
-                  "imagens_completas", "blocos", "revisar"):
+    for field in REPROCESS_FIELDS:
         question[field] = new_question.get(field)
     data["arquivo_sha256"] = preview["sourceSha256"]
     # Sincroniza a extração base, se a prova também mantém esse JSON.
@@ -859,8 +865,7 @@ def _confirm_question_reprocess(exam_id: str, number: int, preview_id: str) -> d
         target = next((q for q in current.get("questoes", []) if int(q.get("numero", -1)) == number), None)
         if target is None:
             raise ValueError("a extração base não contém a questão para sincronização")
-        for field in ("pagina", "texto_id", "enunciado", "alternativas", "figuras_enunciado",
-                      "imagens_completas", "blocos", "revisar"):
+        for field in REPROCESS_FIELDS:
             target[field] = new_question.get(field)
         temporary = path.with_name(path.name + f".{preview_id}.tmp")
         temporary.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

@@ -64,6 +64,28 @@ class QuestionReprocessingTests(unittest.TestCase):
         doc.save(path)
         doc.close()
 
+    def test_confirmation_saves_note_found_by_the_new_extraction(self):
+        # FUVEST 2024 Q49: a nota vazava para as alternativas e ficava vazia; reextraída,
+        # a caixa "Note e adote" precisa chegar à prova em vez de manter a nota antiga.
+        for path in (self.classified, self.base):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["questoes"][0]["nota"] = ""
+            path.write_text(json.dumps(data), encoding="utf-8")
+        doc = pymupdf.open(self.pdf)
+        page = doc[0]
+        page.draw_rect(pymupdf.Rect(300, 115, 520, 175))
+        page.insert_text((305, 130), "Note e adote:", fontsize=10)
+        page.insert_text((305, 145), "Despreze a massa do fio.", fontsize=10)
+        doc.saveIncr()
+        doc.close()
+        preview = self.run_preview()
+        self.assertEqual(preview["question"]["nota"], "Note e adote: Despreze a massa do fio.")
+        server._confirm_question_reprocess("exam-id", 1, preview["previewId"])
+        for path in (self.classified, self.base):
+            question = json.loads(path.read_text(encoding="utf-8"))["questoes"][0]
+            self.assertEqual(question["nota"], "Note e adote: Despreze a massa do fio.", path.name)
+            self.assertEqual(question["alternativas"]["A"]["texto"], "um terço")
+
     def run_preview(self, uploaded=None, filename=None):
         return server._reprocess_question("exam-id", 1, uploaded, filename, lambda: False, "preview-job")
 
