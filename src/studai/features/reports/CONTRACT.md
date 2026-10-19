@@ -60,3 +60,43 @@ Erros: curso ou nó desconhecido → 404 com `{"error": "..."}`.
 * `POST /api/exam-sessions/<attemptId>/answers` `{ordinal, answer, reason?}` → igual ao diagnóstico, mas o
   motivo é opcional (erro sem motivo grava `error_reason = null`).
 * `POST /api/exam-sessions/<attemptId>/finish` → finaliza (status `completed`, grava `metrics_json`).
+
+## Mapa do conhecimento (Fase 7)
+
+Implementado em `features/reports/knowledge_map.py`; tela em `frontend/knowledge-map.js`. A profundidade e a
+fórmula estão definidas em `src/studai/features/diagnostics/depth.py` (docstring do módulo).
+
+Respostas: as mesmas dos relatórios **mais** as do estudo diário (`study_answers` das sessões do curso),
+via `study.course_responses`, com `kind` `diagnostic` | `exam` | `daily`. Recência: `half_life_days=30`.
+Os relatórios acima continuam sem as respostas diárias.
+
+### `GET /api/knowledge-map?courseId=<id>`
+
+```jsonc
+{
+  "course": {"id", "name", "weights": {matéria: peso normalizado}},
+  "taxonomy_version": "fuvest-2027.v7",
+  "kpis": {"nodes": int, "practiced": int (nós não-matéria com evidência),
+           "depth": 0-1 (profundidade das matérias ponderada pelo curso), "depth_by_subject": {matéria: 0-1}},
+  "nodes": [{"id", "name", "level", "parent_id", "subject", "attempts", "correct", "evidence", "mastery",
+             "lower", "upper", "status", "course_weight", "incidence", "priority",
+             "coverage", "depth", "children_total", "children_practiced",
+             "questions": int (questões elegíveis do pool sob o nó)}],   // árvore viva inteira das matérias do curso
+  "edges": [{"source": id do pai, "target": id do filho}]
+}
+```
+
+### `GET /api/knowledge-map/nodes/<id>?courseId=<id>`
+
+```jsonc
+{
+  "node": Nó (mesmo formato) + {"path": [nomes]},
+  "ancestors": [ids da matéria até o pai],
+  "children": [Nó] (filhos vivos, por incidência desc),
+  "recent_answers": [{"at", "kind", "source_id", "number", "exam_label", "correct", "selected",
+                      "correct_answer", "reason", "content_path"}],   // até 20, mais recentes por último
+  "questions": [{"source_id", "number", "exam_label", "subject", "content_path", "statement", "answered"}]  // até 10, não respondidas primeiro
+}
+```
+
+Erros: curso ou nó desconhecido → 404 com `{"error": "..."}`.

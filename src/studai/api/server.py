@@ -26,6 +26,7 @@ from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
+from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
@@ -1305,7 +1306,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 return self._static("index.html")
-            if path in ("/app.js", "/reports.js", "/styles.css"):
+            if path in ("/app.js", "/reports.js", "/knowledge-map.js", "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})
@@ -1352,6 +1353,25 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self._json(200, reports.node_detail(db, config, course_id, match.group(1),
                                                                _reports_pool(db, config, course_id)))
+                finally:
+                    db.close()
+            if path == "/api/knowledge-map":
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, knowledge_map.graph(db, config, course_id,
+                                                               _reports_pool(db, config, course_id)))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/knowledge-map/nodes/([^/]+)", path)
+            if match:
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, knowledge_map.node_detail(db, config, course_id, match.group(1),
+                                                                     _reports_pool(db, config, course_id)))
                 finally:
                     db.close()
             if path == "/api/study/today":

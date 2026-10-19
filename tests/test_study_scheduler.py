@@ -173,6 +173,76 @@ class StudyServiceTests(unittest.TestCase):
             diagnostics.grade_answer("B", alternatives, "A", None)
 
 
+TRIANGLE = "matematica.content.trigonometria-no-triangulo"
+CYCLE = "matematica.content.ciclo-trigonometrico-e-funcoes-trigonometricas"
+
+
+def children(content_id: str, count: int) -> list[str]:
+    return sorted(node["id"] for node in CONTENT_INDEX.values()
+                  if node["path_ids"][-2] == content_id and node["is_leaf"] and not node.get("deprecated"))[:count]
+
+
+class TopDownTests(unittest.TestCase):
+    """Fase 7: conteúdos novos entram de cima para baixo."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.db = study.connect_db(Path(self.temp.name) / "historico.sqlite3")
+        self.triangle = children(TRIANGLE, 3)
+        self.cycle = children(CYCLE, 3)
+        # O ciclo trigonométrico tem mais incidência no acervo que o triângulo.
+        self.triangle_pool = [entry("prova-1", i + 1, "Matemática", c) for i, c in enumerate(self.triangle)]
+        self.pool = self.triangle_pool + [entry(f"prova-{copy}", 20 + i, "Matemática", c)
+                                          for copy in (1, 2, 3) for i, c in enumerate(self.cycle)]
+        self.config = {"version": 1, "cursos": {"curso": {"nome": "Curso", "pesos": {"Matemática": 1}}}}
+
+    def tearDown(self):
+        self.db.close()
+        self.temp.cleanup()
+
+    def today(self, now, pool=None, **kwargs):
+        return study.plan_today(self.db, self.pool if pool is None else pool, self.config, "curso", now, **kwargs)
+
+    def contents(self, session):
+        return [CONTENT_INDEX[item["contentId"]]["path_ids"][2] for item in session["items"]]
+
+    def start_triangle(self):
+        """Estuda (e acerta) um subconteúdo do triângulo."""
+        session = self.today(T0, self.triangle_pool, new_per_day=1)
+        item = session["items"][0]
+        study.record_study_answer(self.db, session["id"], item["id"], "A", None, T0)
+        return item
+
+    def test_one_leaf_per_content_per_round(self):
+        session = self.today(T0, new_per_day=2)
+        self.assertEqual(sorted(self.contents(session)), sorted([TRIANGLE, CYCLE]))
+        # Sem histórico, o conteúdo de maior incidência vem primeiro.
+        self.assertEqual(self.contents(session)[0], CYCLE)
+
+    def test_started_content_comes_before_a_new_one(self):
+        first = self.start_triangle()
+        session = self.today(T0 + timedelta(days=1), new_per_day=1)
+        self.assertEqual([i["reason"] for i in session["items"]], ["new_content"])
+        item = session["items"][0]
+        self.assertEqual(self.contents(session), [TRIANGLE])
+        self.assertNotEqual(item["contentId"], first["contentId"])  # a irmã ainda não praticada
+
+    def test_consolidated_content_yields_to_the_others(self):
+        self.start_triangle()
+        with patch.object(study.depth, "CONSOLIDATED_DEPTH", 0.01):
+            session = self.today(T0 + timedelta(days=1), new_per_day=1)
+        self.assertEqual(self.contents(session), [CYCLE])
+
+    def test_course_responses_include_daily_answers(self):
+        item = self.start_triangle()
+        responses = study.course_responses(self.db, "curso")
+        self.assertEqual(len(responses), 1)
+        self.assertEqual(responses[0]["kind"], "daily")
+        self.assertEqual(responses[0]["principal_id"], item["contentId"])
+        self.assertTrue(responses[0]["correct"])
+        self.assertEqual(study.course_responses(self.db, "outro"), [])
+
+
 class StudyApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

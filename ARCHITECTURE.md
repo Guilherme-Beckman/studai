@@ -7,7 +7,9 @@ O StudAI é um monólito modular Python: um processo e uma base de código, orga
 - `src/studai/features/questions/`: extração de PDF e processamento em lote.
 - `src/studai/features/classification/`: classificação e validação de questões.
 - `src/studai/features/answer_keys/`: associação, leitura e importação de gabaritos.
-- `src/studai/features/diagnostics/`: sorteio, respostas, métricas e análise diagnóstica.
+- `src/studai/features/diagnostics/`: sorteio, respostas, métricas e análise diagnóstica; domínio Beta por nó (`mastery.py`) e profundidade propagada pela árvore (`depth.py`).
+- `src/studai/features/study/`: revisão espaçada e "O que estudar hoje", que escolhe conteúdos novos de cima para baixo.
+- `src/studai/features/reports/`: relatórios de evolução, sessões de "Responder prova" e o mapa do conhecimento (`knowledge_map.py`); contrato em `CONTRACT.md`.
 - `src/studai/integrations/`: provedores de IA e conexão SQLite compartilhados.
 - `src/studai/api/`: API HTTP local que converte requisições em chamadas aos casos de uso.
 - `src/studai/tools/`: ferramentas locais, como o painel de benchmark.
@@ -42,6 +44,7 @@ Inicie a aplicação local com `python api.py`; ela serve a interface e a API na
 - `POST /api/diagnostics` gera uma tentativa em background; `GET /api/diagnostics/{id}` mostra progresso e questões sem expor o gabarito.
 - `POST /api/diagnostics/{id}/answers` registra `{ "ordinal": 1, "answer": "A", "reason": "calc_error" }`; motivo é exigido para resposta incorreta.
 - `POST /api/diagnostics/{id}/finalize` calcula métricas e plano de estudo em background.
+- `GET /api/knowledge-map?courseId=` e `GET /api/knowledge-map/nodes/{id}?courseId=` alimentam a tela "Mapa" (grafo da taxonomia com domínio e profundidade).
 
 As rotas são locais e não têm autenticação nesta fase. Tarefas longas ficam em memória; dados de provas, respostas e diagnósticos continuam nos diretórios persistentes existentes.
 
