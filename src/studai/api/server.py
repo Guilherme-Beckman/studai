@@ -277,11 +277,20 @@ def _provider(payload: dict, *, max_tokens: int = 1600):
         threads = int(payload.get("ollamaThreads") or 0)
         if not 0 <= threads <= 64:
             raise ValueError("ollamaThreads deve estar entre 0 e 64")
+        key_env = payload.get("apiKeyEnv") or payload.get("api_key_env")
+        if name == "gemini" and not key_env:
+            # Mesmas chaves do processamento (GEMINI_API_KEYS, GEMINI_API_KEY ou GOOGLE_API_KEY).
+            keys = _gemini_api_keys()
+            if not keys:
+                raise ValueError("configure GEMINI_API_KEYS no arquivo .env para usar Gemini")
+            return GeminiProvider(model=model, api_key=keys[0],
+                                  base_url=payload.get("baseUrl") or payload.get("base_url"),
+                                  temperature=0, max_tokens=max_tokens, json_mode=True)
         return make_provider(
             name,
             model,
             base_url=payload.get("baseUrl") or payload.get("base_url"),
-            key_env=payload.get("apiKeyEnv") or payload.get("api_key_env"),
+            key_env=key_env,
             temperature=0,
             max_tokens=max_tokens,
             json_mode=True,

@@ -379,5 +379,28 @@ class AIPoolTests(unittest.TestCase):
             server.SHARED_POOLS.clear()
 
 
+class DiagnosticProviderTests(unittest.TestCase):
+    """O provedor da análise do diagnóstico lê as mesmas chaves Gemini do processamento."""
+
+    def gemini(self, env):
+        keys = ("GEMINI_API_KEYS", "GEMINI_API_KEY", "GOOGLE_API_KEY")
+        clean = {key: value for key, value in os.environ.items() if key not in keys}
+        with patch.dict(os.environ, {**clean, **env}, clear=True), patch.object(server, "load_dotenv"):
+            return server._provider({"provider": "gemini"})
+
+    def test_plural_variable_is_enough(self):
+        provider = self.gemini({"GEMINI_API_KEYS": "chave-a, chave-b"})
+        self.assertIsInstance(provider, GeminiProvider)
+        self.assertEqual(provider.api_key, "chave-a")
+        self.assertTrue(provider.json_mode)
+
+    def test_singular_variable_still_works(self):
+        self.assertEqual(self.gemini({"GEMINI_API_KEY": "chave-unica"}).api_key, "chave-unica")
+
+    def test_missing_key_is_a_clear_error(self):
+        with self.assertRaisesRegex(ValueError, "GEMINI_API_KEYS"):
+            self.gemini({})
+
+
 if __name__ == "__main__":
     unittest.main()
