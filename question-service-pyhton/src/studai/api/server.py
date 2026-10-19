@@ -1046,14 +1046,35 @@ def _diagnostic_payload(db, attempt_id: str) -> dict:
     }
 
 
+def _study_pool(db, config: dict, course_id: str) -> list[dict]:
+    profile = diagnostics.course_profile(config, course_id)
+    pool, _ = diagnostics.load_question_pool(DEFAULT_QUESTIONS_DIR, db, list(profile["pesos"]))
+    return pool
+
+
 def _study_today(course_id: str) -> dict:
     config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
-    profile = diagnostics.course_profile(config, course_id)
     db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
     try:
         study.sync_diagnostic_answers(db)
-        pool, _ = diagnostics.load_question_pool(DEFAULT_QUESTIONS_DIR, db, list(profile["pesos"]))
+        pool = _study_pool(db, config, course_id)
         return study.plan_today(db, pool, config, course_id, datetime.now(timezone.utc))
+    finally:
+        db.close()
+
+
+def _study_answer(body: dict) -> dict:
+    session_id = str(body.get("sessionId") or "")
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        # Corrige com o gabarito atual, o mesmo que a tela "Hoje" mostrou.
+        row = db.execute("SELECT course_id FROM study_sessions WHERE id=?", (session_id,)).fetchone()
+        pool = None
+        if row:
+            config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+            pool = _study_pool(db, config, row["course_id"])
+        return study.record_study_answer(db, session_id, str(body.get("itemId") or ""), body.get("answer"),
+                                         body.get("reason"), datetime.now(timezone.utc), pool)
     finally:
         db.close()
 
@@ -1701,14 +1722,7 @@ class Handler(BaseHTTPRequestHandler):
                 job_id = _submit_job("Gerar diagnóstico", create)
                 return self._json(202, {"jobId": job_id})
             if path == "/api/study/today/answers":
-                body = self._read_json()
-                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
-                try:
-                    return self._json(200, study.record_study_answer(
-                        db, str(body.get("sessionId") or ""), str(body.get("itemId") or ""),
-                        body.get("answer"), body.get("reason"), datetime.now(timezone.utc)))
-                finally:
-                    db.close()
+                return self._json(200, _study_answer(self._read_json()))
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/answers", path)
             if match:
                 body = self._read_json()

@@ -282,19 +282,31 @@ def plan_today(db: sqlite3.Connection, pool: list[dict], config: dict, course_id
             db.execute("INSERT INTO study_sessions(id,local_date,course_id,plan_json,created_at) VALUES(?,?,?,?,?)",
                        (session_id, day, course_id, json.dumps({"items": items}, ensure_ascii=False), _iso(now)))
         row = db.execute("SELECT * FROM study_sessions WHERE id=?", (session_id,)).fetchone()
-    return session_payload(db, row["id"])
+    return session_payload(db, row["id"], pool)
 
 
-def _session(db: sqlite3.Connection, session_id: str) -> tuple[sqlite3.Row, list[dict]]:
+def _session(db: sqlite3.Connection, session_id: str,
+             pool: list[dict] | None = None) -> tuple[sqlite3.Row, list[dict]]:
+    """
+    O plano gravado guarda uma cópia da questão. Com ``pool``, cada item passa a usar a
+    versão atual do acervo (questão corrigida, gabarito revisto); a cópia só vale se a
+    questão saiu do acervo.
+    """
     row = db.execute("SELECT * FROM study_sessions WHERE id=?", (session_id,)).fetchone()
     if not row:
         raise ValueError(f"sessão de estudo não encontrada: {session_id}")
-    return row, json.loads(row["plan_json"])["items"]
+    items = json.loads(row["plan_json"])["items"]
+    current = {(e["source_id"], int(e["number"])): e for e in pool or []}
+    for item in items:
+        entry = current.get((item["sourceId"], int(item["number"])))
+        if entry:
+            item["question"], item["correctAnswer"] = entry["question"], entry["correct_answer"]
+    return row, items
 
 
-def session_payload(db: sqlite3.Connection, session_id: str) -> dict:
+def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | None = None) -> dict:
     """Sessão para a interface: o gabarito só aparece depois da resposta."""
-    row, items = _session(db, session_id)
+    row, items = _session(db, session_id, pool)
     answers = {a["item_id"]: dict(a) for a in db.execute(
         "SELECT * FROM study_answers WHERE session_id=?", (session_id,))}
     payload_items = []
@@ -317,9 +329,9 @@ def session_payload(db: sqlite3.Connection, session_id: str) -> dict:
 
 
 def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, answer: str | None,
-                        reason: str | None, now: datetime) -> dict:
+                        reason: str | None, now: datetime, pool: list[dict] | None = None) -> dict:
     """Registra a resposta do estudo diário e realimenta os cartões."""
-    _, items = _session(db, session_id)
+    _, items = _session(db, session_id, pool)
     item = next((i for i in items if i["id"] == item_id), None)
     if item is None:
         raise ValueError(f"item {item_id} não pertence à sessão")
