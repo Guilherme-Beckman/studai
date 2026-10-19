@@ -11,3 +11,8 @@ DEFAULT_ANSWER_KEYS_DIR = SERVICE_ROOT / "docs" / "gabaritos"
 DEFAULT_CLASSIFICATION_CACHE = Path(os.environ.get(
     "STUDAI_CACHE_DIR", str(SERVICE_ROOT / "simulados" / "cache")
 )).expanduser() / "classification-cache.sqlite3"
+
+
+def cache_dir() -> Path:
+    """Diretório de cache lido a cada chamada, para respeitar STUDAI_CACHE_DIR definido depois do import."""
+    return Path(os.environ.get("STUDAI_CACHE_DIR", str(SERVICE_ROOT / "simulados" / "cache"))).expanduser()
