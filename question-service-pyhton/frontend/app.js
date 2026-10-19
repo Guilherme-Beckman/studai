@@ -260,9 +260,11 @@ function optionsMarkup(examId, question, { selected, submitted, correctAnswer, s
   }).join("");
 }
 
-function renderSourceQuestionImage(examId, paths) {
+function renderSourceQuestionImage(examId, paths, { collapsible = false } = {}) {
   return paths?.length
-    ? `<div class="source-question-image-panel"><strong>Enunciado original da prova</strong>${examImageMarkup(examId, paths, "source-question-image")}</div>`
+    ? (collapsible
+      ? `<details class="source-question-image-panel" open><summary>Enunciado original da prova</summary>${examImageMarkup(examId, paths, "source-question-image")}</details>`
+      : `<div class="source-question-image-panel"><strong>Enunciado original da prova</strong>${examImageMarkup(examId, paths, "source-question-image")}</div>`)
     : "";
 }
 
@@ -891,6 +893,87 @@ async function openExamQuiz(examId) {
   }
 }
 
+let focusWorkspace = null;
+
+function enhanceFocusMode(workspace, progress) {
+  const header = $(".workspace-top", workspace);
+  if (!header || !$(".question-body, .exam-prompt", workspace)) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button button-secondary focus-open";
+  button.textContent = "Modo foco";
+  button.addEventListener("click", async () => {
+    focusWorkspace = workspace;
+    workspace.classList.add("focus-mode");
+    workspace.dataset.focusProgress = `Questão ${progress}`;
+    if (workspace.requestFullscreen) {
+      try { await workspace.requestFullscreen(); } catch { /* Sobreposição CSS é o fallback. */ }
+    }
+    $("[data-focus-exit]", workspace)?.focus();
+  });
+  header.append(button);
+  const indicator = document.createElement("span");
+  indicator.className = "focus-progress";
+  indicator.textContent = `Questão ${progress}`;
+  workspace.append(indicator);
+  if (workspace.classList.contains("focus-mode")) {
+    const question = $(".question-body, .exam-prompt, .exam-options, .options-list", workspace);
+    question?.classList.add("focus-slide");
+  }
+  const exit = document.createElement("button");
+  exit.type = "button";
+  exit.className = "focus-exit";
+  exit.dataset.focusExit = "";
+  exit.setAttribute("aria-label", "Sair do modo foco (Esc)");
+  exit.textContent = "×";
+  exit.addEventListener("click", closeFocusMode);
+  workspace.append(exit);
+  if (!workspace.dataset.focusGestures) {
+    workspace.dataset.focusGestures = "true";
+    workspace.addEventListener("touchstart", event => { workspace.dataset.swipeX = event.changedTouches[0].clientX; }, { passive: true });
+    workspace.addEventListener("touchend", event => {
+      const start = Number(workspace.dataset.swipeX);
+      const delta = event.changedTouches[0].clientX - start;
+      if (!workspace.classList.contains("focus-mode") || Math.abs(delta) < 70) return;
+      const next = $("[data-exam-next], #today-next", workspace);
+      const prev = $("[data-exam-prev]", workspace);
+      if (delta < 0) next?.click(); else prev?.click();
+    }, { passive: true });
+  }
+}
+
+function closeFocusMode() {
+  const workspace = focusWorkspace;
+  if (!workspace) return;
+  workspace.classList.remove("focus-mode");
+  focusWorkspace = null;
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+}
+
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && focusWorkspace) {
+    focusWorkspace.classList.remove("focus-mode");
+    focusWorkspace = null;
+  }
+});
+
+document.addEventListener("keydown", event => {
+  const workspace = focusWorkspace;
+  if (!workspace?.classList.contains("focus-mode")) return;
+  if (event.key === "Escape") { closeFocusMode(); return; }
+  if (event.key === "ArrowRight") { $("[data-exam-next], #today-next", workspace)?.click(); return; }
+  if (event.key === "ArrowLeft") { $("[data-exam-prev]", workspace)?.click(); return; }
+  if (/^[a-e]$/i.test(event.key)) {
+    const letter = event.key.toUpperCase();
+    const option = $$('[data-exam-option], [data-today-option], [data-answer]', workspace).find(button => (button.dataset.examOption || button.dataset.todayOption || button.dataset.answer) === letter);
+    option?.click();
+  }
+  if (event.key === "Enter") {
+    const action = $("[data-exam-submit], #today-submit, [data-exam-next], #today-next, [data-answer], #confirm-reason", workspace);
+    action?.click();
+  }
+});
+
 function renderExamQuiz() {
   const workspace = $("#exam-quiz-workspace");
   const quiz = currentExamQuiz;
@@ -936,6 +1019,7 @@ function renderExamQuiz() {
     ${questionContentMarkup(exam.id, question, sharedText, sharedImages)}
     <div class="exam-options">${optionsMarkup(exam.id, question, { selected, submitted, correctAnswer: key && !key.annulled ? key.answer : null, saved, attr: "data-exam-option" })}</div>
     ${outcome}${reasonPrompt}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 ? "disabled" : ""}>← Anterior</button><div>${submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button class="button button-primary" data-exam-submit ${selected ? "" : "disabled"}>Responder</button>`}</div></div>`;
+  enhanceFocusMode(workspace, `${index + 1} de ${questions.length}`);
   bindExamQuizActions();
 }
 
@@ -1111,8 +1195,13 @@ function processConfig() {
 
 function toggleProviderFields(prefix) {
   const extra = $(`#${prefix}-provider-extra`);
-  const isExternal = $(`#${prefix}-provider`).value === "ollama";
-  extra.classList.toggle("hidden", !isExternal);
+  const provider = $(`#${prefix}-provider`).value;
+  const hasModel = !["demo", "mock"].includes(provider);
+  extra.classList.toggle("hidden", !hasModel);
+  const baseUrl = $(`#${prefix}-base-url-field`);
+  if (baseUrl) baseUrl.classList.toggle("hidden", provider !== "ollama");
+  const model = $(`#${prefix}-model`);
+  if (model) model.placeholder = provider === "ollama" ? "qwen3.5:4b" : provider === "gemini" ? "gemini-3.8-flash (opcional)" : "Modelo opcional; usa o padrão se vazio";
 }
 
 async function processPdf(event) {
@@ -1241,7 +1330,7 @@ async function cancelProcess() {
 
 function diagnosticCard(item) {
   const state = item.status === "completed" ? "Concluído" : item.status === "analysis_failed" ? "Análise incompleta" : "Em andamento";
-  return `<button class="history-item" data-diagnostic="${escapeHtml(item.id)}"><span class="history-mark">◉</span><span class="history-main"><strong>${escapeHtml(item.course_name)}</strong><span>${state} · ${item.actual_count} questões · ${new Date(item.created_at).toLocaleDateString("pt-BR")}</span></span><span class="history-arrow">›</span></button>`;
+  return `<div class="history-item"><span class="history-mark">◉</span><button class="history-open" type="button" data-diagnostic="${escapeHtml(item.id)}"><span class="history-main"><strong>${escapeHtml(item.course_name)}</strong><span>${state} · ${item.actual_count} questões · ${new Date(item.created_at).toLocaleDateString("pt-BR")}</span></span><span class="history-arrow">›</span></button><button class="history-delete" type="button" data-delete-diagnostic="${escapeHtml(item.id)}" aria-label="Remover diagnóstico" title="Remover diagnóstico">×</button></div>`;
 }
 
 async function refreshDiagnostics() {
@@ -1249,6 +1338,24 @@ async function refreshDiagnostics() {
     const items = await api("/api/diagnostics");
     $("#diagnostic-list").innerHTML = items.length ? items.map(diagnosticCard).join("") : `<div class="empty-state"><div class="empty-icon">◉</div><strong>Nenhum diagnóstico ainda</strong><p>Gere um novo diagnóstico quando houver questões classificadas com gabarito.</p></div>`;
     $$("[data-diagnostic]").forEach(button => button.addEventListener("click", () => openDiagnostic(button.dataset.diagnostic)));
+    $$('[data-delete-diagnostic]').forEach(button => button.addEventListener("click", async event => {
+      event.stopPropagation();
+      const id = button.dataset.deleteDiagnostic;
+      if (!window.confirm("Remover este diagnóstico e todas as respostas e resultados associados? Esta ação não pode ser desfeita.")) return;
+      button.disabled = true;
+      try {
+        await api(`/api/diagnostics/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (currentDiagnostic?.id === id) {
+          currentDiagnostic = null;
+          $("#diagnostic-workspace").classList.add("hidden");
+        }
+        await refreshDiagnostics();
+        toast("Diagnóstico removido.");
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message, true);
+      }
+    }));
   } catch (error) { toast(error.message, true); }
 }
 
@@ -1319,14 +1426,24 @@ function renderDiagnostic(workspace, data) {
     const item = pending;
     const question = item.question || {};
     const position = adaptive ? `Questão ${answered + 1} · adaptativo` : `Questão ${item.ordinal} de ${data.total}`;
-    const alternatives = Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b)).map(([letter, alternative]) => `<button class="option-button" data-answer="${escapeHtml(letter)}"><span class="option-letter">${escapeHtml(letter)}</span><span>${escapeHtml(alternative.texto || "Alternativa apresentada como figura")}</span></button>`).join("");
-    body = `<div class="question-top"><span class="question-subject">${escapeHtml(item.subject)} · ${escapeHtml(item.topic)}</span><span>${position}</span></div>${question._texto_compartilhado ? `<div class="question-body"><b>Texto-base</b><br>${escapeHtml(question._texto_compartilhado)}</div>` : ""}<div class="question-body">${escapeHtml(question.enunciado || "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}</div><div class="options-list">${alternatives}</div><div class="question-actions"><button class="blank-button" id="answer-blank">Deixar em branco</button><span class="muted">Sua resposta fica salva ao selecionar.</span></div><div id="reason-panel" class="reason-row hidden"><label>Qual foi o motivo principal?<select id="answer-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="confirm-reason">Registrar resposta</button></div><div id="answer-feedback"></div>`;
+    const display = questionDisplayState(question);
+    const sharedImages = question._figuras_compartilhadas || [];
+    // Keep the original crop available even when extracted inline figures exist;
+    // a stale or missing figure path should not make the diagnostic unsolvable.
+    const fullPageImages = !display.showSource ? (question.imagens_completas || []) : [];
+    const alternatives = Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b)).map(([letter, raw]) => {
+      const alternative = typeof raw === "string" ? { texto: raw, figuras: [] } : (raw || {});
+      const label = display.showAlternativeText ? (alternative.texto || (alternative.figuras?.length ? "" : "Alternativa apresentada como figura")) : (alternative.figuras?.length ? "" : "Alternativa apresentada na imagem da questão");
+      return `<button class="option-button" data-answer="${escapeHtml(letter)}"><span class="option-letter">${escapeHtml(letter)}</span><span>${escapeHtml(label)}${examImageMarkup(item.source_id, alternative.figuras || [], "option-image")}</span></button>`;
+    }).join("");
+    body = `<div class="question-top"><span class="question-subject">${escapeHtml(item.subject)} · ${escapeHtml(item.topic)}</span><span>${position}</span></div>${question._texto_compartilhado ? `<div class="question-body"><b>Texto-base</b><br>${escapeHtml(question._texto_compartilhado)}${examImageMarkup(item.source_id, sharedImages, "passage-image")}</div>` : ""}<div class="question-body">${display.showStem ? stemMarkup(question, paths => examImageMarkup(item.source_id, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(item.source_id, question.figuras_enunciado || [])}${renderSourceQuestionImage(item.source_id, display.sourceImages, { collapsible: true })}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(item.source_id, fullPageImages)}</details>` : ""}</div><div class="options-list">${alternatives}</div><div class="question-actions"><button class="blank-button" id="answer-blank">Deixar em branco</button><span class="muted">Sua resposta fica salva ao selecionar.</span></div><div id="reason-panel" class="reason-row hidden"><label>Qual foi o motivo principal?<select id="answer-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="confirm-reason">Registrar resposta</button></div><div id="answer-feedback"></div>`;
   } else {
     const stop = adaptive ? `O diagnóstico adaptativo terminou após ${answered} questões${data.stopReason || diagnosticDone.get(data.id) ? `: ${escapeHtml(data.stopReason || diagnosticDone.get(data.id))}` : ""}. ` : "Todas as respostas foram registradas. ";
     body = `<div class="inline-result">${stop}Gere a análise para ver suas métricas e prioridades.</div><button class="button button-primary" id="finalize-diagnostic">Concluir e analisar <span>→</span></button>`;
   }
   const meta = adaptive ? `${answered} respondida(s) · adaptativo${data.requested ? ` · até ${data.requested}` : ""}` : `${answered} de ${data.total} respondidas`;
   workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">TENTATIVA ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${meta} · ${escapeHtml(data.status)}</div></div><button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
+  if (pending && !data.metrics && !(adaptive && finished)) enhanceFocusMode(workspace, `${answered + 1} de ${adaptive ? (data.requested || data.total || "?") : data.total}`);
   $("#close-diagnostic", workspace).addEventListener("click", () => { workspace.classList.add("hidden"); currentDiagnostic = null; });
   if (pending && !data.metrics && !(adaptive && finished)) {
     $$("[data-answer]", workspace).forEach(button => button.addEventListener("click", () => submitAnswer(data.id, pending, button.dataset.answer)));
@@ -1461,6 +1578,7 @@ function renderToday() {
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
     <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
     ${reasonPanel}${feedback}${actions}`;
+  enhanceFocusMode(workspace, `${items.indexOf(item) + 1} de ${items.length}`);
   $$("[data-today-option]", workspace).forEach(button => button.addEventListener("click", () => {
     currentStudy.selected = button.dataset.todayOption;
     currentStudy.pendingReason = null;

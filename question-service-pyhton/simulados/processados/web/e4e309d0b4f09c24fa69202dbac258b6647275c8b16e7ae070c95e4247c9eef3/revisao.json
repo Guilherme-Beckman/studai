@@ -1,0 +1,1038 @@
+{
+  "schema_version": 1,
+  "questions": {
+    "1": {
+      "status": "reviewed",
+      "subject": "Língua Portuguesa",
+      "topic": "Paródia, paráfrase e estilização",
+      "content_id": "lingua-portuguesa.intertextualidade-parodia-e-interdiscursividade.parodia-e-parafrase",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Língua Portuguesa → Texto, discurso e argumentação → Intertextualidade, paródia e interdiscursividade → Paródia, paráfrase e estilização",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "2": {
+      "status": "reviewed",
+      "subject": "Língua Portuguesa",
+      "topic": "Marcas de subjetividade",
+      "content_id": "lingua-portuguesa.modalizacao-e-posicionamento-do-enunciador.marcas-de-subjetividade",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Língua Portuguesa → Texto, discurso e argumentação → Modalização e posicionamento do enunciador → Marcas de subjetividade",
+      "related_content_ids": [
+        "lingua-portuguesa.content.pontuacao-e-ortografia"
+      ],
+      "note": ""
+    },
+    "3": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Princípio da casa dos pombos e inclusão-exclusão",
+      "content_id": "matematica.analise-combinatoria.principio-da-casa-dos-pombos-e-inclusao-exclusao",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Contagem, probabilidade e estatística → Análise combinatória → Princípio da casa dos pombos e inclusão-exclusão",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "12": {
+      "status": "reviewed",
+      "subject": "Literatura",
+      "topic": "Leitura comparada de obras indicadas",
+      "content_id": "literatura.conteudo-de-leitura-obrigatoria.leitura-comparada-de-obras-indicadas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Literatura → Leituras obrigatórias FUVEST → Lista de leitura obrigatória: visão de conjunto → Leitura comparada de obras indicadas",
+      "related_content_ids": [
+        "historia.content.doutrinas-politicas-e-cidadania",
+        "historia.content.ditadura-militar-no-brasil"
+      ],
+      "note": ""
+    },
+    "13": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Leitura de gráficos",
+      "content_id": "matematica.graficos-tabelas-e-infograficos.leitura-de-graficos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Contagem, probabilidade e estatística → Gráficos, tabelas e infográficos → Leitura de gráficos",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "21": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Jesuítas e catequese",
+      "content_id": "historia.expansao-maritima-e-conquista-da-america.jesuitas-e-catequese",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Expansão europeia, colonização e independências nas Américas → Expansão marítima e conquista da América → Jesuítas e catequese",
+      "related_content_ids": [
+        "historia.content.america-pre-colombiana",
+        "historia.content.acucar-e-escravidao-na-america-portuguesa"
+      ],
+      "note": ""
+    },
+    "20": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Resistência indígena",
+      "content_id": "historia.resistencia-indigena-e-africana.resistencia-indigena",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Temas transversais: memória, cidadania, trabalho e ambiente → Resistência indígena e africana → Resistência indígena",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "44": {
+      "status": "reviewed",
+      "subject": "Arte",
+      "topic": "Arte conceitual e instalação",
+      "content_id": "arte.arte-contemporanea.arte-conceitual-e-instalacao",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Arte → História, períodos e contextos da arte → Arte contemporânea → Arte conceitual e instalação",
+      "related_content_ids": [
+        "arte.content.artes-visuais",
+        "arte.content.saberes-esteticos-e-culturais"
+      ],
+      "note": ""
+    },
+    "70": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Órgãos dos sentidos",
+      "content_id": "biologia.sistema-nervoso.orgaos-dos-sentidos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Organismos e fisiologia → Sistema nervoso → Órgãos dos sentidos",
+      "related_content_ids": [
+        "biologia.content.membrana-plasmatica-e-transporte"
+      ],
+      "note": ""
+    },
+    "81": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Solubilidade e polaridade",
+      "content_id": "quimica.forcas-intermoleculares.solubilidade-e-polaridade",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Matéria, estrutura e propriedades → Forças intermoleculares → Solubilidade e polaridade",
+      "related_content_ids": [
+        "biologia.content.adaptacoes-das-plantas-ao-ambiente-terrestre"
+      ],
+      "note": ""
+    },
+    "39": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Cortiços, favelas e exclusão urbana",
+      "content_id": "historia.reforma-urbana-do-rio-de-janeiro.corticos-favelas-e-exclusao-urbana",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Brasil: Império e Primeira República (1808–1930) → Reforma urbana do Rio de Janeiro → Cortiços, favelas e exclusão urbana",
+      "related_content_ids": [
+        "historia.content.direitos-trabalhistas-na-historia"
+      ],
+      "note": ""
+    },
+    "4": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Definição e propriedades dos logaritmos",
+      "content_id": "matematica.logaritmos-e-funcoes-logaritmicas.definicao-e-propriedades-dos-logaritmos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Álgebra, funções e sequências → Logaritmos e funções logarítmicas → Definição e propriedades dos logaritmos",
+      "related_content_ids": [
+        "matematica.content.probabilidade"
+      ],
+      "note": ""
+    },
+    "6": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Área e volume da pirâmide",
+      "content_id": "matematica.volume-de-piramides.area-e-volume-da-piramide",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Geometria e medidas → Volume de pirâmides → Área e volume da pirâmide",
+      "related_content_ids": [
+        "matematica.content.areas-de-figuras-planas"
+      ],
+      "note": ""
+    },
+    "7": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Arco duplo",
+      "content_id": "matematica.content.arco-duplo",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Trigonometria → Identidades e equações trigonométricas → Arco duplo",
+      "related_content_ids": [
+        "matematica.content.ciclo-trigonometrico-e-funcoes-trigonometricas"
+      ],
+      "note": ""
+    },
+    "8": {
+      "status": "reviewed",
+      "subject": "Língua Portuguesa",
+      "topic": "Tema, ideia central e propósito do texto",
+      "content_id": "lingua-portuguesa.compreensao-global-e-inferencia.tema-e-ideia-central",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Compreensão global e inferência → Tema, ideia central e propósito do texto",
+      "related_content_ids": [
+        "lingua-portuguesa.content.variacao-linguistica-e-preconceito-linguistico"
+      ],
+      "note": ""
+    },
+    "9": {
+      "status": "reviewed",
+      "subject": "Sociologia",
+      "topic": "Educação, reprodução e emancipação",
+      "content_id": "sociologia.socializacao-e-instituicoes.educacao-reproducao-e-emancipacao",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Sociologia → Cultura, identidade e socialização → Socialização e instituições → Educação, reprodução e emancipação",
+      "related_content_ids": [
+        "sociologia.content.divisao-do-trabalho-e-coesao-social",
+        "sociologia.content.genero-e-sexualidade"
+      ],
+      "note": ""
+    },
+    "10": {
+      "status": "reviewed",
+      "subject": "Arte",
+      "topic": "Arte e representação social",
+      "content_id": "arte.arte-sociedade-e-politica.arte-e-representacao-social",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Arte → História, períodos e contextos da arte → Arte, sociedade e política → Arte e representação social",
+      "related_content_ids": [
+        "arte.content.arte-popular-e-manifestacoes-culturais",
+        "arte.content.arte-indigena-e-africana"
+      ],
+      "note": ""
+    },
+    "11": {
+      "status": "reviewed",
+      "subject": "Literatura",
+      "topic": "Opúsculo humanitário: educação feminina e argumentação",
+      "content_id": "literatura.nisia-floresta-opusculo-humanitario.educacao-da-mulher-e-argumentacao",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Literatura → Leituras obrigatórias FUVEST → Nísia Floresta: Opúsculo humanitário → Opúsculo humanitário: educação feminina e argumentação",
+      "related_content_ids": [
+        "literatura.content.julia-lopes-de-almeida-memorias-de-martha"
+      ],
+      "note": ""
+    },
+    "14": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Migrações internacionais",
+      "content_id": "geografia.migracoes-e-refugiados.migracoes-internacionais",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → População, território e mobilidade → Migrações e refugiados → Migrações internacionais",
+      "related_content_ids": [
+        "geografia.content.segregacao-socioespacial-e-vulnerabilidade"
+      ],
+      "note": ""
+    },
+    "15": {
+      "status": "reviewed",
+      "subject": "Sociologia",
+      "topic": "Uberização e plataformas",
+      "content_id": "sociologia.trabalho-tecnologia-e-novas-formas-de-ocupacao.uberizacao-e-plataformas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Sociologia → Trabalho, consumo e tecnologia → Trabalho, tecnologia e novas formas de ocupação → Uberização e plataformas",
+      "related_content_ids": [
+        "sociologia.content.emprego-desemprego-e-mercado-de-trabalho",
+        "sociologia.content.sentidos-e-desigualdades-do-trabalho"
+      ],
+      "note": ""
+    },
+    "16": {
+      "status": "reviewed",
+      "subject": "Sociologia",
+      "topic": "Uberização e plataformas",
+      "content_id": "sociologia.trabalho-tecnologia-e-novas-formas-de-ocupacao.uberizacao-e-plataformas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Sociologia → Trabalho, consumo e tecnologia → Trabalho, tecnologia e novas formas de ocupação → Uberização e plataformas",
+      "related_content_ids": [
+        "sociologia.content.trabalho-assalariado-e-classes-sociais"
+      ],
+      "note": ""
+    },
+    "17": {
+      "status": "reviewed",
+      "subject": "Sociologia",
+      "topic": "Marx: mais-valia e classes sociais",
+      "content_id": "sociologia.trabalho-assalariado-e-classes-sociais.marx-mais-valia-e-classes-sociais",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Sociologia → Trabalho, consumo e tecnologia → Trabalho assalariado e classes sociais → Marx: mais-valia e classes sociais",
+      "related_content_ids": [
+        "sociologia.content.sentidos-e-desigualdades-do-trabalho"
+      ],
+      "note": ""
+    },
+    "18": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Inequações logarítmicas",
+      "content_id": "matematica.inequacoes-logaritmicas.inequacoes-logaritmicas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Álgebra, funções e sequências → Logaritmos e funções logarítmicas → Inequações logarítmicas",
+      "related_content_ids": [
+        "matematica.content.funcoes-exponenciais"
+      ],
+      "note": ""
+    },
+    "19": {
+      "status": "reviewed",
+      "subject": "Arte",
+      "topic": "Arte contemporânea brasileira",
+      "content_id": "arte.arte-contemporanea.arte-contemporanea-brasileira",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Arte → História, períodos e contextos da arte → Arte contemporânea → Arte contemporânea brasileira",
+      "related_content_ids": [
+        "arte.content.arte-sociedade-e-politica"
+      ],
+      "note": ""
+    },
+    "22": {
+      "status": "reviewed",
+      "subject": "Arte",
+      "topic": "Arte engajada e de protesto",
+      "content_id": "arte.arte-sociedade-e-politica.arte-engajada",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Arte → História, períodos e contextos da arte → Arte, sociedade e política → Arte engajada e de protesto",
+      "related_content_ids": [
+        "arte.content.elementos-da-linguagem-artistica"
+      ],
+      "note": ""
+    },
+    "23": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Desmatamento e queimadas",
+      "content_id": "geografia.impactos-ambientais-urbanos-e-rurais.desmatamento-e-queimadas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Questões socioambientais e sustentabilidade → Impactos ambientais urbanos e rurais → Desmatamento e queimadas",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "24": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Fenômenos climáticos",
+      "content_id": "geografia.climatologia-e-massas-de-ar.fenomenos-climaticos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Dinâmicas da natureza → Climatologia e massas de ar → Fenômenos climáticos",
+      "related_content_ids": [
+        "geografia.content.biomas-e-dominios-morfoclimaticos"
+      ],
+      "note": ""
+    },
+    "25": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Localização de informações",
+      "content_id": "ingles.interpretacao-de-texto-em-ingles.localizacao-de-informacoes",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Interpretação de texto em inglês → Localização de informações",
+      "related_content_ids": [
+        "ingles.content.inferencia-de-sentido-em-ingles"
+      ],
+      "note": ""
+    },
+    "26": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Localização de informações",
+      "content_id": "ingles.interpretacao-de-texto-em-ingles.localizacao-de-informacoes",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Interpretação de texto em inglês → Localização de informações",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "27": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Tectônica de placas",
+      "content_id": "geografia.relevo-e-estrutura-geologica.tectonica-de-placas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Dinâmicas da natureza → Relevo e estrutura geológica → Tectônica de placas",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "28": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Relações estequiométricas",
+      "content_id": "quimica.estequiometria.relacoes-estequiometricas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Transformações e quantificação → Estequiometria → Relações estequiométricas",
+      "related_content_ids": [
+        "quimica.content.oxirreducao-e-combustao",
+        "quimica.content.mol-massa-molar-e-constante-de-avogadro"
+      ],
+      "note": ""
+    },
+    "29": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Mercado de carbono e desenvolvimento sustentável",
+      "content_id": "geografia.mudancas-climaticas-e-acordos-ambientais.mercado-de-carbono-e-desenvolvimento-sustentavel",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Questões socioambientais e sustentabilidade → Mudanças climáticas e acordos ambientais → Mercado de carbono e desenvolvimento sustentável",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "30": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Cilindro",
+      "content_id": "matematica.prismas-e-cilindros.cilindro",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Geometria e medidas → Prismas e cilindros → Cilindro",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "31": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Corrosão de metais",
+      "content_id": "quimica.protecao-catodica-e-corrosao.corrosao-de-metais",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Eletroquímica e oxirredução → Proteção catódica e corrosão → Corrosão de metais",
+      "related_content_ids": [
+        "quimica.content.acidos-bases-sais-e-ph"
+      ],
+      "note": ""
+    },
+    "32": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "pH e pOH",
+      "content_id": "quimica.acidos-bases-sais-e-ph.ph-e-poh",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Soluções e equilíbrio químico → Ácidos, bases, sais e pH → pH e pOH",
+      "related_content_ids": [
+        "quimica.content.equilibrio-de-solubilidade"
+      ],
+      "note": ""
+    },
+    "33": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Consumismo e pegada ecológica",
+      "content_id": "geografia.consumo-e-sustentabilidade.consumismo-e-pegada-ecologica",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Questões socioambientais e sustentabilidade → Consumo e sustentabilidade → Consumismo e pegada ecológica",
+      "related_content_ids": [
+        "geografia.content.gestao-de-residuos-solidos"
+      ],
+      "note": ""
+    },
+    "34": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Bacias hidrográficas brasileiras",
+      "content_id": "geografia.hidrografia-e-recursos-hidricos.bacias-hidrograficas-brasileiras",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Dinâmicas da natureza → Hidrografia e recursos hídricos → Bacias hidrográficas brasileiras",
+      "related_content_ids": [
+        "geografia.content.ocupacao-da-amazonia",
+        "geografia.content.biomas-e-dominios-morfoclimaticos"
+      ],
+      "note": ""
+    },
+    "35": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Deslizamentos e enchentes",
+      "content_id": "geografia.riscos-e-desastres-ambientais.deslizamentos-e-enchentes",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Questões socioambientais e sustentabilidade → Riscos e desastres ambientais → Deslizamentos e enchentes",
+      "related_content_ids": [
+        "geografia.content.impactos-ambientais-urbanos-e-rurais"
+      ],
+      "note": ""
+    },
+    "36": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Razões trigonométricas no triângulo retângulo",
+      "content_id": "matematica.trigonometria-no-triangulo.razoes-trigonometricas-no-triangulo-retangulo",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Trigonometria → Trigonometria no triângulo → Razões trigonométricas no triângulo retângulo",
+      "related_content_ids": [
+        "matematica.content.grandezas-compostas-e-unidades-de-medida"
+      ],
+      "note": ""
+    },
+    "37": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Equação da circunferência",
+      "content_id": "matematica.circunferencia-no-plano-cartesiano.equacao-da-circunferencia",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Geometria e medidas → Circunferência no plano cartesiano → Equação da circunferência",
+      "related_content_ids": [
+        "matematica.content.plano-cartesiano-e-distancia-entre-pontos"
+      ],
+      "note": ""
+    },
+    "38": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Distribuição da população",
+      "content_id": "geografia.distribuicao-e-crescimento-populacional.distribuicao-da-populacao",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → População, território e mobilidade → Distribuição e crescimento populacional → Distribuição da população",
+      "related_content_ids": [
+        "geografia.content.urbanizacao-e-metropoles"
+      ],
+      "note": ""
+    },
+    "40": {
+      "status": "reviewed",
+      "subject": "Sociologia",
+      "topic": "Urbanização e modernidade",
+      "content_id": "sociologia.urbanizacao-e-problemas-urbanos.urbanizacao-e-modernidade",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Sociologia → Cidade, comunicação e vida contemporânea → Urbanização e problemas urbanos → Urbanização e modernidade",
+      "related_content_ids": [
+        "sociologia.content.comunidade-e-sociedade"
+      ],
+      "note": ""
+    },
+    "41": {
+      "status": "reviewed",
+      "subject": "Sociologia",
+      "topic": "Direitos humanos e concepções de cidadania",
+      "content_id": "sociologia.direitos-humanos-e-identidades.direitos-humanos-e-concepcoes-de-cidadania",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Sociologia → Cultura, identidade e socialização → Direitos humanos e identidades → Direitos humanos e concepções de cidadania",
+      "related_content_ids": [
+        "sociologia.content.cultura-dominacao-e-distincao-social"
+      ],
+      "note": ""
+    },
+    "42": {
+      "status": "reviewed",
+      "subject": "Língua Portuguesa",
+      "topic": "Tema, ideia central e propósito do texto",
+      "content_id": "lingua-portuguesa.compreensao-global-e-inferencia.tema-e-ideia-central",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Compreensão global e inferência → Tema, ideia central e propósito do texto",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "43": {
+      "status": "reviewed",
+      "subject": "Arte",
+      "topic": "Fotografia, cinema e audiovisual",
+      "content_id": "arte.artes-visuais.fotografia-cinema-e-audiovisual",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Arte → Linguagens e elementos artísticos → Artes visuais → Fotografia, cinema e audiovisual",
+      "related_content_ids": [
+        "arte.content.arte-e-tecnologias-digitais",
+        "arte.content.arte-contemporanea"
+      ],
+      "note": ""
+    },
+    "45": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Renascimento cultural",
+      "content_id": "historia.renascimento-e-reforma.renascimento-cultural",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Europa moderna, revoluções e capitalismo (séculos XV–XIX) → Renascimento e Reforma → Renascimento cultural",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "46": {
+      "status": "reviewed",
+      "subject": "Literatura",
+      "topic": "O Cristo cigano: forma poética e tema religioso",
+      "content_id": "literatura.sophia-de-mello-breyner-andresen-o-cristo-cigano.forma-poetica-e-tema-religioso",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Literatura → Leituras obrigatórias FUVEST → Sophia de Mello Breyner Andresen: O Cristo cigano → O Cristo cigano: forma poética e tema religioso",
+      "related_content_ids": [
+        "literatura.content.intertextualidade-entre-obras-literarias"
+      ],
+      "note": ""
+    },
+    "47": {
+      "status": "reviewed",
+      "subject": "Filosofia",
+      "topic": "Morte e finitude",
+      "content_id": "filosofia.finitude-e-sentido-da-vida.morte-e-finitude",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Filosofia → Antropologia filosófica → Finitude e sentido da vida → Morte e finitude",
+      "related_content_ids": [
+        "filosofia.content.filosofia-contemporanea"
+      ],
+      "note": ""
+    },
+    "48": {
+      "status": "reviewed",
+      "subject": "Literatura",
+      "topic": "Balada de amor ao vento: Sarnau e Mwando",
+      "content_id": "literatura.paulina-chiziane-balada-de-amor-ao-vento.enredo-sarnau-e-mwando",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Literatura → Leituras obrigatórias FUVEST → Paulina Chiziane: Balada de amor ao vento → Balada de amor ao vento: Sarnau e Mwando",
+      "related_content_ids": [
+        "literatura.content.literaturas-africanas-de-lingua-portuguesa"
+      ],
+      "note": ""
+    },
+    "49": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Islã e mundo bizantino",
+      "content_id": "historia.feudalismo-e-poder-no-medievo.isla-e-mundo-bizantino",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Antiguidade e Idade Média → Feudalismo e poder no Medievo → Islã e mundo bizantino",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "50": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Reinos e impérios africanos: Gana, Mali, Songai e Congo",
+      "content_id": "historia.civilizacoes-antigas-do-oriente-e-da-africa.reinos-e-imperios-africanos-medievais",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Antiguidade e Idade Média → Civilizações antigas do Oriente e da África → Reinos e impérios africanos: Gana, Mali, Songai e Congo",
+      "related_content_ids": [
+        "historia.content.feudalismo-e-poder-no-medievo"
+      ],
+      "note": ""
+    },
+    "51": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Terrorismo e 11 de Setembro",
+      "content_id": "historia.oriente-medio-contemporaneo.terrorismo-e-11-de-setembro",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Século XX e mundo contemporâneo → Oriente Médio contemporâneo → Terrorismo e 11 de Setembro",
+      "related_content_ids": [
+        "historia.content.guerra-fria"
+      ],
+      "note": ""
+    },
+    "52": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Conflitos contemporâneos",
+      "content_id": "geografia.geopolitica-e-potencias-mundiais.conflitos-contemporaneos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Geopolítica e regionalização → Geopolítica e potências mundiais → Conflitos contemporâneos",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "53": {
+      "status": "reviewed",
+      "subject": "Geografia",
+      "topic": "Disputas fronteiriças",
+      "content_id": "geografia.conflitos-territoriais-na-america-latina.disputas-fronteiricas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Geografia → Geopolítica e regionalização → Conflitos territoriais na América Latina → Disputas fronteiriças",
+      "related_content_ids": [
+        "geografia.content.fronteiras-territorio-e-territorialidade",
+        "geografia.content.organismos-internacionais-e-blocos-economicos"
+      ],
+      "note": ""
+    },
+    "54": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Democracia ateniense",
+      "content_id": "historia.cidadania-e-democracia-na-antiguidade.democracia-ateniense",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Antiguidade e Idade Média → Cidadania e democracia na Antiguidade → Democracia ateniense",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "55": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Números primos e fatoração",
+      "content_id": "matematica.divisibilidade-e-numeros-primos.numeros-primos-e-fatoracao",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Números, medidas e proporcionalidade → Divisibilidade e números primos → Números primos e fatoração",
+      "related_content_ids": [
+        "matematica.content.progressoes-geometricas"
+      ],
+      "note": ""
+    },
+    "56": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Cladogramas",
+      "content_id": "biologia.filogenia-e-classificacao.cladogramas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Evolução e diversidade biológica → Filogenia e classificação → Cladogramas",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "57": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Edição gênica (CRISPR)",
+      "content_id": "biologia.biotecnologia-e-manipulacao-do-dna.edicao-genica-crispr",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Genética e biotecnologia → Biotecnologia e manipulação do DNA → Edição gênica (CRISPR)",
+      "related_content_ids": [
+        "biologia.content.leis-de-mendel",
+        "biologia.content.genes-alelos-e-cromossomos"
+      ],
+      "note": ""
+    },
+    "58": {
+      "status": "reviewed",
+      "subject": "Língua Portuguesa",
+      "topic": "Tema, ideia central e propósito do texto",
+      "content_id": "lingua-portuguesa.compreensao-global-e-inferencia.tema-e-ideia-central",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Compreensão global e inferência → Tema, ideia central e propósito do texto",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "59": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Localização de informações",
+      "content_id": "ingles.interpretacao-de-texto-em-ingles.localizacao-de-informacoes",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Interpretação de texto em inglês → Localização de informações",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "60": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Velocidade de escape",
+      "content_id": "fisica.dinamica-de-foguetes.velocidade-de-escape-e-orbitas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Mecânica → Gravitação e leis de Kepler → Velocidade de escape",
+      "related_content_ids": [
+        "fisica.content.evolucao-estelar"
+      ],
+      "note": ""
+    },
+    "61": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Efeito fotoelétrico",
+      "content_id": "fisica.efeito-fotoeletrico-e-quantizacao-da-energia.efeito-fotoeletrico",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Física moderna → Efeito fotoelétrico e quantização da energia → Efeito fotoelétrico",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "62": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Reações exotérmicas e endotérmicas",
+      "content_id": "quimica.termoquimica-e-lei-de-hess.reacoes-exotermicas-e-endotermicas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Energia e velocidade das reações → Termoquímica e Lei de Hess → Reações exotérmicas e endotérmicas",
+      "related_content_ids": [
+        "quimica.content.oxirreducao-e-combustao"
+      ],
+      "note": ""
+    },
+    "63": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Relações estequiométricas",
+      "content_id": "quimica.estequiometria.relacoes-estequiometricas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Transformações e quantificação → Estequiometria → Relações estequiométricas",
+      "related_content_ids": [
+        "quimica.content.mol-massa-molar-e-constante-de-avogadro"
+      ],
+      "note": ""
+    },
+    "64": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Ciclos de replicação viral",
+      "content_id": "biologia.virus.ciclos-de-replicacao-viral",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Evolução e diversidade biológica → Vírus → Ciclos de replicação viral",
+      "related_content_ids": [
+        "biologia.content.mutacoes-e-estrutura-genica"
+      ],
+      "note": ""
+    },
+    "65": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Vacinas e soros",
+      "content_id": "biologia.vacinas-e-sistema-imune.vacinas-e-soros",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Organismos e fisiologia → Vacinas e sistema imune → Vacinas e soros",
+      "related_content_ids": [
+        "biologia.content.cadeias-alimentares-e-populacoes"
+      ],
+      "note": ""
+    },
+    "66": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Artigos de divulgação em inglês",
+      "content_id": "ingles.divulgacao-cientifica-em-ingles.artigos-de-divulgacao-em-ingles",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Divulgação científica em inglês → Artigos de divulgação em inglês",
+      "related_content_ids": [
+        "ingles.content.interpretacao-de-texto-em-ingles"
+      ],
+      "note": ""
+    },
+    "67": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Partículas subatômicas e isótopos",
+      "content_id": "quimica.modelos-atomicos.particulas-subatomicas-e-isotopos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Matéria, estrutura e propriedades → Modelos atômicos → Partículas subatômicas e isótopos",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "68": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Artigos de divulgação em inglês",
+      "content_id": "ingles.divulgacao-cientifica-em-ingles.artigos-de-divulgacao-em-ingles",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Divulgação científica em inglês → Artigos de divulgação em inglês",
+      "related_content_ids": [
+        "ingles.content.interpretacao-de-texto-em-ingles"
+      ],
+      "note": ""
+    },
+    "69": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Artigos de divulgação em inglês",
+      "content_id": "ingles.divulgacao-cientifica-em-ingles.artigos-de-divulgacao-em-ingles",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Divulgação científica em inglês → Artigos de divulgação em inglês",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "71": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Calor sensível",
+      "content_id": "fisica.calorimetria-e-mudancas-de-fase.calor-sensivel",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Termologia e termodinâmica → Calorimetria e mudanças de fase → Calor sensível",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "72": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Movimento uniformemente variado",
+      "content_id": "fisica.cinematica-escalar.movimento-uniformemente-variado",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Mecânica → Cinemática escalar → Movimento uniformemente variado",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "73": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Centro de massa",
+      "content_id": "fisica.equilibrio-e-torque.centro-de-massa",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Mecânica → Equilíbrio e torque → Centro de massa",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "74": {
+      "status": "reviewed",
+      "subject": "Matemática",
+      "topic": "Transformações de gráficos",
+      "content_id": "matematica.conceito-de-funcao-e-analise-grafica.transformacoes-de-graficos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Matemática → Álgebra, funções e sequências → Conceito de função e análise gráfica → Transformações de gráficos",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "75": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Gráficos do movimento",
+      "content_id": "fisica.cinematica-escalar.graficos-do-movimento",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Mecânica → Cinemática escalar → Gráficos do movimento",
+      "related_content_ids": [
+        "fisica.content.trabalho-e-conservacao-da-energia"
+      ],
+      "note": ""
+    },
+    "76": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Nível de intensidade sonora",
+      "content_id": "fisica.ondas-sonoras-e-nivel-de-intensidade.nivel-de-intensidade-sonora",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Oscilações e ondas → Ondas sonoras e nível de intensidade → Nível de intensidade sonora",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "77": {
+      "status": "reviewed",
+      "subject": "Física",
+      "topic": "Equação fundamental da ondulatória",
+      "content_id": "fisica.ondas-harmonicas-e-equacao-fundamental.equacao-fundamental-da-ondulatoria",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Física → Oscilações e ondas → Ondas harmônicas e equação fundamental → Equação fundamental da ondulatória",
+      "related_content_ids": [
+        "fisica.content.ondas-sonoras-e-nivel-de-intensidade"
+      ],
+      "note": ""
+    },
+    "78": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Mitocôndrias e cloroplastos",
+      "content_id": "biologia.organelas-celulares.mitocondrias-e-cloroplastos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Organização celular e metabolismo → Organelas celulares → Mitocôndrias e cloroplastos",
+      "related_content_ids": [
+        "biologia.content.evidencias-da-evolucao",
+        "biologia.content.bacterias-protistas-e-fungos"
+      ],
+      "note": ""
+    },
+    "79": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Localização de informações",
+      "content_id": "ingles.interpretacao-de-texto-em-ingles.localizacao-de-informacoes",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Interpretação de texto em inglês → Localização de informações",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "80": {
+      "status": "reviewed",
+      "subject": "Inglês",
+      "topic": "Localização de informações",
+      "content_id": "ingles.interpretacao-de-texto-em-ingles.localizacao-de-informacoes",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Inglês → Leitura, compreensão e gêneros → Interpretação de texto em inglês → Localização de informações",
+      "related_content_ids": [
+        "ingles.content.divulgacao-cientifica-em-ingles"
+      ],
+      "note": ""
+    },
+    "82": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Coeficiente e curvas de solubilidade",
+      "content_id": "quimica.equilibrio-de-solubilidade.curvas-de-solubilidade",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Soluções e equilíbrio químico → Soluções e concentração → Coeficiente e curvas de solubilidade",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "83": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Relações estequiométricas",
+      "content_id": "quimica.estequiometria.relacoes-estequiometricas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Transformações e quantificação → Estequiometria → Relações estequiométricas",
+      "related_content_ids": [
+        "quimica.content.mol-massa-molar-e-constante-de-avogadro",
+        "quimica.content.solucoes-e-concentracao"
+      ],
+      "note": ""
+    },
+    "84": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Transporte de seiva bruta",
+      "content_id": "biologia.transporte-de-seiva-e-relacoes-hidricas.transporte-de-seiva-bruta",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Organismos e fisiologia → Transporte de seiva e relações hídricas → Transporte de seiva bruta",
+      "related_content_ids": [
+        "biologia.content.hormonios-vegetais-e-tropismos"
+      ],
+      "note": ""
+    },
+    "85": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Relações desarmônicas",
+      "content_id": "biologia.relacoes-ecologicas.relacoes-desarmonicas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Ecologia e ambiente → Relações ecológicas → Relações desarmônicas",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "86": {
+      "status": "reviewed",
+      "subject": "Biologia",
+      "topic": "Artrópodes",
+      "content_id": "biologia.adaptacoes-dos-grupos-animais.artropodes",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Biologia → Evolução e diversidade biológica → Adaptações dos grupos animais → Artrópodes",
+      "related_content_ids": [
+        "biologia.content.caracteristicas-dos-insetos"
+      ],
+      "note": ""
+    },
+    "87": {
+      "status": "reviewed",
+      "subject": "Língua Portuguesa",
+      "topic": "Pressupostos e subentendidos",
+      "content_id": "lingua-portuguesa.compreensao-global-e-inferencia.pressupostos-e-subentendidos",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Língua Portuguesa → Leitura, interpretação e gêneros → Compreensão global e inferência → Pressupostos e subentendidos",
+      "related_content_ids": [],
+      "note": ""
+    },
+    "88": {
+      "status": "reviewed",
+      "subject": "História",
+      "topic": "Tráfico atlântico de escravizados",
+      "content_id": "historia.acucar-e-escravidao-na-america-portuguesa.trafico-atlantico-de-escravizados",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "História → Expansão europeia, colonização e independências nas Américas → Açúcar e escravidão na América portuguesa → Tráfico atlântico de escravizados",
+      "related_content_ids": [
+        "historia.content.segundo-reinado-e-abolicao"
+      ],
+      "note": ""
+    },
+    "89": {
+      "status": "reviewed",
+      "subject": "Literatura",
+      "topic": "Canção para ninar menino grande: escrevivência e masculinidade negra",
+      "content_id": "literatura.conceicao-evaristo-cancao-para-ninar-menino-grande.escrevivencia-e-autoria-negra-feminina",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Literatura → Leituras obrigatórias FUVEST → Conceição Evaristo: Canção para ninar menino grande → Canção para ninar menino grande: escrevivência e masculinidade negra",
+      "related_content_ids": [
+        "literatura.content.literatura-contemporanea-brasileira"
+      ],
+      "note": ""
+    },
+    "90": {
+      "status": "reviewed",
+      "subject": "Sociologia",
+      "topic": "Preconceito e desigualdade de gênero",
+      "content_id": "sociologia.genero-e-sexualidade.preconceito-e-desigualdade-de-genero",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Sociologia → Cultura, identidade e socialização → Gênero e sexualidade → Preconceito e desigualdade de gênero",
+      "related_content_ids": [
+        "sociologia.content.cultura-dominacao-e-distincao-social"
+      ],
+      "note": ""
+    },
+    "5": {
+      "status": "reviewed",
+      "subject": "Química",
+      "topic": "Ligação iônica e fórmulas",
+      "content_id": "quimica.ligacoes-ionica-e-metalica.ligacao-ionica-e-formulas",
+      "taxonomy_version": "fuvest-2027.v7",
+      "content_path": "Química → Matéria, estrutura e propriedades → Ligações iônica e metálica → Ligação iônica e fórmulas",
+      "related_content_ids": [],
+      "note": ""
+    }
+  }
+}

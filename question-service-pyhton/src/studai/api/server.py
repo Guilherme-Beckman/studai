@@ -1037,7 +1037,8 @@ def _diagnostic_payload(db, attempt_id: str) -> dict:
         question = json.loads(row["question_json"])
         # Internal source paths are only needed by the CLI for local image display.
         question.pop("_source_dir", None)
-        questions.append({"ordinal": row["ordinal"], "subject": row["subject"], "topic": row["topic"],
+        questions.append({"ordinal": row["ordinal"], "source_id": row["source_id"],
+                          "subject": row["subject"], "topic": row["topic"],
                           "question": question, "selectedAnswer": row["selected_answer"],
                           "errorReason": row["error_reason"], "answered": row["answered_at"] is not None})
     return {
@@ -1313,6 +1314,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/providers":
                 return self._json(200, [{"id": "demo", "name": "Demonstração offline"},
                                         {"id": "ollama", "name": "Ollama local"},
+                                        {"id": "gemini", "name": "Gemini"},
+                                        {"id": "groq", "name": "Groq"},
+                                        {"id": "openrouter", "name": "OpenRouter"},
+                                        {"id": "huggingface", "name": "Hugging Face"},
                                         {"id": "mock", "name": "Classificação simulada"}])
             if path == "/api/review/bad-crops":
                 return self._json(200, question_review.bad_crop_queue(PROCESSED_ROOT))
@@ -1459,12 +1464,29 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         path = unquote(urlsplit(self.path).path)
         try:
+            match = re.fullmatch(r"/api/diagnostics/([^/]+)", path)
+            if match:
+                attempt_id = match.group(1)
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    row = db.execute("SELECT mode FROM attempts WHERE id=?", (attempt_id,)).fetchone()
+                    if row is None:
+                        raise FileNotFoundError(f"diagnóstico não encontrado: {attempt_id}")
+                    if row["mode"] == "exam":
+                        raise ValueError("esta tentativa é uma prova completa; não pode ser removida por esta rota")
+                    with db:
+                        db.execute("DELETE FROM attempts WHERE id=?", (attempt_id,))
+                    return self._json(200, {"ok": True, "id": attempt_id})
+                finally:
+                    db.close()
             match = re.fullmatch(r"/api/exams/([^/]+)", path)
             if not match:
                 return self._json(404, {"error": "rota não encontrada"})
             return self._json(200, _delete_exam(match.group(1)))
         except FileNotFoundError as exc:
             self._json(404, {"error": str(exc)})
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
         except Exception as exc:
             self._json(500, {"error": str(exc)})
 

@@ -32,7 +32,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 5 | Diagnóstico inicial | concluída | 6/6 |
 | 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
 | 7 | Mapa do conhecimento e progresso por profundidade | pendente | 0/5 |
-| 8 | Modo foco (tela cheia) para responder questões | pendente | 0/5 |
+| 8 | Modo foco (tela cheia) para responder questões | em andamento | 0/5 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -145,7 +145,7 @@ Base: `diagnostics/mastery.py` (posterior Beta por nó), `study/service.py` ("Ho
 Ideia: na tela "Hoje" e em todo lugar onde se respondem questões (Diagnósticos, "Responder prova"), um botão "Modo foco" abre a questão em tela cheia, sem menus nem distrações; você responde e a próxima entra deslizando de lado (carrossel).
 Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `frontend/app.js`, `frontend/styles.css`.
 
-- [ ] Componente de questão em tela cheia (Fullscreen API + fallback com sobreposição), reutilizável no "Hoje", nos Diagnósticos e no "Responder prova"
+- [~] Componente de questão em tela cheia (Fullscreen API + fallback com sobreposição), reutilizável no "Hoje", nos Diagnósticos e no "Responder prova" (em andamento: Codex, feature/frontend/focus-mode)
 - [ ] Questão ocupando a tela: enunciado, imagens e alternativas grandes e legíveis, com rolagem só quando necessário (inclusive no celular)
 - [ ] Navegação lateral: depois de responder, mostra o feedback e a próxima questão entra deslizando de lado; atalhos de teclado (A–E, Enter, ←/→, Esc para sair) e gesto de deslizar no celular
 - [ ] Indicador discreto de progresso (questão X de N) e saída sem perder o que já foi respondido (as respostas continuam sendo salvas no fluxo atual)

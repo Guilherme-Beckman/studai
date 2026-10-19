@@ -196,6 +196,7 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
             shared = shared_texts.get(question.get("texto_id") or "")
             if shared and shared.get("texto"):
                 question_copy["_texto_compartilhado"] = shared["texto"]
+                question_copy["_figuras_compartilhadas"] = list(shared.get("figuras") or [])
             pool.append({"source_id": source_id, "source_file": str(path), "number": number,
                          "subject": subject, "topic": topic, "question": question_copy,
                          "correct_answer": answer})
