@@ -30,7 +30,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 3 | Questões mal recortadas | pendente | 0/5 |
 | 4 | Reorganização e otimização (código + IA) | em andamento | 4/13 |
 | 5 | Diagnóstico inicial | pendente | 0/5 |
-| 6 | Revisão espaçada / "O que estudar hoje" | em andamento | 0/6 |
+| 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -118,12 +118,12 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 
 ## Fase 6 — Revisão espaçada / "O que estudar hoje"
 
-- [~] Escolher o algoritmo de agendamento (SM-2 ou FSRS) por conteúdo e por questão: FSRS (`fsrs==6.3.2`), cartão por conteúdo e por questão errada (em andamento: Claude, `claude/fase-6-revisao-espacada`; implementado e testado, falta commit)
-- [~] Modelo de dados no SQLite (histórico de respostas, próxima revisão, domínio por conteúdo): `review_cards`, `review_logs`, `study_sessions`, `study_answers` (em andamento: Claude, `claude/fase-6-revisao-espacada`; implementado e testado, falta commit)
-- [~] Caso de uso "o que estudar hoje" combinando o diagnóstico, as revisões vencidas e o peso do conteúdo na FUVEST (`study/service.py`) (em andamento: Claude, `claude/fase-6-revisao-espacada`; implementado e testado, falta commit)
-- [~] Rota de API + tela "Hoje" no frontend (em andamento: Claude, `claude/fase-6-revisao-espacada`; implementado e testado, falta commit)
-- [~] Registrar as respostas do estudo diário e realimentar o agendamento; respostas dos diagnósticos também entram (em andamento: Claude, `claude/fase-6-revisao-espacada`; implementado e testado, falta commit)
-- [~] Testes do agendador com datas simuladas (`tests/test_study_scheduler.py`) (em andamento: Claude, `claude/fase-6-revisao-espacada`; implementado e testado, falta commit)
+- [x] Escolher o algoritmo de agendamento (SM-2 ou FSRS) por conteúdo e por questão: FSRS (`fsrs==6.3.2`), cartão por conteúdo e por questão errada (commit 0ac86e9, 2026-10-19)
+- [x] Modelo de dados no SQLite (histórico de respostas, próxima revisão, domínio por conteúdo): `review_cards`, `review_logs`, `study_sessions`, `study_answers` (commit 0ac86e9, 2026-10-19)
+- [x] Caso de uso "o que estudar hoje" combinando o diagnóstico, as revisões vencidas e o peso do conteúdo na FUVEST (`study/service.py`) (commit 0ac86e9, 2026-10-19)
+- [x] Rota de API + tela "Hoje" no frontend (commit 0ac86e9, 2026-10-19)
+- [x] Registrar as respostas do estudo diário e realimentar o agendamento; respostas dos diagnósticos também entram (commit 0ac86e9, 2026-10-19)
+- [x] Testes do agendador com datas simuladas (`tests/test_study_scheduler.py`) (commit 0ac86e9, 2026-10-19)
 
 ## Expansão do acervo/RAG (depois das fases 1–3)
 
@@ -152,4 +152,4 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-15 | Claude / `feature/classification/hierarchical-taxonomy` | Remoção das flags `STUDAI_STAGE_ORDER` e `STUDAI_QUESTION_FIRST`, que não deram ganho | — |
 | 2026-10-15 | Claude (agentes em paralelo) / `feature/classification/hierarchical-taxonomy` | Taxonomia `fuvest-2027.v7`: proposta integrada, passada editorial nas 13 matérias, nós `deprecated`, mapeamento de rótulos legados, testes de estrutura | — |
 | 2026-10-16 | Claude / `claude/question-reprocessing-formulas-0dda57` | Fase 2: fila de revisão completa, edições em camada, aprovação em lote, `bad_crop`, gabarito manual, filtros | 0c715a3 |
-| 2026-10-19 | Claude / `claude/fase-6-revisao-espacada` | Fase 6: revisão espaçada FSRS, tela "Hoje", sincronização com os diagnósticos | — |
+| 2026-10-19 | Claude / `claude/fase-6-revisao-espacada` | Fase 6: revisão espaçada FSRS, tela "Hoje", sincronização com os diagnósticos | 0ac86e9 |
