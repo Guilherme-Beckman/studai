@@ -24,7 +24,8 @@ from studai.features.classification.taxonomy import (
     CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, aggregate_content_ids,
 )
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+MODES = {"static", "adaptive", "exam"}
 REASONS = {"unknown_content", "calc_error", "misread", "blank"}
 ACTIONS = {"theory", "calculation_practice", "interpretation_practice", "review"}
 ACTION_BY_REASON = {"unknown_content": "theory", "calc_error": "calculation_practice",
@@ -102,6 +103,10 @@ def connect_db(path: Path) -> sqlite3.Connection:
                               ("variant", "TEXT"), ("association_method", "TEXT")):
         if name not in columns:
             db.execute(f"ALTER TABLE answer_keys ADD COLUMN {name} {declaration}")
+    attempt_columns = {row[1] for row in db.execute("PRAGMA table_info(attempts)")}
+    if "mode" not in attempt_columns:
+        # v3: origem da tentativa (diagnóstico estático/adaptativo ou prova completa).
+        db.execute("ALTER TABLE attempts ADD COLUMN mode TEXT NOT NULL DEFAULT 'static'")
     old = db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
     if old and int(old[0]) > SCHEMA_VERSION:
         db.close()
@@ -375,7 +380,7 @@ def list_questions_for_attempt(db: sqlite3.Connection, attempt_id: str, *, unans
 
 
 def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
-                    answer: str | None, reason: str | None = None) -> dict:
+                    answer: str | None, reason: str | None = None, *, require_reason: bool = True) -> dict:
     row = db.execute("SELECT * FROM attempt_questions WHERE attempt_id=? AND ordinal=?",
                      (attempt_id, ordinal)).fetchone()
     if not row:
@@ -392,6 +397,8 @@ def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
     elif correct:
         if reason is not None:
             raise ValueError("resposta correta não recebe motivo de erro")
+    elif reason is None and not require_reason:
+        pass
     elif reason not in REASONS - {"blank"}:
         raise ValueError("resposta incorreta exige motivo: unknown_content, calc_error ou misread")
     with db:
