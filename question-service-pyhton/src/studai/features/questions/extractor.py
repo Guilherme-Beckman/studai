@@ -490,7 +490,8 @@ def _clean(s: str) -> str:
     return re.sub(r"ℓ ([.,;])", r"ℓ\1", s)
 
 
-def _build_rows(page: pymupdf.Page) -> tuple[list[Row], list[tuple[int, float]]]:
+def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None
+                ) -> tuple[list[Row], list[tuple[int, float]]]:
     pw = page.rect.width
     lines = _raw_lines(page)
     _patch_missing_glyphs(lines, page)
@@ -518,6 +519,16 @@ def _build_rows(page: pymupdf.Page) -> tuple[list[Row], list[tuple[int, float]]]
                          n_math=sum(_is_math(c) for c in solid), n_chars=len(solid),
                          size=_ref_size(ln["chars"]), ink=pymupdf.Rect(ln.get("ink", b))))
 
+    # Caixa "Note e adote" ao lado das alternativas (2024 Q48/Q49): cada linha da caixa
+    # está na altura de uma alternativa e seria fundida a ela ("(B) 28°C Note e adote:").
+    note_boxes = [p for p in parts or []
+                  if any(NOTE_RE.match(c.text) and p.contains(pymupdf.Point(c.bbox.x0 + 1, c.bbox.y0 + 1))
+                         for c in cands)]
+
+    def note_box(b: pymupdf.Rect) -> int:
+        center = pymupdf.Point((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2)
+        return next((k for k, nb in enumerate(note_boxes) if nb.contains(center)), -1)
+
     # funde linhas na mesma altura e mesma coluna (linhas de tabela, "(A)" + célula etc.)
     cands.sort(key=lambda r: (r.col, (r.bbox.y0 + r.bbox.y1) / 2, r.bbox.x0))
     rows: list[Row] = []
@@ -534,6 +545,8 @@ def _build_rows(page: pymupdf.Page) -> tuple[list[Row], list[tuple[int, float]]]
             # ficam na mesma altura, mas cada uma é uma linha própria.
             label = ALT_RE.match(r.text) or ALT_CAPTION_RE.match(r.text)
             if label and any(ALT_RE.match(t) or ALT_CAPTION_RE.match(t) for _, t in prev.parts):
+                continue
+            if note_boxes and note_box(prev.bbox) != note_box(r.bbox):
                 continue
             if ov >= 0.5 and side_by_side and ov > best_ov:
                 best, best_ov = prev, ov
@@ -744,9 +757,9 @@ def _attach_side_figures(rows: list[Row], figs: list[Fig], parts: list[pymupdf.R
 
 def extract_page(page: pymupdf.Page, pno: int) -> list[Item]:
     pw = page.rect.width
-    rows, ends = _build_rows(page)
-    _mark_layout(rows, pw)
     parts = _figure_parts(page)
+    rows, ends = _build_rows(page, parts)
+    _mark_layout(rows, pw)
 
     # caixas "Note e adote": retângulo que contém uma linha começando assim. Separadas
     # antes da fusão: uma imagem encostada na caixa (2019 Q39) não pode virar nota.

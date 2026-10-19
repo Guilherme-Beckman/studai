@@ -110,6 +110,25 @@ class AlternativeFigureTests(unittest.TestCase):
         self.assertEqual(len(question["alternativas"]["E"]["figuras"]), 1)
         self.assertIn("considere", question["nota"])
 
+    def test_note_box_beside_alternatives_stays_a_note(self):
+        # FUVEST 2024 Q49: a caixa "Note e adote" fica à direita das alternativas e
+        # cada linha dela está na altura de uma letra ("(B) 28°C Note e adote:").
+        doc = pymupdf.open()
+        page = doc.new_page()
+        _stem(page)
+        values = ("14°C", "28°C", "40°C", "60°C", "84°C")
+        for k, (letter, value) in enumerate(zip("ABCDE", values)):
+            page.insert_text((40, 130 + k * 14), f"({letter}) {value}", fontsize=10)
+        page.draw_rect(pymupdf.Rect(150, 132, 290, 196))
+        note = ("Note e adote:", "Considere apenas trocas de", "calor entre as águas.")
+        for k, line in enumerate(note):
+            page.insert_text((155, 144 + k * 14), line, fontsize=10)
+        question = self.extract(doc)
+        self.assertEqual({k: v["texto"] for k, v in question["alternativas"].items()},
+                         dict(zip("ABCDE", values)))
+        self.assertEqual(question["nota"], " ".join(note))
+        self.assertTrue(all(not v["figuras"] for v in question["alternativas"].values()))
+
 
 class FigureGeometryTests(unittest.TestCase):
     def test_merge_keeps_the_union_instead_of_dropping_neighbours(self):
