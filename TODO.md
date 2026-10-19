@@ -182,3 +182,4 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-19 | Claude (swarm de 3 agentes) / `feature/diagnostics/fase5-diagnostico-relatorios` | Fase 5: diagnóstico adaptativo só com revisadas, domínio por nó, pesos FUVEST derivados, relatório e painel de evolução | 5095fe5 |
 | 2026-10-19 | Claude / `claude/topic-progress-visualization-bfe261` | Fase 7 adicionada: mapa do conhecimento em grafo e progresso por profundidade | — |
 | 2026-10-19 | Claude / `claude/topic-progress-visualization-bfe261` | Fase 8 adicionada: modo foco em tela cheia com navegação lateral entre questões | — |
+| 2026-10-19 | Claude / `claude/diagnostico-questoes-gabarito-f159ce` | Correção: acervo publicado sem gabaritos (o banco não é versionado) bloqueava o diagnóstico; `gabarito.json` por prova é importado automaticamente e o erro explica as exclusões | — |
