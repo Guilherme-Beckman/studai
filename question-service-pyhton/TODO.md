@@ -31,6 +31,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 4 | Reorganização e otimização (código + IA) | em andamento | 4/13 |
 | 5 | Diagnóstico inicial | concluída | 6/6 |
 | 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
+| 7 | Mapa do conhecimento e progresso por profundidade | pendente | 0/5 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -126,6 +127,18 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 - [x] Registrar as respostas do estudo diário e realimentar o agendamento; respostas dos diagnósticos também entram (commit 0ac86e9, 2026-10-19)
 - [x] Testes do agendador com datas simuladas (`tests/test_study_scheduler.py`) (commit 0ac86e9, 2026-10-19)
 
+## Fase 7 — Mapa do conhecimento ("cérebro") e progresso por profundidade
+
+Ideia: um grafo interativo estilo *graph view* do Obsidian, em que cada nó é um nó da taxonomia (matéria → área → conteúdo → subconteúdo) e o progresso mede o quanto você **aprofundou** num setor, não só os acertos em subconteúdos soltos.
+Base: `diagnostics/mastery.py` (posterior Beta por nó), `study/service.py` ("Hoje"), `content_taxonomy.json`.
+
+- [ ] Visualização em grafo (força-dirigida) da taxonomia: tamanho/brilho do nó = domínio, cor = status (forte/lacuna/incerto/não testado), arestas pai → filho; zoom, arrastar e clicar no nó para ver detalhes e questões
+- [ ] Métrica de **profundidade/reforço** por nó: estudar vários subconteúdos de um conteúdo reforça o conteúdo e a área acima dele (ex.: Trigonometria → conteúdo X → subconteúdo Y e Trigonometria → conteúdo Z → subconteúdo W ⇒ Trigonometria recebe reforço e mostra o quanto foi aprofundada)
+  - [ ] Definir a fórmula: cobertura (fração de filhos praticados) × domínio dos filhos, propagada para cima, combinada com o posterior Beta já existente
+- [ ] "O que estudar hoje" prioriza a evolução **de cima para baixo**: primeiro fortalecer conteúdos (amplitude) e só depois descer para subconteúdos, evitando sortear subconteúdos isolados sem consolidar o conteúdo pai
+- [ ] API do grafo (nós + arestas + métricas por nó) e tela no frontend
+- [ ] Testes da propagação do reforço e da ordem de prioridade
+
 ## Expansão do acervo/RAG (depois das fases 1–3)
 
 - [ ] Processar mais provas de `fuvest_acervo/` usando o fluxo novo de revisão
@@ -155,3 +168,4 @@ Base: `src/studai/features/diagnostics/service.py`, `diagnostico/cursos.json`.
 | 2026-10-16 | Claude / `claude/question-reprocessing-formulas-0dda57` | Fase 2: fila de revisão completa, edições em camada, aprovação em lote, `bad_crop`, gabarito manual, filtros | 0c715a3 |
 | 2026-10-19 | Claude / `claude/fase-6-revisao-espacada` | Fase 6: revisão espaçada FSRS, tela "Hoje", sincronização com os diagnósticos | 0ac86e9 |
 | 2026-10-19 | Claude (swarm de 3 agentes) / `feature/diagnostics/fase5-diagnostico-relatorios` | Fase 5: diagnóstico adaptativo só com revisadas, domínio por nó, pesos FUVEST derivados, relatório e painel de evolução | 5095fe5 |
+| 2026-10-19 | Claude / `claude/topic-progress-visualization-bfe261` | Fase 7 adicionada: mapa do conhecimento em grafo e progresso por profundidade | — |
