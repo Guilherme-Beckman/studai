@@ -11,6 +11,9 @@ from studai.api import server
 from studai.features.diagnostics.service import connect_db, load_question_pool
 from studai.features.questions.extractor import extract_pdf
 from studai.features.questions import review
+from studai.features.classification.taxonomy import CONTENT_TAXONOMY_VERSION
+
+REVIEWED_CONTENT = "matematica.conjuntos-numericos-e-operacoes.operacoes-com-conjuntos"
 
 
 class QuestionReprocessingTests(unittest.TestCase):
@@ -195,8 +198,10 @@ class QuestionReprocessingTests(unittest.TestCase):
         data["questoes"][1]["classificacao"] = {"materia": "Matemática", "assunto": "Probabilidade"}
         self.classified.write_text(json.dumps(data), encoding="utf-8")
         review.save_review(self.classified, 1, {"status": "bad_crop"})
-        review.save_review(self.classified, 2, {"status": "pending", "edits": {
-            "alternativas": {"A": {"texto": "b"}, "B": {"texto": "corrigida"}}}})
+        review.save_review(self.classified, 2, {
+            "status": "reviewed", "subject": "Matemática", "content_id": REVIEWED_CONTENT,
+            "taxonomy_version": CONTENT_TAXONOMY_VERSION,
+            "edits": {"alternativas": {"A": {"texto": "b"}, "B": {"texto": "corrigida"}}}})
         db = connect_db(self.root / "diagnostics.sqlite3")
         try:
             for number, answer in ((1, "A"), (2, "B")):

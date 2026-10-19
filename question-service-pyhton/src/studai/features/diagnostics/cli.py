@@ -137,7 +137,11 @@ def main(argv=None) -> int:
 
     p_generate = subs.add_parser("gerar", help="gera e persiste um simulado diagnóstico")
     p_generate.add_argument("--curso", default="eng-comp-sao-carlos")
-    p_generate.add_argument("--quantidade", type=int, default=51)
+    p_generate.add_argument("--modo", choices=("adaptive", "static"), default="adaptive",
+                            help="adaptive (padrão): uma questão por vez, escolhida pelas respostas; "
+                                 "static: sorteio completo de uma vez")
+    p_generate.add_argument("--quantidade", type=int,
+                            help="orçamento de questões (padrão: 30 no adaptativo, 51 no estático)")
     p_generate.add_argument("--seed", type=int, help="semente para reproduzir o sorteio")
     p_generate.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     p_generate.add_argument("--db", type=Path, default=DEFAULT_DB)
@@ -172,6 +176,9 @@ def main(argv=None) -> int:
                 return 0
 
             if args.command == "gerar":
+                if args.quantidade is None:
+                    args.quantidade = (core.DEFAULT_ADAPTIVE_TOTAL if args.modo == "adaptive"
+                                       else core.DEFAULT_STATIC_TOTAL)
                 if args.quantidade < 1:
                     raise ValueError("--quantidade deve ser positiva")
                 config = core.load_course_config(args.config.resolve())
@@ -186,19 +193,32 @@ def main(argv=None) -> int:
                     print("Nota: o planejamento do diagnóstico é uma chamada única de IA; workers não paralelizam essa etapa.")
                 print(f"Configuração IA: {args.provider} · workers={args.workers} · threads Ollama={args.ollama_threads}")
                 attempt = core.create_attempt(db, config, args.curso, pool, total=args.quantidade,
-                                              seed=seed, provider=provider, excluded=excluded)
-                print(f"Diagnóstico {attempt['id']} criado para {attempt['course']}.")
-                print(f"Questões: {attempt['selected']}/{attempt['requested']} · seed {attempt['seed']}.")
-                if attempt["planner"] and attempt["planner"]["status"] != "llm":
-                    print("Planejamento temático: fallback determinístico (" + str(attempt["planner"].get("error")) + ")")
-                for subject in profile["pesos"]:
-                    selected_count = attempt["distribution"]["selected_by_subject"].get(subject, 0)
-                    available_count = attempt["distribution"]["available_by_subject"].get(subject, 0)
-                    print(f"  {subject}: {selected_count} selecionada(s) / {available_count} elegível(is)")
+                                              seed=seed, provider=provider, excluded=excluded, mode=args.modo)
+                print(f"Diagnóstico {attempt['id']} ({attempt['mode']}) criado para {attempt['course']}.")
+                if attempt["mode"] == "adaptive":
+                    budget = attempt["budget"]
+                    print(f"Até {budget['total']} questões, uma por vez · seed {attempt['seed']}.")
+                    for subject in profile["pesos"]:
+                        planned = budget["by_subject"].get(subject, 0)
+                        available_count = attempt["distribution"]["available_by_subject"].get(subject, 0)
+                        weight = attempt["weights"].get(subject, 0)
+                        if planned:
+                            print(f"  {subject}: até {planned} questão(ões) · peso {weight:.0%} · "
+                                  f"{available_count} elegível(is)")
+                        else:
+                            print(f"  {subject}: fora do orçamento (peso {weight:.0%})")
+                else:
+                    print(f"Questões: {attempt['selected']}/{attempt['requested']} · seed {attempt['seed']}.")
+                    if attempt["planner"] and attempt["planner"]["status"] != "llm":
+                        print("Planejamento temático: fallback determinístico (" + str(attempt["planner"].get("error")) + ")")
+                    for subject in profile["pesos"]:
+                        selected_count = attempt["distribution"]["selected_by_subject"].get(subject, 0)
+                        available_count = attempt["distribution"]["available_by_subject"].get(subject, 0)
+                        print(f"  {subject}: {selected_count} selecionada(s) / {available_count} elegível(is)")
+                    if attempt["selected"] < attempt["requested"]:
+                        print("Aviso: banco elegível insuficiente; o diagnóstico foi criado com a cobertura disponível.")
                 for subject in attempt["distribution"]["unavailable_subjects"]:
                     print(f"Aviso: sem questão com gabarito para {subject}; matéria ficará sem dados.")
-                if attempt["selected"] < attempt["requested"]:
-                    print("Aviso: banco elegível insuficiente; o diagnóstico foi criado com a cobertura disponível.")
                 print(f"Para começar: python diagnostico.py responder {attempt['id']}")
                 return 0
 
@@ -213,9 +233,12 @@ def main(argv=None) -> int:
                     provider = build_provider(args)
                     print_analysis(core.finalize_attempt(db, args.id, provider))
                     return 0
-                for row in pending:
+                adaptive = attempt.get("mode") == "adaptive"
+                while pending:
+                    row = pending[0]
                     question = json.loads(row["question_json"])
-                    print(f"\nQuestão {row['ordinal']}/{attempt['actual_count']} · "
+                    of = f"até {attempt['requested_count']}" if adaptive else str(attempt["actual_count"])
+                    print(f"\nQuestão {row['ordinal']}/{of} · "
                           f"prova {row['source_id']} Q{row['question_number']:02d} · {row['subject']} · {row['topic']}")
                     if question.get("_texto_compartilhado"):
                         print("Texto-base:\n" + question["_texto_compartilhado"])
@@ -237,10 +260,10 @@ def main(argv=None) -> int:
                             break
                         print("Escolha uma alternativa exibida ou deixe em branco.")
                     if not raw:
-                        core.record_response(db, args.id, row["ordinal"], None)
+                        progress = core.record_response(db, args.id, row["ordinal"], None)
                         print("Resposta em branco registrada.")
                     elif raw == row["correct_answer"]:
-                        core.record_response(db, args.id, row["ordinal"], raw)
+                        progress = core.record_response(db, args.id, row["ordinal"], raw)
                         print("Resposta registrada.")
                     else:
                         print("Resposta registrada. Qual foi o motivo principal do erro?")
@@ -253,7 +276,10 @@ def main(argv=None) -> int:
                             if reason in choices:
                                 break
                             print("Informe 1, 2 ou 3.")
-                        core.record_response(db, args.id, row["ordinal"], raw, choices[reason])
+                        progress = core.record_response(db, args.id, row["ordinal"], raw, choices[reason])
+                    if progress.get("done") and progress.get("stop_reason") == "converged":
+                        print("\nDiagnóstico adaptativo concluído: as áreas de maior peso já têm evidência suficiente.")
+                    pending = core.list_questions_for_attempt(db, args.id, unanswered_only=True)
                 provider = build_provider(args)
                 print_analysis(core.finalize_attempt(db, args.id, provider))
                 return 0

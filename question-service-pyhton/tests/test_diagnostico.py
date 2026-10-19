@@ -53,7 +53,7 @@ class DiagnosticTests(unittest.TestCase):
         provider = provider or ScriptedProvider(json.dumps({"topicos": {
             "Matemática": ["Tópico 1"], "Física": ["Tópico 1"]}}))
         return core.create_attempt(self.db, self.config, "curso-teste", self.pool,
-                                   total=total, seed=42, provider=provider)
+                                   total=total, seed=42, provider=provider, mode="static")
 
     def test_weighted_allocation_respects_caps_and_redistributes(self):
         allocated = core.allocate_counts({"Base": 80, "Física": 20, "Matemática": 20},

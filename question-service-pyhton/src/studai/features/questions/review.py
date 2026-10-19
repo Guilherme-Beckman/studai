@@ -270,6 +270,32 @@ def bad_crop_queue(root: Path) -> list[dict]:
     return rows
 
 
+def diagnostic_ready(review: dict | None, subject: str | None = None) -> str | None:
+    """Motivo pelo qual a questão não serve de exemplo/diagnóstico, ou ``None`` se serve.
+
+    Exige revisão humana aprovada (``status == "reviewed"``) com ``content_id``
+    válido na versão atual da taxonomia (folha ou nó refinável) e da mesma
+    matéria. ``subject`` é a matéria já canônica; por padrão, a da revisão.
+    Motivos: ``unusable``/``bad_crop`` (descartadas), ``pending_review``,
+    ``missing_subject`` ou ``invalid_content``.
+    """
+    review = review if isinstance(review, dict) else {}
+    status = review.get("status")
+    if status in ("unusable", "bad_crop"):
+        return status
+    if status != "reviewed":
+        return "pending_review"
+    subject = subject if subject is not None else review.get("subject")
+    if not subject:
+        return "missing_subject"
+    from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
+    content = CONTENT_INDEX.get(str(review.get("content_id") or ""))
+    if (review.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION or not content
+            or not (content["is_leaf"] or content["refinable"]) or content["subject"] != subject):
+        return "invalid_content"
+    return None
+
+
 def reviewed_examples(root: Path) -> list[dict]:
     """Return only usable, human-confirmed examples, without answer-key labels."""
     rows = []
@@ -280,15 +306,10 @@ def reviewed_examples(root: Path) -> list[dict]:
             number = question.get("numero")
             review = reviews.get(str(number)) or {}
             question = apply_edits(question, review)
-            if (review.get("status") != "reviewed" or not review.get("subject")
-                    or not review.get("content_id")):
+            if diagnostic_ready(review) is not None:
                 continue
             from studai.features.classification.taxonomy import CONTENT_INDEX, CONTENT_TAXONOMY_VERSION
-            content = CONTENT_INDEX.get(str(review["content_id"]))
-            if (review.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION or not content
-                    or not (content["is_leaf"] or content["refinable"])
-                    or content["subject"] != review["subject"]):
-                continue
+            content = CONTENT_INDEX[str(review["content_id"])]
             support = shared.get(str(question.get("texto_id") or ""), {})
             if isinstance(support, str):
                 support = {"texto": support}

@@ -19,12 +19,24 @@ from studai.features.answer_keys.service import (
     associate_answer_key, exam_key, exam_variant, import_answer_key,
     parse_answer_key_pdf, source_id_for,
 )
+from studai.features.diagnostics import courses, mastery
+from studai.features.diagnostics.report import build_report
 from studai.features.questions import review as question_review
 from studai.features.classification.taxonomy import (
     CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, aggregate_content_ids,
 )
 
 SCHEMA_VERSION = 3
+DEFAULT_STATIC_TOTAL = 51
+DEFAULT_ADAPTIVE_TOTAL = 30
+MAX_ADAPTIVE_TOTAL = 51
+# Regra de parada adaptativa (documentada em ``adaptive_stop_reason``).
+STOP_WIDTH = 0.4
+STOP_MIN_INCIDENCE = 0.1
+STOP_TOP_WEIGHT_SHARE = 0.8
+STOP_MIN_AREA_ANSWERS = 2
+STOP_GAP_UPPER = 0.55
+STOP_STRONG_LOWER = 0.5
 MODES = {"static", "adaptive", "exam"}
 REASONS = {"unknown_content", "calc_error", "misread", "blank"}
 ACTIONS = {"theory", "calculation_practice", "interpretation_practice", "review"}
@@ -116,19 +128,14 @@ def connect_db(path: Path) -> sqlite3.Connection:
     return db
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) -> tuple[list[dict], dict]:
+    """Questões elegíveis ao diagnóstico: revisadas por humano, com conteúdo válido e gabarito.
+
+    Usa o mesmo critério de ``questions.review.diagnostic_ready`` (o dos
+    exemplos revisados). Exclusões são contadas por motivo (``pending_review``,
+    ``invalid_content``, ``missing_subject``, ``unusable``, ``bad_crop``,
+    ``unclassified``, ``no_valid_answer_key``, ...).
+    """
     pool: list[dict] = []
     excluded = Counter()
     seen_questions: set[tuple[str, int]] = set()
@@ -150,37 +157,36 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
                 excluded["invalid_number"] += 1
                 continue
             identity = (source_id, number)
-            status = (reviewed_states.get(str(number)) or {}).get("status")
+            human_review = reviewed_states.get(str(number)) or {}
+            status = human_review.get("status")
             if status in ("unusable", "bad_crop"):
                 excluded[status] += 1
                 continue
-            question = question_review.apply_edits(question, reviewed_states.get(str(number)))
+            question = question_review.apply_edits(question, human_review)
             if identity in seen_questions:
                 excluded["duplicate_question"] += 1
                 continue
             seen_questions.add(identity)
-            human_review = reviewed_states.get(str(number)) or {}
-            classification = dict(question.get("classificacao") or {})
-            raw_subject = (human_review.get("subject") if human_review.get("status") == "reviewed"
-                           else question.get("materia") or classification.get("materia"))
+            raw_subject = human_review.get("subject")
             subject = canonical_subject(raw_subject, subjects) if raw_subject else None
-            answer = keys.get(number)
-            alternatives = question.get("alternativas") or {}
+            reason = question_review.diagnostic_ready(human_review, subject or raw_subject or None)
+            if reason:
+                excluded[reason] += 1
+                continue
             if not subject:
                 excluded["unclassified"] += 1
                 continue
+            answer = keys.get(number)
+            alternatives = question.get("alternativas") or {}
             if answer not in alternatives:
                 excluded["no_valid_answer_key"] += 1
                 continue
-            if human_review.get("status") == "reviewed" and human_review.get("content_id"):
-                reviewed_content = CONTENT_INDEX.get(str(human_review["content_id"]))
-                if (human_review.get("taxonomy_version") == CONTENT_TAXONOMY_VERSION and reviewed_content
-                        and (reviewed_content["is_leaf"] or reviewed_content["refinable"])
-                        and reviewed_content["subject"] == subject):
-                    classification.update(materia=subject, assunto=reviewed_content["name"],
-                                           conteudo_principal_id=reviewed_content["id"],
-                                           conteudos_relacionados_ids=human_review.get("related_content_ids", []),
-                                           caminho_conteudo=" → ".join(reviewed_content["path"]))
+            reviewed_content = CONTENT_INDEX[str(human_review["content_id"])]
+            classification = dict(question.get("classificacao") or {})
+            classification.update(materia=subject, assunto=reviewed_content["name"],
+                                  conteudo_principal_id=reviewed_content["id"],
+                                  conteudos_relacionados_ids=human_review.get("related_content_ids", []),
+                                  caminho_conteudo=" → ".join(reviewed_content["path"]))
             topic = str(classification.get("caminho_conteudo") or classification.get("assunto") or "").strip()
             if not topic:
                 topic = "Tópico não informado"
@@ -326,41 +332,244 @@ def select_questions(pool: list[dict], weights: dict[str, float], total: int,
                       "excluded": {}}
 
 
+def effective_weights(profile: dict, pool: list[dict]) -> dict:
+    """Pesos efetivos do curso (``courses.resolve_weights``): fórmula FUVEST ou ``pesos`` manuais."""
+    return courses.resolve_weights(profile, pool)
+
+
+def selection_weights(profile: dict, weights_result: dict) -> dict[str, float]:
+    """Pesos usados para sortear/alocar: derivados quando o perfil tem ``formula``."""
+    return dict(weights_result["weights"]) if profile.get("formula") else dict(profile["pesos"])
+
+
+def course_weight_summary(profile: dict, pool: list[dict]) -> dict:
+    """Pesos efetivos de um curso para exibição: ``{"weights", "non_assessable", "formula", "error"}``."""
+    course_pool = [item for item in pool if item.get("subject") in profile.get("pesos", {})]
+    try:
+        result = effective_weights(profile, course_pool)
+    except (ValueError, KeyError, ZeroDivisionError) as exc:
+        return {"weights": None, "non_assessable": {}, "formula": profile.get("formula"), "error": str(exc)}
+    return {"weights": result["weights"], "non_assessable": result["non_assessable"],
+            "formula": result["formula"], "error": None}
+
+
+def _candidate(item: dict) -> dict:
+    return {"source_id": item["source_id"], "number": item["number"], "subject": item["subject"],
+            "topic": item["topic"], "question": item["question"], "correct_answer": item["correct_answer"]}
+
+
+def _content_ids(question: dict) -> tuple[str | None, list[str]]:
+    classification = question.get("classificacao") or {}
+    return (classification.get("conteudo_principal_id"),
+            [value for value in (classification.get("conteudos_relacionados_ids") or []) if value])
+
+
+def _candidate_response(candidate: dict) -> dict:
+    principal, related = _content_ids(candidate["question"])
+    return {"correct": False, "subject": candidate["subject"], "principal_id": principal,
+            "related_ids": related, "answered_at": None}
+
+
+def _node_score(node: dict) -> float:
+    """Valor de perguntar sobre o nó: peso do curso × incidência × incerteza (largura do IC)."""
+    return node["course_weight"] * node["incidence"] * (node["upper"] - node["lower"])
+
+
+def _target_node(nodes: dict[str, dict], reachable: set[str]) -> str | None:
+    """Área de maior valor; desce para conteúdos/folhas quando a área já tem evidência e não está resolvida.
+
+    Áreas ainda não resolvidas (``_area_settled``) vêm antes das resolvidas, para
+    que uma lacuna já confirmada não consuma o orçamento da matéria inteira.
+    """
+    areas = [node for node in nodes.values() if node["level"] == "area" and node["id"] in reachable]
+    if not areas:
+        return None
+    target = max(areas, key=lambda node: (not _area_settled(node), _node_score(node), node["id"]))
+    while target["attempts"] >= 1 and target["status"] in ("gap", "uncertain"):
+        children = [node for node in nodes.values()
+                    if node["parent_id"] == target["id"] and node["id"] in reachable]
+        if not children:
+            break
+        target = max(children, key=lambda node: (_node_score(node), node["id"]))
+    return target["id"]
+
+
+def _area_settled(node: dict) -> bool:
+    """Área com evidência suficiente para uma conclusão (ver ``adaptive_stop_reason``)."""
+    if node["attempts"] < STOP_MIN_AREA_ANSWERS:
+        return False
+    return (node["upper"] - node["lower"] < STOP_WIDTH or node["upper"] <= STOP_GAP_UPPER
+            or node["lower"] >= STOP_STRONG_LOWER)
+
+
+def adaptive_stop_reason(nodes: dict[str, dict], plan: dict, rows: list[dict]) -> str | None:
+    """Regra de parada do diagnóstico adaptativo.
+
+    * ``budget``: o orçamento total de questões foi atingido.
+    * ``converged``: toda matéria com orçamento já tem ao menos uma resposta e
+      toda área *relevante* está resolvida. Relevantes são as áreas com
+      incidência ≥ ``STOP_MIN_INCIDENCE`` nas matérias de maior peso (peso ≥
+      ``STOP_TOP_WEIGHT_SHARE`` × maior peso do curso). Uma área está resolvida
+      quando tem ≥ ``STOP_MIN_AREA_ANSWERS`` respostas e o intervalo é estreito
+      (``upper − lower < STOP_WIDTH``) ou já separado — claramente lacuna
+      (``upper ≤ STOP_GAP_UPPER``) ou claramente dominada (``lower ≥
+      STOP_STRONG_LOWER``) — ou quando a matéria já gastou seu orçamento (não
+      há como obter mais evidência).
+    """
+    budget = plan["budget"]
+    if len(rows) >= budget["total"]:
+        return "budget"
+    by_subject = budget["by_subject"]
+    answered = Counter(row["subject"] for row in rows if row.get("answered_at") is not None)
+    if any(answered[subject] < 1 for subject, count in by_subject.items() if count > 0):
+        return None
+    asked = Counter(row["subject"] for row in rows)
+    weights = mastery.normalize_weights(plan["weights"]["weights"])
+    top = max(weights.values(), default=0.0)
+    top_subjects = {subject for subject, weight in weights.items()
+                    if weight >= STOP_TOP_WEIGHT_SHARE * top and by_subject.get(subject)}
+    relevant = [node for node in nodes.values()
+                if node["level"] == "area" and node["subject"] in top_subjects
+                and node["incidence"] >= STOP_MIN_INCIDENCE]
+    if all(_area_settled(node) or asked[node["subject"]] >= by_subject[node["subject"]]
+           for node in relevant):
+        return "converged"
+    return None
+
+
+def next_question(plan: dict, rows: list[dict], *, seed: int) -> tuple[dict | None, str | None]:
+    """Escolhe a próxima questão do diagnóstico adaptativo (função pura).
+
+    ``plan`` traz ``weights``, ``incidence``, ``budget`` e ``candidates``;
+    ``rows`` são as linhas de ``attempt_questions`` já inseridas. Devolve
+    ``(candidato, None)`` ou ``(None, motivo_de_parada)`` — ``budget``,
+    ``converged`` ou ``exhausted``.
+
+    Política: cobertura primeiro (toda matéria com orçamento recebe uma
+    questão, na ordem do peso); depois o nó-alvo é a área de maior
+    ``peso × incidência × (upper − lower)`` entre matérias com orçamento,
+    descendo para conteúdo e folha quando a área já foi testada e segue
+    lacuna/incerta; áreas já resolvidas só voltam a ser escolhidas quando não há
+    outra. Entre as questões sob o alvo, prefere a que toca mais nós
+    incertos; empates são resolvidos pela semente (determinístico).
+    """
+    weights = plan["weights"]["weights"]
+    responses = [mastery.response_from_row(row) for row in rows if row.get("answered_at") is not None]
+    nodes = mastery.compute_nodes(responses, subject_weights=weights, incidence=plan.get("incidence") or {})
+    stop = adaptive_stop_reason(nodes, plan, rows)
+    if stop:
+        return None, stop
+    asked = Counter(row["subject"] for row in rows)
+    used = {(row["source_id"], int(row["question_number"])) for row in rows}
+    remaining = {subject for subject, count in plan["budget"]["by_subject"].items() if asked[subject] < count}
+    open_items = [item for item in plan.get("candidates") or []
+                  if item["subject"] in remaining and (item["source_id"], int(item["number"])) not in used]
+    if not open_items:
+        return None, "exhausted"
+    uncovered = sorted({item["subject"] for item in open_items if asked[item["subject"]] == 0},
+                       key=lambda subject: (-float(weights.get(subject, 0)), subject.casefold()))
+    if uncovered:
+        open_items = [item for item in open_items if item["subject"] == uncovered[0]]
+    paths: list[set[str]] = []
+    for item in open_items:
+        principal, _ = _content_ids(item["question"])
+        node = CONTENT_INDEX.get(principal or "")
+        paths.append(set(node["path_ids"]) if node else set())
+    target = _target_node(nodes, set().union(*paths))
+    indexes = [i for i, path in enumerate(paths) if target in path] if target else []
+    indexes = indexes or list(range(len(open_items)))
+
+    def touched(index: int) -> int:
+        return sum(1 for identity in mastery.evidence_weights(_candidate_response(open_items[index]))
+                   if nodes.get(identity, {}).get("status", "untested") in ("uncertain", "untested"))
+
+    best = max(touched(i) for i in indexes)
+    ties = sorted((open_items[i] for i in indexes if touched(i) == best),
+                  key=lambda item: (item["source_id"], int(item["number"])))
+    rng = random.Random(f"{seed}:{len(rows) + 1}")
+    return rng.choice(ties), None
+
+
+def _insert_question(db: sqlite3.Connection, attempt_id: str, ordinal: int, item: dict) -> None:
+    db.execute("""INSERT INTO attempt_questions(attempt_id,ordinal,source_id,question_number,
+        subject,topic,question_json,correct_answer) VALUES(?,?,?,?,?,?,?,?)""",
+               (attempt_id, ordinal, item["source_id"], item["number"], item["subject"], item["topic"],
+                json.dumps(item["question"], ensure_ascii=False), item["correct_answer"]))
+
+
 def create_attempt(db: sqlite3.Connection, config: dict, course_id: str, pool: list[dict],
-                   *, total: int, seed: int, provider, planner_topics: dict | None = None,
-                   planner_meta: dict | None = None, excluded: dict | None = None) -> dict:
+                   *, total: int | None = None, seed: int, provider=None, planner_topics: dict | None = None,
+                   planner_meta: dict | None = None, excluded: dict | None = None,
+                   mode: str = "adaptive") -> dict:
+    """Cria uma tentativa de diagnóstico.
+
+    ``mode="static"`` sorteia todas as questões de uma vez (comportamento
+    original). ``mode="adaptive"`` (padrão) reserva um orçamento por matéria
+    e insere uma questão por vez: a primeira aqui, as seguintes em
+    ``record_response`` via ``next_question``.
+    """
+    if mode not in ("static", "adaptive"):
+        raise ValueError("modo de diagnóstico inválido: use adaptive ou static")
+    total = total if total is not None else (DEFAULT_ADAPTIVE_TOTAL if mode == "adaptive" else DEFAULT_STATIC_TOTAL)
+    if mode == "adaptive" and not 1 <= total <= MAX_ADAPTIVE_TOTAL:
+        raise ValueError(f"diagnóstico adaptativo aceita de 1 a {MAX_ADAPTIVE_TOTAL} questões")
     profile = course_profile(config, course_id)
-    weights = profile["pesos"]
-    subjects = list(weights)
-    available_topics = deterministic_topics(pool, subjects)
-    if planner_topics is None:
-        # A composição do diagnóstico é determinística; o LLM não escolhe a
-        # cobertura de tópicos nem pode tornar a criação dependente de rede.
-        planner_topics = deterministic_topics_from_available(available_topics)
-        planner_meta = {"status": "deterministic", "attempts": 0, "error": None}
-    selected, distribution = select_questions(pool, weights, total, planner_topics, seed)
+    subjects = list(profile["pesos"])
+    course_pool = [item for item in pool if item["subject"] in profile["pesos"]]
+    weights_result = effective_weights(profile, course_pool)
+    weights = selection_weights(profile, weights_result)
+    incidence = mastery.node_incidence(course_pool)
+    if mode == "adaptive":
+        available = dict(Counter(item["subject"] for item in course_pool if item["subject"] in weights))
+        by_subject = allocate_counts(available, weights, total) if available else {}
+        budget = {"total": sum(by_subject.values()), "requested": total, "by_subject": by_subject}
+        candidates = [_candidate(item) for item in course_pool if by_subject.get(item["subject"])]
+        plan = {"mode": "adaptive", "weights": weights_result, "incidence": incidence,
+                "budget": budget, "candidates": candidates,
+                "planner": {"status": "adaptive", "attempts": 0, "error": None},
+                "policy": {"stop_width": STOP_WIDTH, "stop_min_incidence": STOP_MIN_INCIDENCE,
+                           "stop_top_weight_share": STOP_TOP_WEIGHT_SHARE,
+                           "stop_min_area_answers": STOP_MIN_AREA_ANSWERS,
+                           "stop_gap_upper": STOP_GAP_UPPER, "stop_strong_lower": STOP_STRONG_LOWER}}
+        first, _ = next_question(plan, [], seed=seed) if candidates else (None, "exhausted")
+        selected = [first] if first else []
+        distribution = {"requested": total, "selected": len(selected), "available_by_subject": available,
+                        "selected_by_subject": dict(Counter(q["subject"] for q in selected)),
+                        "budget_by_subject": by_subject}
+        planner_meta = plan["planner"]
+    else:
+        available_topics = deterministic_topics(course_pool, subjects)
+        if planner_topics is None:
+            # A composição do diagnóstico é determinística; o LLM não escolhe a
+            # cobertura de tópicos nem pode tornar a criação dependente de rede.
+            planner_topics = deterministic_topics_from_available(available_topics)
+            planner_meta = {"status": "deterministic", "attempts": 0, "error": None}
+        selected, distribution = select_questions(course_pool, weights, total, planner_topics, seed)
+        plan = {"mode": "static", "topics": planner_topics, "planner": planner_meta or {"status": "provided"},
+                "weights": weights_result, "incidence": incidence}
     distribution["excluded"] = excluded or {}
     distribution["unavailable_subjects"] = [s for s in subjects if not distribution["available_by_subject"].get(s)]
+    plan["distribution"] = distribution
     if not selected:
         raise ValueError("nenhuma questão elegível com classificação e gabarito; importe gabaritos e confira o banco")
     attempt_id = uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc).isoformat()
-    plan = {"topics": planner_topics, "planner": planner_meta or {"status": "provided"},
-            "distribution": distribution}
     with db:
         db.execute("""INSERT INTO attempts(id,course_id,course_name,config_version,profile_snapshot,seed,
-            requested_count,actual_count,status,plan_json,created_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            requested_count,actual_count,status,plan_json,created_at,mode)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                    (attempt_id, course_id, profile["nome"], config["version"],
-                    json.dumps(profile, ensure_ascii=False), seed, total, len(selected), "in_progress",
-                    json.dumps(plan, ensure_ascii=False), now))
+                    json.dumps(profile, ensure_ascii=False), seed,
+                    plan["budget"]["total"] if mode == "adaptive" else total, len(selected), "in_progress",
+                    json.dumps(plan, ensure_ascii=False), now, mode))
         for ordinal, item in enumerate(selected, 1):
-            db.execute("""INSERT INTO attempt_questions(attempt_id,ordinal,source_id,question_number,
-                subject,topic,question_json,correct_answer) VALUES(?,?,?,?,?,?,?,?)""",
-                       (attempt_id, ordinal, item["source_id"], item["number"], item["subject"], item["topic"],
-                        json.dumps(item["question"], ensure_ascii=False), item["correct_answer"]))
-    return {"id": attempt_id, "course": profile["nome"], "seed": seed, "requested": total,
-            "selected": len(selected), "distribution": distribution, "planner": planner_meta}
+            _insert_question(db, attempt_id, ordinal, item)
+    result = {"id": attempt_id, "course": profile["nome"], "seed": seed, "requested": total,
+              "selected": len(selected), "distribution": distribution, "planner": planner_meta,
+              "mode": mode, "weights": weights_result["weights"]}
+    if mode == "adaptive":
+        result["budget"] = plan["budget"]
+    return result
 
 
 def get_attempt(db: sqlite3.Connection, attempt_id: str) -> dict:
@@ -379,8 +588,38 @@ def list_questions_for_attempt(db: sqlite3.Connection, attempt_id: str, *, unans
         "SELECT * FROM attempt_questions WHERE attempt_id=?" + where + " ORDER BY ordinal", (attempt_id,))]
 
 
+def _advance_adaptive(db: sqlite3.Connection, attempt_id: str) -> dict:
+    """Acrescenta a próxima questão adaptativa (dentro da transação corrente)."""
+    attempt = db.execute("SELECT seed,plan_json FROM attempts WHERE id=?", (attempt_id,)).fetchone()
+    plan = json.loads(attempt["plan_json"])
+    rows = list_questions_for_attempt(db, attempt_id)
+    if any(row["answered_at"] is None for row in rows):
+        pending = min(row["ordinal"] for row in rows if row["answered_at"] is None)
+        return {"next_ordinal": pending, "done": False}
+    if plan.get("stop"):
+        return {"next_ordinal": None, "done": True, "stop_reason": plan["stop"]["reason"]}
+    item, stop = next_question(plan, rows, seed=int(attempt["seed"]))
+    if item is None:
+        # Ao parar, o banco de candidatos deixa de ser necessário (reduz o plano salvo).
+        plan["stop"] = {"reason": stop, "questions": len(rows),
+                        "at": datetime.now(timezone.utc).isoformat()}
+        plan["candidate_count"] = len(plan.pop("candidates", None) or [])
+        db.execute("UPDATE attempts SET plan_json=? WHERE id=?", (json.dumps(plan, ensure_ascii=False), attempt_id))
+        return {"next_ordinal": None, "done": True, "stop_reason": stop}
+    ordinal = max((row["ordinal"] for row in rows), default=0) + 1
+    _insert_question(db, attempt_id, ordinal, item)
+    db.execute("UPDATE attempts SET actual_count=? WHERE id=?", (ordinal, attempt_id))
+    return {"next_ordinal": ordinal, "done": False}
+
+
 def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
                     answer: str | None, reason: str | None = None, *, require_reason: bool = True) -> dict:
+    """Registra a resposta e informa a próxima questão.
+
+    Resultado: ``{"ordinal", "answer", "correct", "reason", "next_ordinal",
+    "done"}`` (+ ``"stop_reason"`` quando um adaptativo termina). Em tentativas
+    adaptativas, a próxima questão é inserida aqui.
+    """
     row = db.execute("SELECT * FROM attempt_questions WHERE attempt_id=? AND ordinal=?",
                      (attempt_id, ordinal)).fetchone()
     if not row:
@@ -401,16 +640,36 @@ def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
         pass
     elif reason not in REASONS - {"blank"}:
         raise ValueError("resposta incorreta exige motivo: unknown_content, calc_error ou misread")
+    mode_row = db.execute("SELECT mode FROM attempts WHERE id=?", (attempt_id,)).fetchone()
     with db:
         db.execute("UPDATE attempt_questions SET selected_answer=?,error_reason=?,is_correct=?,answered_at=? "
                    "WHERE attempt_id=? AND ordinal=?",
                    (answer, reason, int(correct), datetime.now(timezone.utc).isoformat(), attempt_id, ordinal))
-    return {"ordinal": ordinal, "answer": answer, "correct": bool(correct), "reason": reason}
+        if mode_row and mode_row["mode"] == "adaptive":
+            progress = _advance_adaptive(db, attempt_id)
+        else:
+            pending = db.execute("SELECT MIN(ordinal) FROM attempt_questions WHERE attempt_id=? "
+                                 "AND answered_at IS NULL", (attempt_id,)).fetchone()[0]
+            progress = {"next_ordinal": pending, "done": pending is None}
+    return {"ordinal": ordinal, "answer": answer, "correct": bool(correct), "reason": reason, **progress}
+
+
+def attempt_weights(attempt: dict) -> dict:
+    """Resultado de pesos da tentativa (``plan.weights``) ou fallback para tentativas antigas."""
+    plan = attempt.get("plan") or {}
+    if isinstance(plan.get("weights"), dict) and plan["weights"].get("weights"):
+        return plan["weights"]
+    profile = attempt["profile_snapshot"]
+    manual = {s: float(v) for s, v in profile["pesos"].items()}
+    total = sum(manual.values()) or 1.0
+    non_assessable = {courses.REDACAO: round(0.5 / 3, 4)} if profile.get("formula") else {}
+    return {"weights": {s: round(v / total, 4) for s, v in manual.items()}, "raw": manual, "components": {},
+            "non_assessable": non_assessable, "formula": None, "first_phase_sample": None}
 
 
 def calculate_metrics(db: sqlite3.Connection, attempt_id: str) -> dict:
     attempt = get_attempt(db, attempt_id)
-    weights = attempt["profile_snapshot"]["pesos"]
+    profile = attempt["profile_snapshot"]
     rows = list_questions_for_attempt(db, attempt_id)
     by_subject: dict[str, list[dict]] = defaultdict(list)
     by_content: dict[str, list[dict]] = defaultdict(list)
@@ -424,7 +683,7 @@ def calculate_metrics(db: sqlite3.Connection, attempt_id: str) -> dict:
             for content_id in aggregate_content_ids([value for value in assigned if value]):
                 by_content[content_id].append(row)
     metrics = {}
-    for subject in weights:
+    for subject in profile["pesos"]:
         answered = by_subject.get(subject, [])
         count = len(answered)
         correct = sum(int(r["is_correct"] or 0) for r in answered)
@@ -450,11 +709,20 @@ def calculate_metrics(db: sqlite3.Connection, attempt_id: str) -> dict:
             "error_reasons": {reason: reasons.get(reason, 0) for reason in sorted(REASONS)},
             "status": "assessed" if count >= 3 else "insufficient_data",
         }
+    weights_result = attempt_weights(attempt)
+    incidence = (attempt.get("plan") or {}).get("incidence") or \
+        mastery.node_incidence([mastery.response_from_row(row) for row in rows])
+    responses = [mastery.response_from_row(row) for row in rows if row["answered_at"] is not None]
+    nodes = mastery.compute_nodes(responses, subject_weights=weights_result["weights"], incidence=incidence)
     return {"total_questions": len(rows), "answered": answered_count,
             "correct": correct_count, "incorrect_or_blank": answered_count - correct_count,
             "accuracy": round(correct_count / answered_count, 4) if answered_count else None,
             "subjects": metrics, "contents": content_metrics,
-            "taxonomy_version": CONTENT_TAXONOMY_VERSION}
+            "taxonomy_version": CONTENT_TAXONOMY_VERSION,
+            "mode": attempt.get("mode") or "static",
+            "course_weights": weights_result["weights"],
+            "nodes": nodes,
+            "report": build_report(nodes, weights_result, profile)}
 
 
 def validate_analysis(obj: dict, metrics: dict, subjects: list[str]) -> dict:
