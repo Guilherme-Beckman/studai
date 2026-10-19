@@ -32,6 +32,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 5 | Diagnóstico inicial | concluída | 6/6 |
 | 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
 | 7 | Mapa do conhecimento e progresso por profundidade | pendente | 0/5 |
+| 8 | Modo foco (tela cheia) para responder questões | pendente | 0/5 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -139,6 +140,17 @@ Base: `diagnostics/mastery.py` (posterior Beta por nó), `study/service.py` ("Ho
 - [ ] API do grafo (nós + arestas + métricas por nó) e tela no frontend
 - [ ] Testes da propagação do reforço e da ordem de prioridade
 
+## Fase 8 — Modo foco (tela cheia) para responder questões
+
+Ideia: na tela "Hoje" e em todo lugar onde se respondem questões (Diagnósticos, "Responder prova"), um botão "Modo foco" abre a questão em tela cheia, sem menus nem distrações; você responde e a próxima entra deslizando de lado (carrossel).
+Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `frontend/app.js`, `frontend/styles.css`.
+
+- [ ] Componente de questão em tela cheia (Fullscreen API + fallback com sobreposição), reutilizável no "Hoje", nos Diagnósticos e no "Responder prova"
+- [ ] Questão ocupando a tela: enunciado, imagens e alternativas grandes e legíveis, com rolagem só quando necessário (inclusive no celular)
+- [ ] Navegação lateral: depois de responder, mostra o feedback e a próxima questão entra deslizando de lado; atalhos de teclado (A–E, Enter, ←/→, Esc para sair) e gesto de deslizar no celular
+- [ ] Indicador discreto de progresso (questão X de N) e saída sem perder o que já foi respondido (as respostas continuam sendo salvas no fluxo atual)
+- [ ] Teste manual nas três telas e em largura de celular
+
 ## Expansão do acervo/RAG (depois das fases 1–3)
 
 - [ ] Processar mais provas de `fuvest_acervo/` usando o fluxo novo de revisão
@@ -169,3 +181,4 @@ Base: `diagnostics/mastery.py` (posterior Beta por nó), `study/service.py` ("Ho
 | 2026-10-19 | Claude / `claude/fase-6-revisao-espacada` | Fase 6: revisão espaçada FSRS, tela "Hoje", sincronização com os diagnósticos | 0ac86e9 |
 | 2026-10-19 | Claude (swarm de 3 agentes) / `feature/diagnostics/fase5-diagnostico-relatorios` | Fase 5: diagnóstico adaptativo só com revisadas, domínio por nó, pesos FUVEST derivados, relatório e painel de evolução | 5095fe5 |
 | 2026-10-19 | Claude / `claude/topic-progress-visualization-bfe261` | Fase 7 adicionada: mapa do conhecimento em grafo e progresso por profundidade | — |
+| 2026-10-19 | Claude / `claude/topic-progress-visualization-bfe261` | Fase 8 adicionada: modo foco em tela cheia com navegação lateral entre questões | — |
