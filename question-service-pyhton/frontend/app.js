@@ -5,6 +5,7 @@ let courses = [];
 let currentDiagnostic = null;
 const diagnosticDone = new Map();
 let currentExamQuiz = null;
+let currentStudy = null;
 let currentExamReview = null;
 let currentReprocessPreview = null;
 let activeProvider = { provider: "demo" };
@@ -107,6 +108,7 @@ function showView(name) {
   if (name === "exams") refreshExams();
   if (name === "diagnostics") refreshDiagnostics();
   if (name === "reports") window.refreshReports?.();
+  if (name === "today") refreshToday();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -235,6 +237,27 @@ function questionDisplayState(question) {
     showStem: hasStem && !unreadable,
     showAlternativeText: !unreadable,
   };
+}
+
+// Texto-base e enunciado com as imagens da prova; usado no "Responder prova" e no estudo de hoje.
+function questionContentMarkup(examId, question, sharedText, sharedImages = []) {
+  const questionImages = question.figuras_enunciado || [];
+  const display = questionDisplayState(question);
+  const options = Object.entries(question.alternativas || {});
+  const hasInlineImages = questionImages.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
+  const fullPageImages = !display.showSource && !hasInlineImages ? (question.imagens_completas || []) : [];
+  return `${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(examId, sharedImages, "passage-image")}</div>` : ""}
+    <div class="question-body exam-prompt">${display.showStem ? stemMarkup(question, paths => examImageMarkup(examId, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(examId, questionImages)}${renderSourceQuestionImage(examId, display.sourceImages)}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(examId, fullPageImages)}</details>` : ""}</div>`;
+}
+
+function optionsMarkup(examId, question, { selected, submitted, correctAnswer, saved, attr }) {
+  const display = questionDisplayState(question);
+  return Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b)).map(([letter, option]) => {
+    const value = display.showAlternativeText ? (typeof option === "string" ? option : (option?.texto || "")) : (typeof option === "object" && option?.figuras?.length ? "" : "Alternativa apresentada na imagem da questão");
+    const images = typeof option === "object" ? option.figuras : [];
+    const state = [selected === letter ? "selected" : "", submitted && correctAnswer === letter ? "answer-correct" : "", submitted && saved === letter && correctAnswer && correctAnswer !== letter ? "answer-wrong" : ""].join(" ");
+    return `<button type="button" class="exam-option ${state}" ${attr}="${escapeHtml(letter)}" ${submitted ? "disabled" : ""}><span class="exam-option-letter">${escapeHtml(letter)}</span><span class="exam-option-content">${escapeHtml(value)}${examImageMarkup(examId, images, "option-image")}</span></button>`;
+  }).join("");
 }
 
 function renderSourceQuestionImage(examId, paths) {
@@ -902,11 +925,6 @@ function renderExamQuiz() {
   const shared = question.texto_id != null ? sharedTexts[String(question.texto_id)] : null;
   const sharedText = typeof shared === "string" ? shared : shared?.texto;
   const sharedImages = shared && typeof shared === "object" ? shared.figuras : [];
-  const questionImages = question.figuras_enunciado || [];
-  const display = questionDisplayState(question);
-  const options = Object.entries(question.alternativas || {});
-  const hasInlineImages = questionImages.length || (sharedImages || []).length || options.some(([, option]) => typeof option === "object" && option.figuras?.length);
-  const fullPageImages = !display.showSource && !hasInlineImages ? (question.imagens_completas || []) : [];
   const outcome = submitted && key ? (key.annulled || key.answer === "*"
     ? `<div class="exam-answer-feedback annulled">Questão anulada no gabarito.</div>`
     : `<div class="exam-answer-feedback ${saved === key.answer ? "correct" : "incorrect"}">${saved === key.answer ? "Resposta correta!" : `Resposta incorreta. Gabarito: ${escapeHtml(key.answer)}.`}</div>`) : (submitted ? `<div class="exam-answer-feedback neutral">Resposta registrada. Ainda não há gabarito importado para esta questão.</div>` : "");
@@ -915,9 +933,8 @@ function renderExamQuiz() {
   const progress = Math.round(((index + 1) / questions.length) * 100);
   workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Responda à prova</h2><div class="workspace-meta">Questão ${index + 1} de ${questions.length}${question.pagina ? ` · página ${question.pagina}` : ""} · ${examSessionStatus(quiz)}</div></div><button class="blank-button" data-exam-close>Fechar prova</button></div>
     <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
-    ${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(exam.id, sharedImages, "passage-image")}</div>` : ""}
-    <div class="question-body exam-prompt">${display.showStem ? stemMarkup(question, paths => examImageMarkup(exam.id, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(exam.id, questionImages)}${renderSourceQuestionImage(exam.id, display.sourceImages)}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(exam.id, fullPageImages)}</details>` : ""}</div>
-    <div class="exam-options">${options.map(([letter, option]) => { const value = display.showAlternativeText ? (typeof option === "string" ? option : (option?.texto || "")) : (typeof option === "object" && option?.figuras?.length ? "" : "Alternativa apresentada na imagem da questão"); const images = typeof option === "object" ? option.figuras : []; return `<button type="button" class="exam-option ${selected === letter ? "selected" : ""} ${submitted && key && key.answer === letter ? "answer-correct" : ""} ${submitted && saved === letter && key && key.answer !== letter && !key.annulled ? "answer-wrong" : ""}" data-exam-option="${escapeHtml(letter)}" ${submitted ? "disabled" : ""}><span class="exam-option-letter">${escapeHtml(letter)}</span><span class="exam-option-content">${escapeHtml(value)}${examImageMarkup(exam.id, images, "option-image")}</span></button>`; }).join("")}</div>
+    ${questionContentMarkup(exam.id, question, sharedText, sharedImages)}
+    <div class="exam-options">${optionsMarkup(exam.id, question, { selected, submitted, correctAnswer: key && !key.annulled ? key.answer : null, saved, attr: "data-exam-option" })}</div>
     ${outcome}${reasonPrompt}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 ? "disabled" : ""}>← Anterior</button><div>${submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button class="button button-primary" data-exam-submit ${selected ? "" : "disabled"}>Responder</button>`}</div></div>`;
   bindExamQuizActions();
 }
@@ -977,6 +994,8 @@ async function refreshCourses() {
   try {
     courses = await api("/api/courses");
     $("#course-select").innerHTML = courses.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.name)} · ${course.subjects.length} matérias</option>`).join("");
+    $("#today-course").innerHTML = courses.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.name)}</option>`).join("");
+    try { const saved = localStorage.getItem("studai-today-course"); if (saved && courses.some(course => course.id === saved)) $("#today-course").value = saved; } catch {}
   } catch (error) {
     $("#course-select").innerHTML = `<option value="">Não foi possível carregar os cursos</option>`;
     toast(error.message, true);
@@ -1370,6 +1389,112 @@ async function finalizeDiagnostic(id) {
   }
 }
 
+const STUDY_REASONS = {
+  overdue_question: "QUESTÃO ERRADA", due_content: "REVISÃO VENCIDA",
+  new_gap: "LACUNA DO DIAGNÓSTICO", new_content: "CONTEÚDO NOVO",
+};
+
+function formatDay(isoDate) {
+  return new Date(`${isoDate}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+
+async function refreshToday() {
+  const courseId = $("#today-course").value;
+  if (!courseId) return;
+  try {
+    const [session, progress] = await Promise.all([
+      api(`/api/study/today?courseId=${encodeURIComponent(courseId)}`),
+      api("/api/study/progress"),
+    ]);
+    currentStudy = { session, selected: null, pendingReason: null };
+    $("#today-date").textContent = formatDay(session.date);
+    renderTodaySummary(session, progress);
+    renderTodayProgress(progress);
+    renderToday();
+  } catch (error) {
+    $("#today-workspace").innerHTML = `<div class="inline-result error">Não foi possível montar o estudo de hoje: ${escapeHtml(error.message)}</div>`;
+    toast(error.message, true);
+  }
+}
+
+function renderTodaySummary(session, progress) {
+  const c = session.counts;
+  const forecast = Object.entries(progress.forecast || {}).slice(1).map(([day, count]) => `<div class="forecast-day">${escapeHtml(formatDay(day))}<strong>${count}</strong></div>`).join("");
+  $("#today-summary").innerHTML = `<div class="result-grid"><div class="metric-card"><span>Questões erradas para refazer</span><strong>${c.overdue_question}</strong></div><div class="metric-card"><span>Revisões vencidas</span><strong>${c.due_content}</strong></div><div class="metric-card"><span>Lacunas do diagnóstico</span><strong>${c.new_gap}</strong></div><div class="metric-card"><span>Conteúdos novos</span><strong>${c.new_content}</strong></div></div>${forecast ? `<p class="eyebrow" style="margin-top:14px">REVISÕES NOS PRÓXIMOS DIAS</p><div class="forecast-row">${forecast}</div>` : ""}`;
+}
+
+function renderTodayProgress(progress) {
+  const rows = (progress.contents || []).map(row => `<tr><td>${escapeHtml(row.path)}</td><td>${row.reviews}</td><td>${row.accuracy == null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>${Math.round(row.retrievability * 100)}%</td><td>${new Date(row.dueAt).toLocaleDateString("pt-BR")}</td></tr>`).join("");
+  $("#today-progress").innerHTML = rows
+    ? `<table class="subject-table"><thead><tr><th>Conteúdo</th><th>Revisões</th><th>Acertos</th><th>Lembrança hoje</th><th>Próxima revisão</th></tr></thead><tbody>${rows}</tbody></table>`
+    : `<div class="empty-state"><div class="empty-icon">◷</div><strong>Nenhum conteúdo em revisão ainda</strong><p>Responda o estudo de hoje ou um diagnóstico para começar o agendamento.</p></div>`;
+}
+
+function renderToday() {
+  const workspace = $("#today-workspace");
+  const { session, selected } = currentStudy;
+  const items = session.items;
+  if (!items.length) {
+    workspace.innerHTML = `<div class="empty-state"><div class="empty-icon">☀</div><strong>Nada para estudar hoje</strong><p>Não há revisões vencidas nem questões classificadas com gabarito para conteúdos novos.</p></div>`;
+    return;
+  }
+  const answered = items.filter(item => item.answered).length;
+  const progress = Math.round(answered / items.length * 100);
+  const top = `<div class="workspace-top"><div><p class="eyebrow">SESSÃO DE ${escapeHtml(formatDay(session.date)).toUpperCase()}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${session.correct} acertos até agora</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
+  const item = currentStudy.lastAnswer ? items.find(entry => entry.id === currentStudy.lastAnswer.itemId) : items.find(entry => !entry.answered);
+  if (!item) {
+    const list = items.map(entry => `<tr><td><span class="today-reason ${entry.reason}">${STUDY_REASONS[entry.reason]}</span></td><td>${escapeHtml(entry.contentPath)}</td><td>${entry.selectedAnswer ? escapeHtml(entry.selectedAnswer) : "Branco"} / ${escapeHtml(entry.correctAnswer)}</td><td>${entry.correct ? "✓" : "✗"}</td></tr>`).join("");
+    workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>Sessão concluída: ${session.correct} de ${items.length}</strong><p>As próximas revisões já foram agendadas. Veja abaixo quando cada conteúdo volta.</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
+    return;
+  }
+  const question = item.question || {};
+  const result = currentStudy.lastAnswer;
+  const submitted = Boolean(result);
+  const feedback = submitted
+    ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? "Resposta correta!" : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}.</div>`
+    : "";
+  const reasonPanel = currentStudy.pendingReason ? `<div class="reason-row"><label>Qual foi o motivo principal?<select id="today-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="today-confirm-reason">Registrar resposta</button></div>` : "";
+  const actions = submitted
+    ? `<div class="exam-quiz-actions"><span></span><button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"} →</button></div>`
+    : `<div class="exam-quiz-actions"><button class="blank-button" id="today-blank">Deixar em branco</button><button class="button button-primary" id="today-submit" ${selected ? "" : "disabled"}>Responder</button></div>`;
+  workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span><span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}</span></div>
+    ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
+    <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
+    ${reasonPanel}${feedback}${actions}`;
+  $$("[data-today-option]", workspace).forEach(button => button.addEventListener("click", () => {
+    currentStudy.selected = button.dataset.todayOption;
+    currentStudy.pendingReason = null;
+    renderToday();
+  }));
+  $("#today-submit", workspace)?.addEventListener("click", () => submitStudyAnswer(item, currentStudy.selected));
+  $("#today-blank", workspace)?.addEventListener("click", () => submitStudyAnswer(item, null));
+  $("#today-confirm-reason", workspace)?.addEventListener("click", () => {
+    const reason = $("#today-reason", workspace).value;
+    if (!reason) return toast("Escolha o motivo do erro.", true);
+    submitStudyAnswer(item, currentStudy.selected, reason);
+  });
+  $("#today-next", workspace)?.addEventListener("click", () => refreshToday());
+}
+
+async function submitStudyAnswer(item, answer, reason = null) {
+  try {
+    const result = await api("/api/study/today/answers", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: currentStudy.session.id, itemId: item.id, answer, reason }),
+    });
+    if (result.requiresReason) {
+      currentStudy.pendingReason = true;
+      return renderToday();
+    }
+    Object.assign(item, { answered: true, selectedAnswer: result.answer, correct: result.correct, correctAnswer: result.correctAnswer });
+    if (result.correct) currentStudy.session.correct++;
+    currentStudy.lastAnswer = result;
+    currentStudy.pendingReason = null;
+    currentStudy.selected = null;
+    renderToday();
+  } catch (error) { toast(error.message, true); }
+}
+
 function bindEvents() {
   $("#theme-toggle").addEventListener("click", () => {
     applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
@@ -1381,6 +1506,11 @@ function bindEvents() {
   $("#diagnostic-form").addEventListener("submit", createDiagnostic);
   $("#refresh-exams").addEventListener("click", refreshExams);
   $("#refresh-diagnostics").addEventListener("click", refreshDiagnostics);
+  $("#refresh-today").addEventListener("click", refreshToday);
+  $("#today-course").addEventListener("change", () => {
+    try { localStorage.setItem("studai-today-course", $("#today-course").value); } catch {}
+    refreshToday();
+  });
   $("#pdf-file").addEventListener("change", event => { $("#file-label").textContent = event.target.files[0]?.name || "Escolher PDF"; });
   $("#key-pdf-file").addEventListener("change", event => { $("#key-file-label").textContent = event.target.files[0]?.name || "Escolher PDF do gabarito"; });
   $("#drop-zone").addEventListener("dragover", event => { event.preventDefault(); event.currentTarget.classList.add("dragover"); });

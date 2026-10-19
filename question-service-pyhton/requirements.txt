@@ -1,1 +1,2 @@
 pymupdf
+fsrs==6.3.2

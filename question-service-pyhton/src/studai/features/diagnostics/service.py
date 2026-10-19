@@ -612,6 +612,25 @@ def _advance_adaptive(db: sqlite3.Connection, attempt_id: str) -> dict:
     return {"next_ordinal": ordinal, "done": False}
 
 
+def grade_answer(answer: str | None, alternatives: dict, correct_answer: str,
+                 reason: str | None, *, require_reason: bool = True) -> tuple[str | None, bool, str | None]:
+    """Valida a alternativa e o motivo do erro; devolve (resposta, acertou, motivo)."""
+    answer = (answer or "").strip().upper() or None
+    if answer is not None and answer not in alternatives:
+        raise ValueError("resposta deve ser uma das alternativas disponíveis")
+    correct = answer is not None and answer == correct_answer
+    if answer is None:
+        reason = "blank"
+    elif correct:
+        if reason is not None:
+            raise ValueError("resposta correta não recebe motivo de erro")
+    elif reason is None and not require_reason:
+        pass
+    elif reason not in REASONS - {"blank"}:
+        raise ValueError("resposta incorreta exige motivo: unknown_content, calc_error ou misread")
+    return answer, correct, reason
+
+
 def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
                     answer: str | None, reason: str | None = None, *, require_reason: bool = True) -> dict:
     """Registra a resposta e informa a próxima questão.
@@ -627,19 +646,8 @@ def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
     if row["answered_at"] is not None:
         raise ValueError(f"questão {ordinal} já respondida")
     alternatives = json.loads(row["question_json"]).get("alternativas", {})
-    answer = (answer or "").strip().upper() or None
-    if answer is not None and answer not in alternatives:
-        raise ValueError("resposta deve ser uma das alternativas disponíveis")
-    correct = answer is not None and answer == row["correct_answer"]
-    if answer is None:
-        reason = "blank"
-    elif correct:
-        if reason is not None:
-            raise ValueError("resposta correta não recebe motivo de erro")
-    elif reason is None and not require_reason:
-        pass
-    elif reason not in REASONS - {"blank"}:
-        raise ValueError("resposta incorreta exige motivo: unknown_content, calc_error ou misread")
+    answer, correct, reason = grade_answer(answer, alternatives, row["correct_answer"], reason,
+                                           require_reason=require_reason)
     mode_row = db.execute("SELECT mode FROM attempts WHERE id=?", (attempt_id,)).fetchone()
     with db:
         db.execute("UPDATE attempt_questions SET selected_answer=?,error_reason=?,is_correct=?,answered_at=? "

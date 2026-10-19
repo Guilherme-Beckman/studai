@@ -292,3 +292,5 @@ html[data-theme="dark"] .rp-tooltip{box-shadow:0 12px 28px rgba(0,0,0,.4)}
 .rp-tree-rows{max-height:none}
 .reports-heading>div{min-width:0}
 }
+.today-controls{padding:14px 22px;margin-bottom:14px}.today-controls label{margin:0;max-width:520px}.today-summary{margin-bottom:14px}.today-summary .result-grid{margin:0}.today-progress{margin-top:18px}.today-reason{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.6px;border-radius:12px;padding:4px 8px;background:#edf5ff;color:#2f6fc4;margin-right:8px}.today-reason.overdue_question{background:#fff0ed;color:#b44d41}.today-reason.due_content{background:#fff5e4;color:#a8772a}.today-reason.new_gap{background:#f0edff;color:#7059c8}.today-reason.new_content{background:#e8f8f3;color:#23845f}.forecast-row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}.forecast-day{flex:1;min-width:64px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:8px 4px;font-size:10px;color:#8796a4}.forecast-day strong{display:block;font-size:16px;color:var(--ink);margin-top:3px}
+html[data-theme="dark"] .forecast-day{border-color:#2a3a4b}html[data-theme="dark"] .forecast-day strong{color:#e5edf5}

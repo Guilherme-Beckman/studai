@@ -10,6 +10,7 @@ import secrets
 import shutil
 import threading
 import uuid
+from datetime import datetime, timezone
 import os
 import time
 import warnings
@@ -26,6 +27,7 @@ from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
 from studai.features.reports import service as reports
+from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import review as question_review
 from studai.integrations.llm import (
@@ -1044,6 +1046,18 @@ def _diagnostic_payload(db, attempt_id: str) -> dict:
     }
 
 
+def _study_today(course_id: str) -> dict:
+    config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+    profile = diagnostics.course_profile(config, course_id)
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        study.sync_diagnostic_answers(db)
+        pool, _ = diagnostics.load_question_pool(DEFAULT_QUESTIONS_DIR, db, list(profile["pesos"]))
+        return study.plan_today(db, pool, config, course_id, datetime.now(timezone.utc))
+    finally:
+        db.close()
+
+
 def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | None = None, cancelled=lambda: False) -> dict:
     clean_name = Path(filename).name
     if not clean_name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
@@ -1307,6 +1321,16 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self._json(200, reports.node_detail(db, config, course_id, match.group(1),
                                                                _reports_pool(db, config, course_id)))
+                finally:
+                    db.close()
+            if path == "/api/study/today":
+                course_id = (parse_qs(parsed.query).get("courseId") or ["eng-comp-sao-carlos"])[0]
+                return self._json(200, _study_today(course_id))
+            if path == "/api/study/progress":
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    study.sync_diagnostic_answers(db)
+                    return self._json(200, study.progress(db, datetime.now(timezone.utc)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/jobs/([a-f0-9]+)", path)
@@ -1676,6 +1700,15 @@ class Handler(BaseHTTPRequestHandler):
 
                 job_id = _submit_job("Gerar diagnóstico", create)
                 return self._json(202, {"jobId": job_id})
+            if path == "/api/study/today/answers":
+                body = self._read_json()
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study.record_study_answer(
+                        db, str(body.get("sessionId") or ""), str(body.get("itemId") or ""),
+                        body.get("answer"), body.get("reason"), datetime.now(timezone.utc)))
+                finally:
+                    db.close()
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/answers", path)
             if match:
                 body = self._read_json()

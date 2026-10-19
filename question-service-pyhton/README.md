@@ -143,7 +143,19 @@ O status por servidor usa a API `/api/ps` do Ollama: modelo carregado e memória
 
 ## Diagnóstico inicial por curso
 
-O módulo `diagnostico.py` gera um simulado diagnóstico com questões reais classificadas, registra respostas e motivos de erro no SQLite e produz um caminho inicial de estudo. O perfil editável de Engenharia de Computação EESC/ICMC (curso 17) está em `diagnostico/cursos.json`: pesos 1 para as matérias gerais e 3 para Física e Matemática. Esses números são um rascunho configurável, não pesos oficiais.
+O módulo `diagnostico.py` gera um simulado diagnóstico com questões reais **revisadas**, registra respostas e motivos de erro no SQLite e produz um relatório de estudo. Os perfis ficam em `diagnostico/cursos.json` (v2): Engenharia de Computação EESC/ICMC São Carlos (carreira 308, curso 17), Ciências de Computação ICMC e Engenharia de Computação Poli.
+
+**Pesos.** Com `"formula": "fuvest-2027"`, os pesos vêm da nota final do Guia de Provas 2027, NF = (F1 + D1 + D2)/3: F1 pela incidência histórica de cada matéria nas provas revisadas, D1 = 50% Português (Língua Portuguesa + Literatura) + 50% Redação, D2 = disciplinas de `fase2.dia2` divididas igualmente. Para Eng. Computação São Carlos isso dá ≈ Matemática 25%, Física 25%, Literatura 15%, Língua Portuguesa 12% e Redação 17% (fora do banco de múltipla escolha). Sem `formula`, valem os `pesos` manuais.
+
+**Diagnóstico adaptativo** (padrão, até 30 questões): primeiro uma questão por matéria com orçamento, depois desce área → conteúdo → subconteúdo onde peso do curso × incidência × incerteza é maior; para quando as áreas relevantes das matérias principais ficam definidas ou o orçamento acaba. `--modo static` mantém o sorteio de 51 questões. O domínio de cada nó (matéria → área → conteúdo → folha) é uma posterior Beta com intervalo de 80% (`diagnostics/mastery.py`), e o relatório lista pontos fortes, lacunas e prioridades com critério de saída (`diagnostics/report.py`).
+
+**Relatórios.** A aba "Relatórios" mostra a evolução da nota ponderada e do domínio de cada conteúdo ao longo de diagnósticos e provas respondidas em "Responder prova" (agora salvas no histórico). Para gerar um histórico de teste sem tocar o banco real:
+
+```bash
+cp diagnostico/historico.sqlite3 /tmp/studai-sim.sqlite3
+PYTHONPATH=src python -m studai.tools.simulate_student --db /tmp/studai-sim.sqlite3 --questions-dir simulados/processados --config diagnostico/cursos.json --course eng-comp-sao-carlos --profile mat-forte-fis-fraca
+python api.py --diagnostics-db /tmp/studai-sim.sqlite3
+```
 
 ### Importar gabarito
 
@@ -164,9 +176,21 @@ python diagnostico.py resultado ID_DO_DIAGNOSTICO
 python diagnostico.py listar
 ```
 
-O padrão é 51 questões, ajustável com `--quantidade`, e uma semente aleatória fica registrada para reproduzir o sorteio com `--seed`. São 13 categorias porque a taxonomia do classificador separa Literatura de Língua Portuguesa; com os pesos iniciais, o alvo é 3 questões por matéria geral e 9 por matéria específica. O programa usa o provider Ollama do `classifier.py` por padrão; `--provider`, `--model`, `--base-url` e `--api-key-env` permitem reutilizar os demais providers. Cada erro pede um motivo; branco é registrado como `blank`. A análise calcula acertos e motivos em código. Matérias com menos de três respostas ficam `insufficient_data`. O banco local fica em `diagnostico/historico.sqlite3` e é ignorado pelo Git.
+No modo estático o padrão é 51 questões (adaptativo: 30), ajustável com `--quantidade`, e uma semente aleatória fica registrada para reproduzir o sorteio com `--seed`. São 13 categorias porque a taxonomia do classificador separa Literatura de Língua Portuguesa; com os pesos iniciais, o alvo é 3 questões por matéria geral e 9 por matéria específica. O programa usa o provider Ollama do `classifier.py` por padrão; `--provider`, `--model`, `--base-url` e `--api-key-env` permitem reutilizar os demais providers. Cada erro pede um motivo; branco é registrado como `blank`. A análise calcula acertos e motivos em código. Matérias com menos de três respostas ficam `insufficient_data`. O banco local fica em `diagnostico/historico.sqlite3` e é ignorado pelo Git.
 
 A LLM só organiza a cobertura por tópicos disponíveis e interpreta métricas já calculadas; não recebe IDs de questões para selecionar nem define contagens. Se o planejamento temático falhar após correção, o código usa cobertura determinística. Se a análise falhar, os números permanecem salvos e o relatório indica a falha. A seleção usa apenas questões classificadas com gabarito importado; matérias sem cobertura suficiente são sinalizadas.
+
+## Estudo diário: o que estudar hoje
+
+A tela **Hoje** da interface (rotas `GET /api/study/today?courseId=…`, `POST /api/study/today/answers` e `GET /api/study/progress`) monta uma sessão por dia e por curso, com revisão espaçada FSRS (biblioteca `fsrs`, parâmetros padrão, sem passos em minutos: tudo volta em dias). Há dois tipos de cartão: um por conteúdo da taxonomia (o `conteudo_principal_id` da questão) e um por questão errada, para refazer a mesma questão.
+
+A sessão é montada em código, sem IA, nesta ordem e até 15 questões:
+
+1. questões erradas cujo cartão venceu;
+2. conteúdos com revisão vencida, primeiro os de menor probabilidade de lembrança e maior peso da matéria no curso;
+3. até 5 conteúdos novos: primeiro os vizinhos (mesmo conteúdo) dos pontos fracos do último diagnóstico concluído, depois os demais, distribuídos pelos pesos de `diagnostico/cursos.json`.
+
+As respostas dos diagnósticos entram no agendamento automaticamente, uma única vez cada. Erro pede motivo, como no diagnóstico. A sessão do dia (fuso de São Paulo) fica gravada e não muda ao recarregar. As tabelas `review_cards`, `review_logs`, `study_sessions` e `study_answers` ficam no mesmo `diagnostico/historico.sqlite3`. O código está em `src/studai/features/study/`.
 
 ## Executar etapas separadas
 
