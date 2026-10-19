@@ -25,6 +25,7 @@ from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
+from studai.features.reports import service as reports
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import review as question_review
 from studai.integrations.llm import (
@@ -59,6 +60,8 @@ RAG_STATUS_FILE = SERVICE_ROOT / "simulados" / "cache" / "fuvest-rag-status.json
 RAG_INDEX_LOCK = threading.Lock()
 AI_OPTIONS_LOCK = threading.Lock()
 AI_OPTIONS_CACHE: tuple[float, dict] | None = None
+POOL_CACHE: dict[tuple, tuple[tuple, list[dict]]] = {}
+POOL_CACHE_LOCK = threading.Lock()
 
 
 def _read_rag_status() -> dict:
@@ -991,9 +994,32 @@ def _list_exams() -> list[dict]:
 
 def _list_courses() -> list[dict]:
     config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
-    return [{"id": course_id, "name": profile.get("nome", course_id),
-             "subjects": list(profile.get("pesos", {}))}
-            for course_id, profile in config["cursos"].items()]
+    courses = []
+    db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        pools = {}
+        for course_id in config["cursos"]:
+            try:
+                # Reaproveita o cache do pool dos relatórios (invalidado quando as fontes mudam).
+                pools[course_id] = _reports_pool(db, config, course_id)
+            except (OSError, ValueError):
+                pools[course_id] = []
+    finally:
+        db.close()
+    for course_id, profile in config["cursos"].items():
+        summary = diagnostics.course_weight_summary(profile, pools[course_id])
+        courses.append({"id": course_id, "name": profile.get("nome", course_id),
+                        "subjects": list(profile.get("pesos", {})),
+                        "weights": summary["weights"], "nonAssessable": summary["non_assessable"],
+                        "formula": summary["formula"]})
+    return courses
+
+
+def _reject_exam_attempt(db, attempt_id: str, action: str) -> None:
+    """Provas completas (mode='exam') são tentativas, mas têm rotas próprias."""
+    row = db.execute("SELECT mode FROM attempts WHERE id=?", (attempt_id,)).fetchone()
+    if row is not None and row["mode"] == "exam":
+        raise ValueError(f"esta tentativa é uma prova completa; use /api/exam-sessions/{attempt_id}/{action}")
 
 
 def _diagnostic_payload(db, attempt_id: str) -> dict:
@@ -1009,6 +1035,8 @@ def _diagnostic_payload(db, attempt_id: str) -> dict:
                           "errorReason": row["error_reason"], "answered": row["answered_at"] is not None})
     return {
         "id": attempt["id"], "course": attempt["course_name"], "status": attempt["status"],
+        "mode": attempt.get("mode") or "static",
+        "done": not any(item["answered"] is False for item in questions),
         "requested": attempt["requested_count"], "total": attempt["actual_count"],
         "createdAt": attempt["created_at"], "metrics": attempt.get("metrics"),
         "analysis": attempt.get("analysis"), "analysisError": attempt.get("analysis_error"),
@@ -1155,6 +1183,43 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
                 "classificationError": str(exc), "output": str(extracted_path.relative_to(SERVICE_ROOT))}
 
 
+def _pool_signature(db) -> tuple:
+    """Assinatura barata das fontes do pool: JSONs, revisões e gabaritos importados."""
+    files = sorted(list(DEFAULT_QUESTIONS_DIR.rglob("questoes.classificado.json"))
+                   + list(DEFAULT_QUESTIONS_DIR.rglob("revisao.json")))
+    stamps = []
+    for path in files:
+        try:
+            stamps.append((str(path), path.stat().st_mtime_ns))
+        except OSError:
+            continue
+    keys = tuple(db.execute("SELECT COUNT(*), COALESCE(MAX(imported_at), ''), COALESCE(SUM(is_annulled), 0), "
+                            "COALESCE(SUM(LENGTH(answer)), 0) FROM answer_keys").fetchone())
+    return tuple(stamps) + keys
+
+
+def _reports_pool(db, config: dict, course_id: str) -> list[dict]:
+    """Pool elegível do curso para relatórios/provas; cache por processo enquanto as fontes não mudam."""
+    if course_id not in (config.get("cursos") or {}):
+        raise reports.NotFound(f"curso não configurado: {course_id}")
+    subjects = list(diagnostics.course_profile(config, course_id)["pesos"])
+    key = (str(DEFAULT_QUESTIONS_DIR), str(DEFAULT_DIAGNOSTICS_DB), tuple(subjects))
+    signature = _pool_signature(db)
+    with POOL_CACHE_LOCK:
+        cached = POOL_CACHE.get(key)
+        if cached and cached[0] == signature:
+            return cached[1]
+    pool, _ = diagnostics.load_question_pool(DEFAULT_QUESTIONS_DIR, db, subjects)
+    with POOL_CACHE_LOCK:
+        POOL_CACHE[key] = (signature, pool)
+    return pool
+
+
+def _report_course_id(query: dict, body: dict | None = None) -> str:
+    value = (body or {}).get("courseId") or (query.get("courseId") or [""])[0]
+    return str(value or reports.DEFAULT_COURSE_ID)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "StudAI-Local/1.0"
 
@@ -1199,7 +1264,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 return self._static("index.html")
-            if path in ("/app.js", "/styles.css"):
+            if path in ("/app.js", "/reports.js", "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})
@@ -1220,9 +1285,28 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/diagnostics":
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
-                    rows = db.execute("SELECT id,course_name,status,requested_count,actual_count,created_at "
-                                      "FROM attempts ORDER BY created_at DESC").fetchall()
+                    rows = db.execute("SELECT id,course_name,status,requested_count,actual_count,created_at,mode "
+                                      "FROM attempts WHERE mode!='exam' ORDER BY created_at DESC").fetchall()
                     return self._json(200, [dict(row) for row in rows])
+                finally:
+                    db.close()
+            if path == "/api/reports/overview":
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, reports.overview(db, config, course_id,
+                                                            _reports_pool(db, config, course_id)))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/reports/nodes/([^/]+)", path)
+            if match:
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, reports.node_detail(db, config, course_id, match.group(1),
+                                                               _reports_pool(db, config, course_id)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/jobs/([a-f0-9]+)", path)
@@ -1369,6 +1453,39 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
         try:
+            match = re.fullmatch(r"/api/exams/([^/]+)/sessions", path)
+            if match:
+                body = self._read_json()
+                summary, _ = _find_exam(match.group(1))
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id({}, body)
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(201, reports.start_exam_session(
+                        db, config, course_id, _reports_pool(db, config, course_id), summary["id"],
+                        exam_name=summary.get("name")))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/exam-sessions/([^/]+)/answers", path)
+            if match:
+                body = self._read_json()
+                try:
+                    ordinal = int(body.get("ordinal"))
+                except (TypeError, ValueError):
+                    raise ValueError("informe ordinal como número inteiro") from None
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, reports.answer_exam_question(
+                        db, match.group(1), ordinal, body.get("answer"), body.get("reason")))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/exam-sessions/([^/]+)/finish", path)
+            if match:
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, reports.finish_exam_session(db, match.group(1)))
+                finally:
+                    db.close()
             bulk_match = re.fullmatch(r"/api/exams/([^/]+)/reviews/bulk", path)
             if bulk_match:
                 numbers = self._read_json().get("numbers")
@@ -1530,9 +1647,14 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/diagnostics":
                 body = self._read_json()
                 course_id = str(body.get("courseId") or "eng-comp-sao-carlos")
-                total = int(body.get("total") or 51)
-                if not 1 <= total <= 100:
-                    raise ValueError("total deve estar entre 1 e 100 questões")
+                mode = str(body.get("mode") or "adaptive")
+                if mode not in ("adaptive", "static"):
+                    raise ValueError("mode deve ser adaptive ou static")
+                total = int(body.get("total") or (diagnostics.DEFAULT_ADAPTIVE_TOTAL if mode == "adaptive"
+                                                  else diagnostics.DEFAULT_STATIC_TOTAL))
+                limit = diagnostics.MAX_ADAPTIVE_TOTAL if mode == "adaptive" else 100
+                if not 1 <= total <= limit:
+                    raise ValueError(f"total deve estar entre 1 e {limit} questões")
                 seed = int(body["seed"]) if body.get("seed") is not None else secrets.randbits(63)
 
                 def create(cancelled, current_job):
@@ -1546,7 +1668,7 @@ class Handler(BaseHTTPRequestHandler):
                             raise ValueError("não há questões classificadas com gabarito para este curso")
                         result = diagnostics.create_attempt(
                             db, config, course_id, pool, total=total, seed=seed,
-                            provider=_provider(body), excluded=excluded)
+                            provider=_provider(body), excluded=excluded, mode=mode)
                         result["seed"] = seed
                         return result
                     finally:
@@ -1563,6 +1685,7 @@ class Handler(BaseHTTPRequestHandler):
                 reason = body.get("reason")
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
+                    _reject_exam_attempt(db, attempt_id, "answers")
                     row = db.execute("SELECT correct_answer FROM attempt_questions "
                                      "WHERE attempt_id=? AND ordinal=?", (attempt_id, ordinal)).fetchone()
                     if row is None:
@@ -1576,6 +1699,11 @@ class Handler(BaseHTTPRequestHandler):
             if match:
                 body = self._read_json()
                 attempt_id = match.group(1)
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    _reject_exam_attempt(db, attempt_id, "finish")
+                finally:
+                    db.close()
 
                 def finalize(cancelled, current_job):
                     db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
@@ -1596,13 +1724,33 @@ class Handler(BaseHTTPRequestHandler):
             self._json(500, {"error": str(exc)})
 
 
+def configure_paths(*, diagnostics_db: Path | None = None, questions_dir: Path | None = None,
+                    course_config: Path | None = None) -> None:
+    """Sobrescreve os caminhos padrão do processo (testes locais com bancos descartáveis)."""
+    global DEFAULT_DIAGNOSTICS_DB, DEFAULT_QUESTIONS_DIR, PROCESSED_ROOT, DEFAULT_COURSE_CONFIG
+    if diagnostics_db is not None:
+        DEFAULT_DIAGNOSTICS_DB = Path(diagnostics_db).expanduser().resolve()
+    if questions_dir is not None:
+        DEFAULT_QUESTIONS_DIR = PROCESSED_ROOT = Path(questions_dir).expanduser().resolve()
+    if course_config is not None:
+        DEFAULT_COURSE_CONFIG = Path(course_config).expanduser().resolve()
+
+
 def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1", help="endereço local de desenvolvimento")
     parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--diagnostics-db", type=Path, default=None,
+                        help=f"banco SQLite do diagnóstico (padrão: {DEFAULT_DIAGNOSTICS_DB})")
+    parser.add_argument("--questions-dir", type=Path, default=None,
+                        help=f"provas processadas (padrão: {DEFAULT_QUESTIONS_DIR})")
+    parser.add_argument("--course-config", type=Path, default=None,
+                        help=f"configuração de cursos (padrão: {DEFAULT_COURSE_CONFIG})")
     args = parser.parse_args(argv)
+    configure_paths(diagnostics_db=args.diagnostics_db, questions_dir=args.questions_dir,
+                    course_config=args.course_config)
     load_dotenv(SERVICE_ROOT / ".env")
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"StudAI: http://{args.host}:{args.port}")
