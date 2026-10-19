@@ -89,7 +89,7 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
   - alternativas `a)` (até 2017), número colado ao texto em negrito/corpo maior (`07 Na…`, `V.01 – …`), 100 questões, páginas carta e ampliadas, capa/contracapa e folha de gabarito ignoradas, número de página e título de matéria fora do texto, caixa "Dados:" como nota
   - ordem de leitura: faixa de página inteira entre colunas (2015, 2017), blocos reordenados pelo número (2005 Q45), linhas largas picadas no PDF; números desenhados como imagens de dígitos (2018)
   - 2021: o texto inteiro é fonte Type3 em bitmap sem Unicode; saem as 90 questões sem texto (o lixo é descartado) e caem em `enunciado_vazio`, com o recorte da página para revisão
-- [ ] OCR para as provas sem camada de texto legível: 2021 (bitmap), 1997 e 2002 dia 2 (sem texto/fonte quebrada). Não há OCR instalado; decidir entre Tesseract (`por`) e modelo de visão
+- [x] OCR (Tesseract `por`, injetado em `parse`/`extract_pdf`) só nas páginas sem texto legível: 2021 (bitmap), 1996/1997 (escaneadas) e 2002 dia 2 (fonte quebrada). 2021 sai com 90 questões, ~73 com A–E completas; questões de fórmula/tabela ficam com `texto_ocr`/`alternativas_incompletas` para revisão. 1997 e 2002 dia 2 ainda não conferidos
 
 ## Fase 4 — Reorganização e otimização (código + leituras/análises de IA)
 
@@ -189,3 +189,4 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-19 | Claude / `claude/topic-progress-visualization-bfe261` | Fase 8 adicionada: modo foco em tela cheia com navegação lateral entre questões | — |
 | 2026-10-19 | Claude / `claude/knowledge-map-depth-progress-5b2ceb` | Fase 7: profundidade por nó (`depth.py`), "Hoje" de cima para baixo, API e tela "Mapa" em grafo | 0708b1d |
 | 2026-10-19 | Claude / `claude/fuvest-extrator-2021-741e19` | Fase 3: extrator lê os formatos FUVEST de 1998–2021 (alternativas `a)`, número inline, página inteira, dígitos em imagem); 2021 em bitmap fica para OCR | b7b922b |
+| 2026-10-19 | Claude / `claude/peaceful-robinson-bc3448` | Fase 3: OCR (Tesseract) nas provas sem texto legível; 2021 com 90 questões | — |

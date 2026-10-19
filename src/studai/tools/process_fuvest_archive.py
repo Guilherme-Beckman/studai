@@ -11,6 +11,7 @@ from pathlib import Path
 from studai.features.answer_keys.service import import_answer_key, parse_answer_key_pdf
 from studai.features.diagnostics.service import connect_db
 from studai.features.questions.extractor import extract_pdf
+from studai.integrations.ocr import default_ocr
 from studai.settings import DEFAULT_DIAGNOSTICS_DB, SERVICE_ROOT
 
 FIRST_YEAR, LAST_YEAR = 2017, 2026
@@ -96,13 +97,14 @@ def process_archive(*, root: Path, output: Path, report_path: Path,
     review_rows = []
     db_path.parent.mkdir(parents=True, exist_ok=True)
     db = connect_db(db_path)
+    ocr = default_ocr()      # 2021 só tem texto em bitmap
     try:
         for year in range(FIRST_YEAR, LAST_YEAR + 1):
             try:
                 exam, key, version = select_exam_and_key(root, year)
                 exam_id = f"fuvest-{year}-1a-{version}"
                 destination = output / str(year) / exam.stem
-                questions_path = extract_pdf(exam, destination, dpi=dpi, full_crops=False)
+                questions_path = extract_pdf(exam, destination, dpi=dpi, full_crops=False, ocr=ocr)
                 data = json.loads(questions_path.read_text(encoding="utf-8"))
                 if int(data.get("total_questoes", 0)) != 90:
                     raise ValueError(f"extração incompleta: {data.get('total_questoes', 0)}/90 questões; "
