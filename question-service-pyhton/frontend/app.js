@@ -3,6 +3,7 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 let exams = [];
 let courses = [];
 let currentDiagnostic = null;
+const diagnosticDone = new Map();
 let currentExamQuiz = null;
 let currentExamReview = null;
 let currentReprocessPreview = null;
@@ -105,6 +106,7 @@ function showView(name) {
   $$(".nav-item").forEach(button => button.classList.toggle("active", button.dataset.view === name));
   if (name === "exams") refreshExams();
   if (name === "diagnostics") refreshDiagnostics();
+  if (name === "reports") window.refreshReports?.();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -750,6 +752,102 @@ async function retryReviewIndex(examId) {
   } catch (error) { toast(error.message, true); }
 }
 
+// ---- Persistência do "Responder prova" (attempts.mode = 'exam'); sessionStorage segue como fallback offline.
+const EXAM_SESSION_PREFIX = "studai-exam-session:";
+const EXAM_REASONS = [["unknown_content", "Não sabia o conteúdo"], ["calc_error", "Erro de cálculo"], ["misread", "Interpretação"]];
+
+function examSessionCourseId() {
+  // Mesmo curso do formulário de diagnóstico (padrão: Eng. de Computação São Carlos).
+  return $("#course-select")?.value || window.studaiReports?.state?.courseId || "eng-comp-sao-carlos";
+}
+
+function saveExamSession(quiz) {
+  if (!quiz?.session) return;
+  try { sessionStorage.setItem(`${EXAM_SESSION_PREFIX}${quiz.examId}`, JSON.stringify(quiz.session)); } catch { /* armazenamento indisponível */ }
+}
+
+async function startExamSession(examId, answers = {}, { fresh = false } = {}) {
+  const key = `${EXAM_SESSION_PREFIX}${examId}`;
+  let stored = null;
+  try { stored = JSON.parse(sessionStorage.getItem(key) || "null"); } catch { stored = null; }
+  // Retoma a sessão desta aba quando ainda há respostas locais em andamento.
+  if (!fresh && stored?.id && !stored.finished && !stored.offline && Object.keys(answers).length) return stored;
+  try {
+    const created = await api(`/api/exams/${encodeURIComponent(examId)}/sessions`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseId: examSessionCourseId() }),
+    });
+    const ordinals = Object.fromEntries((created.questions || []).map(item => [String(item.number), item.ordinal]));
+    const courseId = examSessionCourseId();
+    const session = { id: created.id, courseId, courseName: courses.find(course => course.id === courseId)?.name || courseId, ordinals, sent: {}, finished: false, offline: false };
+    sessionStorage.setItem(key, JSON.stringify(session));
+    return session;
+  } catch (error) {
+    sessionStorage.removeItem(key);
+    toast(`Não foi possível abrir a sessão no histórico (${error.message}): respostas não serão salvas no histórico.`, true);
+    return null;
+  }
+}
+
+function examSessionFailed(quiz, error) {
+  if (!quiz.session || quiz.session.offline) return;
+  quiz.session.offline = true;
+  saveExamSession(quiz);
+  toast(`Falha ao salvar a resposta (${error.message}): respostas não serão salvas no histórico.`, true);
+}
+
+async function persistExamAnswer(quiz, number, answer, reason = null) {
+  const session = quiz?.session;
+  if (!session || session.offline || session.finished) return;
+  const ordinal = session.ordinals[String(number)];
+  if (ordinal == null || session.sent[String(number)]) return; // questão fora do pool elegível: fica só local
+  session.sent[String(number)] = true;
+  saveExamSession(quiz);
+  try {
+    await api(`/api/exam-sessions/${encodeURIComponent(session.id)}/answers`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reason ? { ordinal, answer, reason } : { ordinal, answer }),
+    });
+  } catch (error) {
+    if (/já respondida/i.test(error.message)) return;
+    delete session.sent[String(number)];
+    examSessionFailed(quiz, error);
+  }
+}
+
+function flushExamReason(quiz) {
+  const pending = quiz?.pendingReason;
+  if (!pending) return Promise.resolve();
+  quiz.pendingReason = null;
+  return persistExamAnswer(quiz, pending.number, pending.answer);
+}
+
+async function finishExamSession(quiz) {
+  const session = quiz?.session;
+  if (!session || session.offline || session.finished || quiz.finishing) return;
+  quiz.finishing = true;
+  try {
+    await flushExamReason(quiz);
+    if (!Object.keys(session.sent).length || session.offline) return;
+    await api(`/api/exam-sessions/${encodeURIComponent(session.id)}/finish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    session.finished = true;
+    saveExamSession(quiz);
+    toast("Prova salva no histórico. Veja sua evolução em Relatórios.");
+    if (currentExamQuiz === quiz) renderExamQuiz();
+  } catch (error) {
+    examSessionFailed(quiz, error);
+  } finally {
+    quiz.finishing = false;
+  }
+}
+
+function examSessionStatus(quiz) {
+  const session = quiz.session;
+  if (!session || session.offline) return `<span class="exam-session-status offline" title="As respostas ficam apenas nesta aba do navegador.">Somente neste navegador</span>`;
+  const title = session.courseName ? ` title="Curso do histórico: ${escapeHtml(session.courseName)}"` : "";
+  if (session.finished) return `<span class="exam-session-status saved"${title}>Salva no histórico</span>`;
+  return `<span class="exam-session-status online"${title}>Salvando no histórico</span>`;
+}
+
 async function openExamQuiz(examId) {
   const workspace = $("#exam-quiz-workspace");
   workspace.classList.remove("hidden");
@@ -760,7 +858,8 @@ async function openExamQuiz(examId) {
     const storageKey = `studai-exam-answers:${examId}`;
     let answers = {};
     try { answers = JSON.parse(sessionStorage.getItem(storageKey) || "{}"); } catch { answers = {}; }
-    currentExamQuiz = { ...data, questions: data.questions.filter(question => !["unusable", "bad_crop"].includes(question.review?.status)), index: 0, selected: null, answers, storageKey };
+    currentExamQuiz = { ...data, examId, questions: data.questions.filter(question => !["unusable", "bad_crop"].includes(question.review?.status)), index: 0, selected: null, answers, storageKey, session: null, pendingReason: null };
+    currentExamQuiz.session = await startExamSession(examId, answers);
     renderExamQuiz();
     workspace.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
@@ -789,7 +888,9 @@ function renderExamQuiz() {
       else { totals.graded++; if (response === key.answer) totals.correct++; }
       return totals;
     }, { graded: 0, correct: 0, annulled: 0 });
-    workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA CONCLUÍDA</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões respondidas nesta sessão</div></div><button class="blank-button" data-exam-close>Fechar</button></div><div class="exam-final-summary"><strong>${scored.graded ? `${scored.correct} de ${scored.graded} acertos` : "Respostas registradas"}</strong><p>${scored.annulled ? `${scored.annulled} questão(ões) anulada(s). ` : ""}${scored.graded < questions.length - scored.annulled ? "Algumas questões ainda não têm gabarito importado." : ""}</p></div><button class="button button-primary" data-exam-restart>Responder novamente</button>`;
+    if (quiz.session && !quiz.session.finished && !quiz.session.offline) finishExamSession(quiz);
+    const savedNote = quiz.session?.finished ? `<p>Respostas salvas no histórico. <button class="text-button" data-go-reports>Ver relatórios →</button></p>` : (!quiz.session || quiz.session.offline ? "<p>As respostas desta sessão não foram salvas no histórico.</p>" : "<p>Salvando respostas no histórico…</p>");
+    workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA CONCLUÍDA</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões respondidas nesta sessão · ${examSessionStatus(quiz)}</div></div><button class="blank-button" data-exam-close>Fechar</button></div><div class="exam-final-summary"><strong>${scored.graded ? `${scored.correct} de ${scored.graded} acertos` : "Respostas registradas"}</strong><p>${scored.annulled ? `${scored.annulled} questão(ões) anulada(s). ` : ""}${scored.graded < questions.length - scored.annulled ? "Algumas questões ainda não têm gabarito importado." : ""}</p>${savedNote}</div><button class="button button-primary" data-exam-restart>Responder novamente</button>`;
     bindExamQuizActions();
     return;
   }
@@ -809,13 +910,15 @@ function renderExamQuiz() {
   const outcome = submitted && key ? (key.annulled || key.answer === "*"
     ? `<div class="exam-answer-feedback annulled">Questão anulada no gabarito.</div>`
     : `<div class="exam-answer-feedback ${saved === key.answer ? "correct" : "incorrect"}">${saved === key.answer ? "Resposta correta!" : `Resposta incorreta. Gabarito: ${escapeHtml(key.answer)}.`}</div>`) : (submitted ? `<div class="exam-answer-feedback neutral">Resposta registrada. Ainda não há gabarito importado para esta questão.</div>` : "");
+  const reasonPrompt = quiz.pendingReason && quiz.pendingReason.number === number
+    ? `<div class="exam-reason-prompt" role="group" aria-label="Motivo do erro (opcional)"><span>Por que você errou? <span class="optional">opcional · ajuda o relatório</span></span><div class="exam-reason-options">${EXAM_REASONS.map(([value, label]) => `<button type="button" class="button button-secondary" data-exam-reason="${value}">${label}</button>`).join("")}<button type="button" class="blank-button" data-exam-reason="">Pular</button></div></div>` : "";
   const progress = Math.round(((index + 1) / questions.length) * 100);
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Responda à prova</h2><div class="workspace-meta">Questão ${index + 1} de ${questions.length}${question.pagina ? ` · página ${question.pagina}` : ""}</div></div><button class="blank-button" data-exam-close>Fechar prova</button></div>
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Responda à prova</h2><div class="workspace-meta">Questão ${index + 1} de ${questions.length}${question.pagina ? ` · página ${question.pagina}` : ""} · ${examSessionStatus(quiz)}</div></div><button class="blank-button" data-exam-close>Fechar prova</button></div>
     <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
     ${sharedText ? `<div class="question-body exam-passage"><strong>Texto-base</strong><div>${escapeHtml(sharedText)}</div>${examImageMarkup(exam.id, sharedImages, "passage-image")}</div>` : ""}
     <div class="question-body exam-prompt">${display.showStem ? stemMarkup(question, paths => examImageMarkup(exam.id, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(exam.id, questionImages)}${renderSourceQuestionImage(exam.id, display.sourceImages)}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(exam.id, fullPageImages)}</details>` : ""}</div>
     <div class="exam-options">${options.map(([letter, option]) => { const value = display.showAlternativeText ? (typeof option === "string" ? option : (option?.texto || "")) : (typeof option === "object" && option?.figuras?.length ? "" : "Alternativa apresentada na imagem da questão"); const images = typeof option === "object" ? option.figuras : []; return `<button type="button" class="exam-option ${selected === letter ? "selected" : ""} ${submitted && key && key.answer === letter ? "answer-correct" : ""} ${submitted && saved === letter && key && key.answer !== letter && !key.annulled ? "answer-wrong" : ""}" data-exam-option="${escapeHtml(letter)}" ${submitted ? "disabled" : ""}><span class="exam-option-letter">${escapeHtml(letter)}</span><span class="exam-option-content">${escapeHtml(value)}${examImageMarkup(exam.id, images, "option-image")}</span></button>`; }).join("")}</div>
-    ${outcome}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 ? "disabled" : ""}>← Anterior</button><div>${submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button class="button button-primary" data-exam-submit ${selected ? "" : "disabled"}>Responder</button>`}</div></div>`;
+    ${outcome}${reasonPrompt}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 ? "disabled" : ""}>← Anterior</button><div>${submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button class="button button-primary" data-exam-submit ${selected ? "" : "disabled"}>Responder</button>`}</div></div>`;
   bindExamQuizActions();
 }
 
@@ -829,21 +932,43 @@ function bindExamQuizActions() {
   $("[data-exam-submit]", workspace)?.addEventListener("click", () => {
     const quiz = currentExamQuiz;
     if (!quiz?.selected) return;
-    quiz.answers[String(quiz.questions[quiz.index].numero)] = quiz.selected;
+    flushExamReason(quiz);
+    const number = String(quiz.questions[quiz.index].numero);
+    const answer = quiz.selected;
+    quiz.answers[number] = answer;
     sessionStorage.setItem(quiz.storageKey, JSON.stringify(quiz.answers));
     quiz.selected = null;
+    const key = (quiz.answerKeys || {})[number];
+    const wrong = key && !key.annulled && key.answer !== "*" && key.answer !== answer;
+    const canSave = quiz.session && !quiz.session.offline && quiz.session.ordinals[number] != null;
+    // Errou: o motivo é opcional; a resposta só é enviada ao escolher (ou pular) para gravar o motivo junto.
+    if (wrong && canSave) quiz.pendingReason = { number, answer };
+    else persistExamAnswer(quiz, number, answer);
     renderExamQuiz();
   });
-  $("[data-exam-next]", workspace)?.addEventListener("click", () => { currentExamQuiz.index++; currentExamQuiz.selected = null; renderExamQuiz(); });
-  $("[data-exam-prev]", workspace)?.addEventListener("click", () => { currentExamQuiz.index--; currentExamQuiz.selected = null; renderExamQuiz(); });
+  $$("[data-exam-reason]", workspace).forEach(button => button.addEventListener("click", () => {
+    const quiz = currentExamQuiz;
+    const pending = quiz?.pendingReason;
+    if (!pending) return;
+    quiz.pendingReason = null;
+    persistExamAnswer(quiz, pending.number, pending.answer, button.dataset.examReason || null);
+    if (button.dataset.examReason) toast("Motivo registrado.");
+    renderExamQuiz();
+  }));
+  $("[data-exam-next]", workspace)?.addEventListener("click", () => { flushExamReason(currentExamQuiz); currentExamQuiz.index++; currentExamQuiz.selected = null; renderExamQuiz(); });
+  $("[data-exam-prev]", workspace)?.addEventListener("click", () => { flushExamReason(currentExamQuiz); currentExamQuiz.index--; currentExamQuiz.selected = null; renderExamQuiz(); });
   $("[data-exam-close]", workspace)?.addEventListener("click", () => {
+    flushExamReason(currentExamQuiz);
     workspace.classList.add("hidden");
     $("#exam-question-workspace").classList.remove("hidden");
   });
-  $("[data-exam-restart]", workspace)?.addEventListener("click", () => {
+  $("[data-go-reports]", workspace)?.addEventListener("click", () => showView("reports"));
+  $("[data-exam-restart]", workspace)?.addEventListener("click", async () => {
     const quiz = currentExamQuiz;
+    await flushExamReason(quiz);
     sessionStorage.removeItem(quiz.storageKey);
-    quiz.answers = {}; quiz.index = 0; quiz.selected = null;
+    quiz.answers = {}; quiz.index = 0; quiz.selected = null; quiz.pendingReason = null;
+    quiz.session = await startExamSession(quiz.examId, {}, { fresh: true });
     renderExamQuiz();
   });
 }
@@ -1115,13 +1240,17 @@ async function createDiagnostic(event) {
   status.textContent = "Preparando diagnóstico…";
   const config = providerConfig("diagnostic");
   activeProvider = config;
-  const body = { ...config, courseId: $("#course-select").value, total: Number($("#diagnostic-total").value) };
+  const mode = $("#diagnostic-mode")?.value || "adaptive";
+  const body = { ...config, mode, courseId: $("#course-select").value, total: Number($("#diagnostic-total").value) };
   if ($("#diagnostic-seed").value) body.seed = Number($("#diagnostic-seed").value);
   try {
     const { jobId } = await api("/api/diagnostics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const result = await pollJob(jobId, job => { status.textContent = job.message; });
     sessionStorage.setItem(`studai-provider-${result.id}`, JSON.stringify(config));
-    status.textContent = `Diagnóstico criado com ${result.selected} questões. Seed: ${result.seed}.`;
+    sessionStorage.setItem(`studai-diagnostic-mode-${result.id}`, result.mode || mode);
+    status.textContent = result.mode === "adaptive" || mode === "adaptive"
+      ? `Diagnóstico adaptativo criado (até ${result.requested ?? body.total} questões). Seed: ${result.seed}.`
+      : `Diagnóstico criado com ${result.selected} questões. Seed: ${result.seed}.`;
     await refreshDiagnostics();
     await openDiagnostic(result.id);
     $("#diagnostic-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1139,7 +1268,8 @@ function renderMetrics(metrics) {
   const rows = Object.entries(metrics.subjects || {}).map(([subject, row]) => `<tr><td>${escapeHtml(subject)}</td><td>${row.attempts}</td><td>${row.correct}</td><td>${row.accuracy == null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>${row.status === "assessed" ? "Avaliada" : "Poucos dados"}</td></tr>`).join("");
   const contentRows = Object.values(metrics.contents || {}).sort((a, b) => a.path.localeCompare(b.path, "pt-BR")).map(row => `<tr><td>${escapeHtml(row.path)}</td><td>${row.attempts}</td><td>${row.correct}</td><td>${row.accuracy == null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>${row.status === "assessed" ? "Avaliado" : "Poucos dados"}</td></tr>`).join("");
   const contentTable = contentRows ? `<h3>Desempenho por conteúdo</h3><p class="muted">As áreas da árvore somam as questões relacionadas aos conteúdos descendentes.</p><table class="subject-table"><thead><tr><th>Matéria e caminho do conteúdo</th><th>Tentativas</th><th>Acertos</th><th>Desempenho</th><th>Situação</th></tr></thead><tbody>${contentRows}</tbody></table>` : "";
-  return `<div class="result-grid"><div class="metric-card"><span>Acertos</span><strong>${metrics.correct}/${metrics.answered}</strong></div><div class="metric-card"><span>Desempenho geral</span><strong>${accuracy}</strong></div><div class="metric-card"><span>Questões</span><strong>${metrics.total_questions}</strong></div><div class="metric-card"><span>Em branco/incorretas</span><strong>${metrics.incorrect_or_blank}</strong></div></div><table class="subject-table"><thead><tr><th>Matéria</th><th>Tentativas</th><th>Acertos</th><th>Desempenho</th><th>Situação</th></tr></thead><tbody>${rows}</tbody></table>${contentTable}`;
+  const report = metrics.report && window.renderStudyReport ? window.renderStudyReport(metrics.report, { title: "Pontos fortes, lacunas e prioridades" }) : "";
+  return `${report}<div class="result-grid"><div class="metric-card"><span>Acertos</span><strong>${metrics.correct}/${metrics.answered}</strong></div><div class="metric-card"><span>Desempenho geral</span><strong>${accuracy}</strong></div><div class="metric-card"><span>Questões</span><strong>${metrics.total_questions}</strong></div><div class="metric-card"><span>Em branco/incorretas</span><strong>${metrics.incorrect_or_blank}</strong></div></div><table class="subject-table"><thead><tr><th>Matéria</th><th>Tentativas</th><th>Acertos</th><th>Desempenho</th><th>Situação</th></tr></thead><tbody>${rows}</tbody></table>${contentTable}`;
 }
 
 function renderAnalysis(analysis, error) {
@@ -1148,29 +1278,46 @@ function renderAnalysis(analysis, error) {
   return `<div class="analysis-card"><h3>Plano inicial de estudos</h3><p>${escapeHtml(analysis.summary)}</p>${steps}</div>`;
 }
 
+function diagnosticMode(data) {
+  return data.mode || sessionStorage.getItem(`studai-diagnostic-mode-${data.id}`) || "static";
+}
+
 function renderDiagnostic(workspace, data) {
   currentDiagnostic = data;
   workspace.classList.remove("hidden");
+  const adaptive = diagnosticMode(data) === "adaptive";
   const answered = data.questions.filter(question => question.answered).length;
-  const progress = data.total ? Math.round(answered / data.total * 100) : 0;
+  const pending = data.questions.find(question => !question.answered);
+  // Adaptativo: o backend acrescenta a próxima questão a cada resposta e sinaliza `done`.
+  const finished = adaptive ? (data.done === true || diagnosticDone.has(data.id) || !pending) : !pending;
+  const progress = adaptive
+    ? (data.metrics || finished ? 100 : Math.min(95, Math.round(answered / Math.max(1, data.requested || data.total || 1) * 100)))
+    : (data.total ? Math.round(answered / data.total * 100) : 0);
   let body = "";
   if (data.metrics) {
     body = `${renderMetrics(data.metrics)}${renderAnalysis(data.analysis, data.analysisError)}`;
-  } else if (answered < data.questions.length) {
-    const item = data.questions.find(question => !question.answered);
+  } else if (pending && !(adaptive && finished)) {
+    const item = pending;
     const question = item.question || {};
+    const position = adaptive ? `Questão ${answered + 1} · adaptativo` : `Questão ${item.ordinal} de ${data.total}`;
     const alternatives = Object.entries(question.alternativas || {}).sort(([a], [b]) => a.localeCompare(b)).map(([letter, alternative]) => `<button class="option-button" data-answer="${escapeHtml(letter)}"><span class="option-letter">${escapeHtml(letter)}</span><span>${escapeHtml(alternative.texto || "Alternativa apresentada como figura")}</span></button>`).join("");
-    body = `<div class="question-top"><span class="question-subject">${escapeHtml(item.subject)} · ${escapeHtml(item.topic)}</span><span>Questão ${item.ordinal} de ${data.total}</span></div>${question._texto_compartilhado ? `<div class="question-body"><b>Texto-base</b><br>${escapeHtml(question._texto_compartilhado)}</div>` : ""}<div class="question-body">${escapeHtml(question.enunciado || "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}</div><div class="options-list">${alternatives}</div><div class="question-actions"><button class="blank-button" id="answer-blank">Deixar em branco</button><span class="muted">Sua resposta fica salva ao selecionar.</span></div><div id="reason-panel" class="reason-row hidden"><label>Qual foi o motivo principal?<select id="answer-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="confirm-reason">Registrar resposta</button></div><div id="answer-feedback"></div>`;
+    body = `<div class="question-top"><span class="question-subject">${escapeHtml(item.subject)} · ${escapeHtml(item.topic)}</span><span>${position}</span></div>${question._texto_compartilhado ? `<div class="question-body"><b>Texto-base</b><br>${escapeHtml(question._texto_compartilhado)}</div>` : ""}<div class="question-body">${escapeHtml(question.enunciado || "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}</div><div class="options-list">${alternatives}</div><div class="question-actions"><button class="blank-button" id="answer-blank">Deixar em branco</button><span class="muted">Sua resposta fica salva ao selecionar.</span></div><div id="reason-panel" class="reason-row hidden"><label>Qual foi o motivo principal?<select id="answer-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="confirm-reason">Registrar resposta</button></div><div id="answer-feedback"></div>`;
   } else {
-    body = `<div class="inline-result">Todas as respostas foram registradas. Gere a análise para ver suas métricas e prioridades.</div><button class="button button-primary" id="finalize-diagnostic">Concluir e analisar <span>→</span></button>`;
+    const stop = adaptive ? `O diagnóstico adaptativo terminou após ${answered} questões${data.stopReason || diagnosticDone.get(data.id) ? `: ${escapeHtml(data.stopReason || diagnosticDone.get(data.id))}` : ""}. ` : "Todas as respostas foram registradas. ";
+    body = `<div class="inline-result">${stop}Gere a análise para ver suas métricas e prioridades.</div><button class="button button-primary" id="finalize-diagnostic">Concluir e analisar <span>→</span></button>`;
   }
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">TENTATIVA ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${answered} de ${data.total} respondidas · ${escapeHtml(data.status)}</div></div><button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
+  const meta = adaptive ? `${answered} respondida(s) · adaptativo${data.requested ? ` · até ${data.requested}` : ""}` : `${answered} de ${data.total} respondidas`;
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">TENTATIVA ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${meta} · ${escapeHtml(data.status)}</div></div><button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
   $("#close-diagnostic", workspace).addEventListener("click", () => { workspace.classList.add("hidden"); currentDiagnostic = null; });
-  if (data.questions.some(question => !question.answered) && !data.metrics) {
-    $$("[data-answer]", workspace).forEach(button => button.addEventListener("click", () => submitAnswer(data.id, data.questions.find(question => !question.answered), button.dataset.answer)));
-    $("#answer-blank", workspace).addEventListener("click", () => submitAnswer(data.id, data.questions.find(question => !question.answered), null));
+  if (pending && !data.metrics && !(adaptive && finished)) {
+    $$("[data-answer]", workspace).forEach(button => button.addEventListener("click", () => submitAnswer(data.id, pending, button.dataset.answer)));
+    $("#answer-blank", workspace).addEventListener("click", () => submitAnswer(data.id, pending, null));
   }
-  if (answered === data.questions.length && !data.metrics) $("#finalize-diagnostic", workspace).addEventListener("click", () => finalizeDiagnostic(data.id));
+  $("#finalize-diagnostic", workspace)?.addEventListener("click", () => finalizeDiagnostic(data.id));
+}
+
+function stopReasonLabel(reason) {
+  return ({ budget: "orçamento de questões atingido", budget_exhausted: "orçamento de questões atingido", converged: "domínio estimado com confiança suficiente", confident: "domínio estimado com confiança suficiente", pool_exhausted: "não há mais questões elegíveis", exhausted: "não há mais questões elegíveis" })[reason] || String(reason).replace(/_/g, " ");
 }
 
 async function openDiagnostic(id) {
@@ -1198,6 +1345,8 @@ async function submitAnswer(id, item, answer, reason = null) {
       };
       return;
     }
+    // Adaptativo: {next_ordinal, done, stop_reason?}; relemos a tentativa para mostrar a próxima questão.
+    if (result.done === true) diagnosticDone.set(id, result.stop_reason ? stopReasonLabel(result.stop_reason) : "");
     feedback.innerHTML = `<div class="inline-result">${result.answer == null ? "Resposta em branco registrada." : result.correct ? "Resposta correta registrada." : "Resposta registrada."}</div>`;
     setTimeout(() => openDiagnostic(id), 350);
   } catch (error) { toast(error.message, true); }
@@ -1252,6 +1401,16 @@ function bindEvents() {
     if (file) { $("#key-pdf-file").files = event.dataTransfer.files; $("#key-file-label").textContent = file.name; }
   });
   $("#diagnostic-provider").addEventListener("change", () => toggleProviderFields("diagnostic"));
+  $("#diagnostic-mode")?.addEventListener("change", event => {
+    const adaptive = event.target.value === "adaptive";
+    const total = $("#diagnostic-total");
+    total.max = adaptive ? "51" : "100";
+    total.value = adaptive ? "30" : "51";
+    $("#diagnostic-total-label").textContent = adaptive ? "Máximo de questões" : "Questões";
+    $("#diagnostic-mode-help").textContent = adaptive
+      ? "O adaptativo escolhe a próxima questão pelas suas respostas e respeita o peso de cada matéria no curso."
+      : "O estático sorteia todas as questões de uma vez, distribuídas pelo peso das matérias.";
+  });
 }
 
 applyTheme(localStorage.getItem("studai-theme") || "light");

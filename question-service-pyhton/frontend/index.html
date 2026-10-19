@@ -18,6 +18,7 @@
       <button class="nav-item" data-view="process"><span>↥</span> Processar prova</button>
       <button class="nav-item" data-view="exams"><span>▤</span> Provas e gabaritos</button>
       <button class="nav-item" data-view="diagnostics"><span>◉</span> Diagnósticos</button>
+      <button class="nav-item" data-view="reports"><span>↗</span> Relatórios</button>
       <div class="sidebar-note"><span class="note-icon">✳</span><div><strong>Modo de teste</strong><p>Use a demonstração offline para experimentar os fluxos sem configurar um modelo.</p></div></div>
       <div class="sidebar-foot">STUDAI <span>·</span> LOCAL</div>
     </aside>
@@ -70,13 +71,19 @@
 
       <section class="view" id="view-diagnostics">
         <div class="page-heading"><div><p class="eyebrow">APRENDIZAGEM</p><h1>Diagnósticos</h1><p class="muted">Crie um simulado com seu acervo e descubra onde concentrar seus estudos.</p></div></div>
-        <div class="two-column diagnostic-layout"><div class="panel form-panel"><div class="panel-heading"><span class="step-number step-violet">01</span><div><h2>Novo diagnóstico</h2><p>Questões elegíveis precisam de classificação e gabarito.</p></div></div><form id="diagnostic-form"><label>Curso<select id="course-select" required></select></label><div class="form-row"><label>Questões<input id="diagnostic-total" type="number" min="1" max="100" value="15"></label><label>Semente <span class="optional">opcional</span><input id="diagnostic-seed" type="number" placeholder="Aleatória"></label></div><label>Provedor de análise<select id="diagnostic-provider" class="provider-select"></select></label><div class="provider-extra hidden" id="diagnostic-provider-extra"><label>Modelo<input id="diagnostic-model" placeholder="qwen3.5:4b"></label><label>URL base<input id="diagnostic-base-url" placeholder="http://localhost:11434"></label></div><button class="button button-primary full-width" type="submit">Criar diagnóstico <span>→</span></button></form><div id="diagnostic-create-status" class="inline-result hidden"></div></div>
+        <div class="two-column diagnostic-layout"><div class="panel form-panel"><div class="panel-heading"><span class="step-number step-violet">01</span><div><h2>Novo diagnóstico</h2><p>Questões elegíveis precisam de classificação e gabarito.</p></div></div><form id="diagnostic-form"><label>Curso<select id="course-select" required></select></label><label>Modo<select id="diagnostic-mode"><option value="adaptive" selected>Adaptativo · para quando o domínio estiver claro</option><option value="static">Estático (51 questões)</option></select></label><p class="help-copy" id="diagnostic-mode-help">O adaptativo escolhe a próxima questão pelas suas respostas e respeita o peso de cada matéria no curso.</p><div class="form-row"><label><span id="diagnostic-total-label">Máximo de questões</span><input id="diagnostic-total" type="number" min="1" max="51" value="30"></label><label>Semente <span class="optional">opcional</span><input id="diagnostic-seed" type="number" placeholder="Aleatória"></label></div><label>Provedor de análise<select id="diagnostic-provider" class="provider-select"></select></label><div class="provider-extra hidden" id="diagnostic-provider-extra"><label>Modelo<input id="diagnostic-model" placeholder="qwen3.5:4b"></label><label>URL base<input id="diagnostic-base-url" placeholder="http://localhost:11434"></label></div><button class="button button-primary full-width" type="submit">Criar diagnóstico <span>→</span></button></form><div id="diagnostic-create-status" class="inline-result hidden"></div></div>
           <div class="panel history-panel"><div class="panel-heading"><span class="step-number step-muted">02</span><div><h2>Histórico</h2><p>Retome uma tentativa ou veja um resultado anterior.</p></div><button class="icon-button" id="refresh-diagnostics" title="Atualizar">↻</button></div><div id="diagnostic-list" class="stack-list"><div class="loading-card">Carregando histórico…</div></div></div></div>
         <div id="diagnostic-workspace" class="panel diagnostic-workspace hidden"></div>
+      </section>
+
+      <section class="view" id="view-reports">
+        <div class="page-heading reports-heading"><div><p class="eyebrow">EVOLUÇÃO</p><h1>Relatórios</h1><p class="muted" id="reports-course-name">Seu domínio estimado por conteúdo, ponderado pelo peso de cada matéria no curso.</p></div><label class="reports-course-picker">Curso<select id="reports-course" aria-label="Curso do relatório"><option value="">Carregando cursos…</option></select></label></div>
+        <div id="reports-root" class="reports-root"><div class="loading-card">Carregando relatórios…</div></div>
       </section>
     </section>
   </main>
   <div id="toast" class="toast" role="status"></div>
   <script src="/app.js" defer></script>
+  <script src="/reports.js" defer></script>
 </body>
 </html>
