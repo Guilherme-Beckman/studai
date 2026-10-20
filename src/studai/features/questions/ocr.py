@@ -271,24 +271,27 @@ def scan_figures(page: pymupdf.Page, text_boxes: list[pymupdf.Rect],
     """
     if not regions:
         return []
-    dpi = 72.0 / INK_CELL * 2                      # 2 px por célula
-    pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
+    pix = page.get_pixmap(dpi=int(72 / INK_CELL * 2), colorspace=pymupdf.csGRAY)   # 2 px por célula
     W, H = pix.width, pix.height
     sx, sy = W / page.rect.width, H / page.rect.height
     samples = pix.samples
     cw, ch = int(page.rect.width / INK_CELL) + 1, int(page.rect.height / INK_CELL) + 1
-    ink = bytearray(cw * ch)
     ox, oy = page.rect.x0, page.rect.y0
-    shrunk = [pymupdf.Rect(r.x0 + 1.5, r.y0 + 1.5, r.x1 - 1.5, r.y1 - 1.5) for r in regions]
+    inside = bytearray(cw * ch)                    # células dentro das faixas escaneadas
+    for r in regions:
+        for cy in range(max(0, int((r.y0 - oy + 1.5) / INK_CELL) + 1), min(ch, int((r.y1 - oy - 1.5) / INK_CELL))):
+            for cx in range(max(0, int((r.x0 - ox + 1.5) / INK_CELL) + 1), min(cw, int((r.x1 - ox - 1.5) / INK_CELL))):
+                inside[cy * cw + cx] = 1
+    ink = bytearray(cw * ch)
+    col_cell = [min(cw - 1, int(px / sx / INK_CELL)) for px in range(W)]
     for py in range(H):
-        y = py / sy
+        base = min(ch - 1, int(py / sy / INK_CELL)) * cw
         row = samples[py * pix.stride: py * pix.stride + W]
-        cy = int(y / INK_CELL)
         for px in range(W):
             if row[px] < INK_DARK:
-                x = px / sx
-                if any(r.x0 <= x + ox <= r.x1 and r.y0 <= y + oy <= r.y1 for r in shrunk):
-                    ink[cy * cw + int(x / INK_CELL)] = 1
+                k = base + col_cell[px]
+                if inside[k]:
+                    ink[k] = 1
     for b in text_boxes:
         for cy in range(max(0, int((b.y0 - oy) / INK_CELL)), min(ch, int((b.y1 - oy) / INK_CELL) + 1)):
             for cx in range(max(0, int((b.x0 - ox) / INK_CELL)), min(cw, int((b.x1 - ox) / INK_CELL) + 1)):
