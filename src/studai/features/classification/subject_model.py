@@ -59,11 +59,21 @@ class SubjectModel:
     bias: list[float]
     embedding_model: str = DEFAULT_SUBJECT_EMBEDDING_MODEL
     meta: dict = field(default_factory=dict)
+    # Média e desvio de cada dimensão no treino: os embeddings normalizados têm um componente
+    # comum grande, e padronizar deixa a regressão separar as matérias com bem menos passos.
+    center: list[float] | None = None
+    scale: list[float] | None = None
 
-    def predict_proba(self, vector: Sequence[float]) -> dict[str, float]:
+    def features(self, vector: Sequence[float]) -> list[float]:
         x = _normalize(vector)
         if len(x) != len(self.weights[0]):
             raise ValueError(f"dimensão do embedding {len(x)} difere da do modelo {len(self.weights[0])}")
+        if self.center is not None and self.scale is not None:
+            x = [(value - mean) / std for value, mean, std in zip(x, self.center, self.scale)]
+        return x
+
+    def predict_proba(self, vector: Sequence[float]) -> dict[str, float]:
+        x = self.features(vector)
         logits = [sum(w * v for w, v in zip(row, x)) + b for row, b in zip(self.weights, self.bias)]
         top = max(logits)
         exps = [math.exp(value - top) for value in logits]
@@ -79,7 +89,9 @@ class SubjectModel:
     def to_json(self) -> dict:
         return {"schema": SUBJECT_MODEL_SCHEMA, "labels": self.labels, "embedding_model": self.embedding_model,
                 "weights": [[round(value, 6) for value in row] for row in self.weights],
-                "bias": [round(value, 6) for value in self.bias], "meta": self.meta}
+                "bias": [round(value, 6) for value in self.bias], "meta": self.meta,
+                "center": [round(value, 7) for value in self.center] if self.center is not None else None,
+                "scale": [round(value, 7) for value in self.scale] if self.scale is not None else None}
 
     def save(self, path: Path) -> None:
         path = Path(path)
@@ -95,17 +107,17 @@ class SubjectModel:
             raise ValueError(f"esquema de modelo de matéria não suportado: {data.get('schema')!r}")
         return cls(labels=list(data["labels"]), weights=data["weights"], bias=data["bias"],
                    embedding_model=data.get("embedding_model") or DEFAULT_SUBJECT_EMBEDDING_MODEL,
-                   meta=data.get("meta") or {})
+                   meta=data.get("meta") or {}, center=data.get("center"), scale=data.get("scale"))
 
 
 def train_subject_model(vectors: Sequence[Sequence[float]], labels: Sequence[str], *,
-                        l2: float = 1e-3, epochs: int = 400, learning_rate: float = 2.0,
+                        l2: float = 1e-2, epochs: int = 300, learning_rate: float = 0.5,
                         class_weight: bool = True, embedding_model: str = DEFAULT_SUBJECT_EMBEDDING_MODEL,
-                        meta: dict | None = None) -> SubjectModel:
+                        meta: dict | None = None, standardize: bool = True) -> SubjectModel:
     """Regressão logística multinomial (softmax) com L2, por gradiente em lote completo.
 
-    Os vetores são normalizados (norma 1). ``class_weight`` equilibra matérias raras
-    (ex.: Educação Física tem 1 exemplo) para não sumirem do modelo.
+    Os vetores são normalizados (norma 1) e, com ``standardize``, padronizados por dimensão.
+    ``class_weight`` equilibra matérias raras (ex.: Educação Física tem 1 exemplo).
     """
     import numpy as np
 
@@ -115,6 +127,11 @@ def train_subject_model(vectors: Sequence[Sequence[float]], labels: Sequence[str
     if len(classes) < 2:
         raise ValueError("são necessárias pelo menos duas matérias para treinar")
     x = np.asarray([_normalize(vector) for vector in vectors], dtype=np.float64)
+    center = scale = None
+    if standardize:
+        center = x.mean(axis=0)
+        scale = x.std(axis=0) + 1e-6
+        x = (x - center) / scale
     index = {label: position for position, label in enumerate(classes)}
     y = np.asarray([index[label] for label in labels])
     onehot = np.zeros((len(y), len(classes)))
@@ -133,7 +150,9 @@ def train_subject_model(vectors: Sequence[Sequence[float]], labels: Sequence[str
         weights -= learning_rate * (error.T @ x + l2 * weights)
         bias -= learning_rate * error.sum(axis=0)
     return SubjectModel(labels=classes, weights=weights.tolist(), bias=bias.tolist(),
-                        embedding_model=embedding_model, meta=dict(meta or {}))
+                        embedding_model=embedding_model, meta=dict(meta or {}),
+                        center=center.tolist() if center is not None else None,
+                        scale=scale.tolist() if scale is not None else None)
 
 
 def cross_validate(vectors: Sequence[Sequence[float]], labels: Sequence[str], *, folds: int = 5,

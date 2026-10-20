@@ -68,7 +68,7 @@ def embed_rows(rows: list[dict], embed: Embed, *, batch: int = 16, cache_path: P
 
 
 def train(rows: list[dict], vectors: list[list[float]], *, folds: int = 5, by_group: bool = True,
-          embedding_model: str = DEFAULT_SUBJECT_EMBEDDING_MODEL, l2: float = 1e-3, epochs: int = 400) -> tuple:
+          embedding_model: str = DEFAULT_SUBJECT_EMBEDDING_MODEL, l2: float = 1e-2, epochs: int = 300) -> tuple:
     labels = [row["subject"] for row in rows]
     groups = [row["group"] for row in rows] if by_group else None
     report = cross_validate(vectors, labels, folds=folds, groups=groups, l2=l2, epochs=epochs,
@@ -93,8 +93,8 @@ def main() -> None:
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--random-folds", action="store_true",
                         help="dobras aleatórias em vez de deixar provas inteiras de fora")
-    parser.add_argument("--l2", type=float, default=1e-3)
-    parser.add_argument("--epochs", type=int, default=400)
+    parser.add_argument("--l2", type=float, default=1e-2)
+    parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--embeddings-cache", type=Path, help="JSON para reaproveitar embeddings entre rodadas")
     parser.add_argument("--report", type=Path, help="grava o relatório da validação cruzada em JSON")
     args = parser.parse_args()

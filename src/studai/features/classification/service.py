@@ -78,7 +78,7 @@ CLASSIFICATION_RETRY_ROUNDS = max(0, int(os.environ.get("STUDAI_CLASSIFICATION_R
 CLASSIFICATION_RETRY_DELAYS = (5, 15, 30, 60, 120)
 if CLASSIFICATION_ROUTING not in {"hierarchical", "flat"}:
     raise ValueError("STUDAI_CLASSIFICATION_ROUTING deve ser 'hierarchical' ou 'flat'")
-PROMPT_VERSION = "v10-language-rules" if CLASSIFICATION_ROUTING == "hierarchical" else "v8-language-rules"
+PROMPT_VERSION = "v11-language-rules" if CLASSIFICATION_ROUTING == "hierarchical" else "v9-language-rules"
 _DEFAULT = object()
 _CACHE_WRITE_LOCK = threading.Lock()
 _CACHE_WARM_LOCK = threading.Lock()
@@ -89,14 +89,13 @@ _CACHE_WARMED = False
 # Matérias da 1ª fase FUVEST (Conhecimentos Gerais). Troque com --taxonomia arquivo.json
 # (formato: {"Nome da matéria": "descrição curta que ajuda o modelo", ...}).
 DEFAULT_TAXONOMY: dict[str, str] = {
-    "Língua Portuguesa": "leitura e interpretação de textos em português (notícia, artigo, crônica, charge, tirinha, "
-                         "publicidade, canção), gramática, semântica, figuras de linguagem e efeitos de sentido, "
-                         "coesão, argumentação, variação linguística e norma culta",
-    "Literatura": "obras e autores literários (Brasil, Portugal, África lusófona, literatura indígena), lista de leitura "
-                  "obrigatória, escolas e períodos literários, gêneros literários, versificação, narrador, eu lírico "
-                  "e personagens como elementos da obra",
-    "Inglês": "compreensão de textos em língua inglesa de qualquer gênero (artigo, anúncio, tirinha, poema, letra de "
-              "canção), vocabulário e gramática em contexto, mesmo com enunciado e alternativas em português",
+    "Língua Portuguesa": "gramática, norma culta, variação linguística, coesão, conectivos, sentido de palavras, "
+                         "figuras de linguagem, interpretação de textos não literários em português (notícia, "
+                         "artigo, ensaio, charge, tirinha, publicidade, canção popular)",
+    "Literatura": "obras, autores e escolas literárias (Brasil, Portugal, África lusófona), lista de leitura "
+                  "obrigatória, análise de poemas e trechos de romance, conto ou crônica literária",
+    "Inglês": "compreensão de textos em inglês (inclusive poema e letra de canção em inglês), "
+              "mesmo com enunciado e alternativas em português",
     "Matemática": "álgebra, funções, geometria, trigonometria, progressões, probabilidade, estatística, contagem",
     "Física": "mecânica, termologia, óptica, ondas, eletricidade, magnetismo, física moderna",
     "Química": "química geral, físico-química, química orgânica, estequiometria, equilíbrio, termoquímica, radioatividade",
@@ -124,21 +123,12 @@ DEFAULT_TOPIC_TAXONOMY: dict[str, list[str]] = {
 # efeitos de sentido são objetos de Língua Portuguesa, e a Literatura cobra obra, autor, período,
 # gênero literário e versificação. Entram no prompt de matéria (roteado) e no prompt plano.
 LANGUAGE_SUBJECT_RULES = """\
-- Inglês × Língua Portuguesa × Literatura (decida pela LÍNGUA do texto-base e pelo que a pergunta cobra):
-  1. Texto-base ou trecho analisado em inglês (artigo, anúncio, tirinha, poema, letra de canção) → "Inglês", \
-mesmo que o enunciado e as alternativas estejam em português e mesmo que o texto seja literário ou musical. \
-Só não é "Inglês" se o trecho em inglês for apenas uma palavra ou citação curta e a pergunta cobrar outra coisa.
-  2. Texto em português e a pergunta exige conhecimento literário: obra ou autor, lista de leitura obrigatória, \
-escola ou período literário (Barroco, Romantismo, Modernismo...), gênero literário, versificação (métrica, \
-rima, estrofe, soneto), papel do narrador, do eu lírico ou de personagens na obra, diálogo entre obras → "Literatura".
-  3. Texto em português e a pergunta cobra leitura, sentido ou funcionamento da língua: tema, inferência, \
-sentido de palavra ou expressão, figura de linguagem e seu efeito, conectivos, coesão, gramática, pontuação, \
-variação linguística, gênero não literário (notícia, artigo, crônica de jornal, charge, tirinha, publicidade) \
-→ "Língua Portuguesa".
-  4. Poema ou letra de canção em português: figura de linguagem, efeito de sentido ou interpretação de \
-versos sem exigir autor, período ou forma poética → "Língua Portuguesa"; se a pergunta envolve o autor, \
-o estilo de época, a obra, a forma poética ou a versificação → "Literatura". O mesmo vale para trechos \
-de romance ou conto: análise literária da obra → "Literatura"; uso da língua no trecho → "Língua Portuguesa"."""
+- Texto-base em INGLÊS (artigo, anúncio, poema, letra de canção) → "Inglês", sempre, mesmo que o enunciado \
+e as alternativas estejam em português.
+- Texto em português de autor literário (poema, conto, romance, obra da lista de leitura) cuja pergunta trata \
+do sentido literário (eu lírico, narrador, personagens, tema da obra, estilo, escola, autor) → "Literatura".
+- Texto em português usado para cobrar gramática, conectivos, sentido de uma palavra, figura de linguagem, \
+tipo ou gênero textual, ou texto não literário (notícia, ensaio, charge, tirinha, quadrinhos) → "Língua Portuguesa"."""
 
 
 SYSTEM_TEMPLATE = """Você classifica questões de vestibular (FUVEST) por matéria e conteúdo.
