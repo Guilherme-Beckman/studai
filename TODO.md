@@ -89,7 +89,7 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
   - alternativas `a)` (até 2017), número colado ao texto em negrito/corpo maior (`07 Na…`, `V.01 – …`), 100 questões, páginas carta e ampliadas, capa/contracapa e folha de gabarito ignoradas, número de página e título de matéria fora do texto, caixa "Dados:" como nota
   - ordem de leitura: faixa de página inteira entre colunas (2015, 2017), blocos reordenados pelo número (2005 Q45), linhas largas picadas no PDF; números desenhados como imagens de dígitos (2018)
   - 2021: o texto inteiro é fonte Type3 em bitmap sem Unicode; saem as 90 questões sem texto (o lixo é descartado) e caem em `enunciado_vazio`, com o recorte da página para revisão
-- [x] OCR (Tesseract `por`, injetado em `parse`/`extract_pdf`) só nas páginas sem texto legível: 2021 (bitmap), 1996/1997 (escaneadas) e 2002 dia 2 (fonte quebrada). 2021 sai com 90 questões, ~73 com A–E completas; questões de fórmula/tabela ficam com `texto_ocr`/`alternativas_incompletas` para revisão. 1997 e 2002 dia 2 ainda não conferidos
+- [x] OCR (Tesseract `por`, injetado em `parse`/`extract_pdf`) só nas páginas sem texto legível: 2021 (bitmap), 1996/1997 (escaneadas) e 2002 dia 2 (fonte quebrada). 2021 sai com 90 questões, 74 com enunciado e A–E completas; todas levam `texto_ocr` e as de fórmula ficam com `alternativas_incompletas` para revisão. Falta: 2002 dia 2 (OCR roda, mas só 5 questões são achadas) e 1997 (0 questões: o texto escaneado cai dentro das figuras)
 
 ## Fase 4 — Reorganização e otimização (código + leituras/análises de IA)
 

@@ -47,6 +47,7 @@ GARBLED_MIN_CHARS = 300  # fonte com codificação quebrada (2002 dia 2): texto 
 GARBLED_MAX_COMMON = 0.03
 OCR_RULE_W = 0.85        # fio horizontal quase da largura da página: separa faixas (2021)
 OCR_WORD_GAP = 2.0
+OCR_BOX_INSET = 2.0
 OCR_BOX_MIN, OCR_BOX_AREA = 60.0, 2000.0   # desenho grande com menos de 1 palavra a cada 2000 pt²: relido recortado       # vão (em alturas de linha) que separa uma linha de OCR em duas (calha entre colunas)
 DIGIT_W, DIGIT_H = (3.0, 10.0), (6.0, 12.0)   # dígito do número da questão desenhado como imagem (2018)
 MERGE_TOL = 4.0        # tolerância p/ juntar pedaços de uma mesma figura
@@ -711,7 +712,8 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
             seen = [pymupdf.Rect(w.bbox) for ln in found for w in ln.words]
             inside = sum(box.contains(pymupdf.Point(w.x0, w.y0)) for w in seen)
             if box.width >= OCR_BOX_MIN and box.height >= OCR_BOX_MIN and inside < box.get_area() / OCR_BOX_AREA:
-                for ln in ocr.read_page(page, photos, box):
+                # Sem a borda externa: a tabela inteira com a moldura vira um bloco "imagem" e sai vazia.
+                for ln in ocr.read_page(page, photos, box + (OCR_BOX_INSET, OCR_BOX_INSET, -OCR_BOX_INSET, -OCR_BOX_INSET)):
                     ln.words = [w for w in ln.words if not any(
                         s.contains(pymupdf.Point((w.bbox[0] + w.bbox[2]) / 2, (w.bbox[1] + w.bbox[3]) / 2)) for s in seen)]
                     found.append(ln)
