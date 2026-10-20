@@ -894,87 +894,6 @@ async function openExamQuiz(examId) {
   }
 }
 
-let focusWorkspace = null;
-
-function enhanceFocusMode(workspace, progress) {
-  const header = $(".workspace-top", workspace);
-  if (!header || !$(".question-body, .exam-prompt", workspace)) return;
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "button button-secondary focus-open";
-  button.textContent = "Modo foco";
-  button.addEventListener("click", async () => {
-    focusWorkspace = workspace;
-    workspace.classList.add("focus-mode");
-    workspace.dataset.focusProgress = `Questão ${progress}`;
-    if (workspace.requestFullscreen) {
-      try { await workspace.requestFullscreen(); } catch { /* Sobreposição CSS é o fallback. */ }
-    }
-    $("[data-focus-exit]", workspace)?.focus();
-  });
-  header.append(button);
-  const indicator = document.createElement("span");
-  indicator.className = "focus-progress";
-  indicator.textContent = `Questão ${progress}`;
-  workspace.append(indicator);
-  if (workspace.classList.contains("focus-mode")) {
-    const question = $(".question-body, .exam-prompt, .exam-options, .options-list", workspace);
-    question?.classList.add("focus-slide");
-  }
-  const exit = document.createElement("button");
-  exit.type = "button";
-  exit.className = "focus-exit";
-  exit.dataset.focusExit = "";
-  exit.setAttribute("aria-label", "Sair do modo foco (Esc)");
-  exit.textContent = "×";
-  exit.addEventListener("click", closeFocusMode);
-  workspace.append(exit);
-  if (!workspace.dataset.focusGestures) {
-    workspace.dataset.focusGestures = "true";
-    workspace.addEventListener("touchstart", event => { workspace.dataset.swipeX = event.changedTouches[0].clientX; }, { passive: true });
-    workspace.addEventListener("touchend", event => {
-      const start = Number(workspace.dataset.swipeX);
-      const delta = event.changedTouches[0].clientX - start;
-      if (!workspace.classList.contains("focus-mode") || Math.abs(delta) < 70) return;
-      const next = $("[data-exam-next], #today-next", workspace);
-      const prev = $("[data-exam-prev]", workspace);
-      if (delta < 0) next?.click(); else prev?.click();
-    }, { passive: true });
-  }
-}
-
-function closeFocusMode() {
-  const workspace = focusWorkspace;
-  if (!workspace) return;
-  workspace.classList.remove("focus-mode");
-  focusWorkspace = null;
-  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-}
-
-document.addEventListener("fullscreenchange", () => {
-  if (!document.fullscreenElement && focusWorkspace) {
-    focusWorkspace.classList.remove("focus-mode");
-    focusWorkspace = null;
-  }
-});
-
-document.addEventListener("keydown", event => {
-  const workspace = focusWorkspace;
-  if (!workspace?.classList.contains("focus-mode")) return;
-  if (event.key === "Escape") { closeFocusMode(); return; }
-  if (event.key === "ArrowRight") { $("[data-exam-next], #today-next", workspace)?.click(); return; }
-  if (event.key === "ArrowLeft") { $("[data-exam-prev]", workspace)?.click(); return; }
-  if (/^[a-e]$/i.test(event.key)) {
-    const letter = event.key.toUpperCase();
-    const option = $$('[data-exam-option], [data-today-option], [data-answer]', workspace).find(button => (button.dataset.examOption || button.dataset.todayOption || button.dataset.answer) === letter);
-    option?.click();
-  }
-  if (event.key === "Enter") {
-    const action = $("[data-exam-submit], #today-submit, [data-exam-next], #today-next, [data-answer], #confirm-reason", workspace);
-    action?.click();
-  }
-});
-
 function renderExamQuiz() {
   const workspace = $("#exam-quiz-workspace");
   const quiz = currentExamQuiz;
@@ -983,6 +902,7 @@ function renderExamQuiz() {
   const question = questions[index];
   if (!questions.length) {
     workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Nenhuma questão disponível</h2><div class="workspace-meta">Todas as questões estão marcadas como inutilizáveis. Reprocesse e revalide-as na revisão da prova.</div></div><button class="blank-button" data-exam-close>Voltar à revisão</button></div>`;
+    window.studaiFocus?.attach(workspace, { key: "empty", label: "Nenhuma questão" });
     bindExamQuizActions();
     return;
   }
@@ -998,6 +918,7 @@ function renderExamQuiz() {
     if (quiz.session && !quiz.session.finished && !quiz.session.offline) finishExamSession(quiz);
     const savedNote = quiz.session?.finished ? `<p>Respostas salvas no histórico. <button class="text-button" data-go-reports>Ver relatórios →</button></p>` : (!quiz.session || quiz.session.offline ? "<p>As respostas desta sessão não foram salvas no histórico.</p>" : "<p>Salvando respostas no histórico…</p>");
     workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA CONCLUÍDA</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões respondidas nesta sessão · ${examSessionStatus(quiz)}</div></div><button class="blank-button" data-exam-close>Fechar</button></div><div class="exam-final-summary"><strong>${scored.graded ? `${scored.correct} de ${scored.graded} acertos` : "Respostas registradas"}</strong><p>${scored.annulled ? `${scored.annulled} questão(ões) anulada(s). ` : ""}${scored.graded < questions.length - scored.annulled ? "Algumas questões ainda não têm gabarito importado." : ""}</p>${savedNote}</div><button class="button button-primary" data-exam-restart>Responder novamente</button>`;
+    window.studaiFocus?.attach(workspace, { key: "summary", label: "Prova concluída" });
     bindExamQuizActions();
     return;
   }
@@ -1020,7 +941,7 @@ function renderExamQuiz() {
     ${questionContentMarkup(exam.id, question, sharedText, sharedImages)}
     <div class="exam-options">${optionsMarkup(exam.id, question, { selected, submitted, correctAnswer: key && !key.annulled ? key.answer : null, saved, attr: "data-exam-option" })}</div>
     ${outcome}${reasonPrompt}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 ? "disabled" : ""}>← Anterior</button><div>${submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button class="button button-primary" data-exam-submit ${selected ? "" : "disabled"}>Responder</button>`}</div></div>`;
-  enhanceFocusMode(workspace, `${index + 1} de ${questions.length}`);
+  window.studaiFocus?.attach(workspace, { current: index + 1, total: questions.length, key: number });
   bindExamQuizActions();
 }
 
@@ -1444,7 +1365,9 @@ function renderDiagnostic(workspace, data) {
   }
   const meta = adaptive ? `${answered} respondida(s) · adaptativo${data.requested ? ` · até ${data.requested}` : ""}` : `${answered} de ${data.total} respondidas`;
   workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">TENTATIVA ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${meta} · ${escapeHtml(data.status)}</div></div><button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
-  if (pending && !data.metrics && !(adaptive && finished)) enhanceFocusMode(workspace, `${answered + 1} de ${adaptive ? (data.requested || data.total || "?") : data.total}`);
+  window.studaiFocus?.attach(workspace, pending && !data.metrics && !(adaptive && finished)
+    ? { current: answered + 1, total: adaptive ? data.requested : data.total, key: pending.ordinal }
+    : { key: data.metrics ? "metrics" : "finished", label: "Diagnóstico concluído" });
   $("#close-diagnostic", workspace).addEventListener("click", () => { workspace.classList.add("hidden"); currentDiagnostic = null; });
   if (pending && !data.metrics && !(adaptive && finished)) {
     $$("[data-answer]", workspace).forEach(button => button.addEventListener("click", () => submitAnswer(data.id, pending, button.dataset.answer)));
@@ -1554,6 +1477,7 @@ function renderToday() {
   const items = session.items;
   if (!items.length) {
     workspace.innerHTML = `<div class="empty-state"><div class="empty-icon">☀</div><strong>Nada para estudar hoje</strong><p>Não há revisões vencidas nem questões classificadas com gabarito para conteúdos novos.</p></div>`;
+    window.studaiFocus?.attach(workspace, { key: "empty", label: "Nada para estudar hoje" });
     return;
   }
   const answered = items.filter(item => item.answered).length;
@@ -1563,6 +1487,7 @@ function renderToday() {
   if (!item) {
     const list = items.map(entry => `<tr><td><span class="today-reason ${entry.reason}">${STUDY_REASONS[entry.reason]}</span></td><td>${escapeHtml(entry.contentPath)}</td><td>${entry.selectedAnswer ? escapeHtml(entry.selectedAnswer) : "Branco"} / ${escapeHtml(entry.correctAnswer)}</td><td>${entry.correct ? "✓" : "✗"}</td></tr>`).join("");
     workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>Sessão concluída: ${session.correct} de ${items.length}</strong><p>As próximas revisões já foram agendadas. Veja abaixo quando cada conteúdo volta.</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
+    window.studaiFocus?.attach(workspace, { key: "summary", label: "Sessão concluída" });
     return;
   }
   const question = item.question || {};
@@ -1579,7 +1504,7 @@ function renderToday() {
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
     <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
     ${reasonPanel}${feedback}${actions}`;
-  enhanceFocusMode(workspace, `${items.indexOf(item) + 1} de ${items.length}`);
+  window.studaiFocus?.attach(workspace, { current: items.indexOf(item) + 1, total: items.length, key: item.id });
   $$("[data-today-option]", workspace).forEach(button => button.addEventListener("click", () => {
     currentStudy.selected = button.dataset.todayOption;
     currentStudy.pendingReason = null;

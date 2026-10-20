@@ -295,11 +295,48 @@ html[data-theme="dark"] .rp-tooltip{box-shadow:0 12px 28px rgba(0,0,0,.4)}
 .today-controls{padding:14px 22px;margin-bottom:14px}.today-controls label{margin:0;max-width:520px}.today-summary{margin-bottom:14px}.today-summary .result-grid{margin:0}.today-progress{margin-top:18px}.today-reason{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.6px;border-radius:12px;padding:4px 8px;background:#edf5ff;color:#2f6fc4;margin-right:8px}.today-reason.overdue_question{background:#fff0ed;color:#b44d41}.today-reason.due_content{background:#fff5e4;color:#a8772a}.today-reason.new_gap{background:#f0edff;color:#7059c8}.today-reason.new_content{background:#e8f8f3;color:#23845f}.forecast-row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}.forecast-day{flex:1;min-width:64px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:8px 4px;font-size:10px;color:#8796a4}.forecast-day strong{display:block;font-size:16px;color:var(--ink);margin-top:3px}
 html[data-theme="dark"] .forecast-day{border-color:#2a3a4b}html[data-theme="dark"] .forecast-day strong{color:#e5edf5}
 
-/* Shared fullscreen question mode: works with the Fullscreen API and as a fixed overlay. */
-.focus-open{margin-left:auto;white-space:nowrap}.focus-mode,.focus-mode:fullscreen{position:fixed;inset:0;z-index:1000;width:100vw;height:100dvh;max-width:none;margin:0;padding:clamp(20px,4vw,56px);border:0;border-radius:0;overflow:auto;background:var(--canvas);display:flex;flex-direction:column;gap:16px}.focus-mode .workspace-top{padding-right:54px}.focus-mode .workspace-top>button:not(.focus-open){display:none}.focus-mode .focus-open{display:none}.focus-mode .focus-exit{display:grid;position:fixed;top:18px;right:22px;z-index:2;width:42px;height:42px;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--paper);color:var(--muted);font-size:27px;cursor:pointer}.focus-mode .question-body,.focus-mode .exam-prompt{font-size:clamp(18px,2.2vw,25px);line-height:1.65;padding:clamp(18px,3vw,36px);background:var(--paper);border:1px solid var(--line);border-radius:14px}.focus-mode .options-list,.focus-mode .exam-options{display:grid;gap:12px}.focus-mode .option-button,.focus-mode .exam-option{min-height:68px;padding:18px 20px;font-size:clamp(16px,1.8vw,21px);line-height:1.5}.focus-mode .exam-question-image{max-height:55vh}.focus-mode .progress-track{order:0}.focus-mode .workspace-top{order:-1}.focus-mode .workspace-meta{font-size:14px}.focus-mode .question-top{font-size:14px}.focus-mode .exam-quiz-actions{margin-top:auto}.focus-mode .focus-slide{animation:focus-slide-in .28s ease-out}@keyframes focus-slide-in{from{opacity:.5;transform:translateX(36px)}to{opacity:1;transform:translateX(0)}}
-@media(max-width:700px){.focus-mode,.focus-mode:fullscreen{padding:16px;gap:12px}.focus-mode .workspace-top{padding-right:46px}.focus-mode .question-body,.focus-mode .exam-prompt{padding:16px;font-size:18px}.focus-mode .option-button,.focus-mode .exam-option{padding:14px;min-height:60px;font-size:16px}}
-.focus-progress{display:none}.focus-mode .focus-progress{display:block;position:fixed;top:25px;left:50%;transform:translateX(-50%);z-index:2;color:var(--muted);font-size:12px;letter-spacing:.02em}.focus-mode .question-body.focus-slide,.focus-mode .exam-prompt.focus-slide,.focus-mode .exam-options.focus-slide,.focus-mode .options-list.focus-slide{animation:focus-slide-in .28s ease-out}
-.focus-exit{display:none}
+/* ==== Modo foco (frontend/focus-mode.js) — início ==== */
+/* Sobreposição de tela cheia (Fullscreen API ou position:fixed como fallback) que recebe o workspace do fluxo. */
+.focus-open{white-space:nowrap;flex:none}.focus-open span{margin:0 4px 0 0}
+html.focus-locked,html.focus-locked body{overflow:hidden}
+.focus-overlay{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;width:100%;height:100vh;height:100dvh;background:var(--canvas);color:var(--ink)}
+.focus-overlay:fullscreen{width:100%;height:100%;background:var(--canvas)}
+.focus-bar{display:flex;align-items:center;gap:12px;padding:8px clamp(14px,3vw,28px);padding-top:max(8px,env(safe-area-inset-top));color:var(--muted);font-size:13px}
+.focus-count{font-weight:700;letter-spacing:.02em}
+.focus-hint{margin-left:auto;font-size:11px;opacity:.75}
+.focus-exit{flex:none;width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--paper);color:var(--muted);font-size:24px;line-height:1;cursor:pointer}
+.focus-exit:hover{color:var(--ink);border-color:#a9caef}
+.focus-meter{height:3px;background:var(--line)}.focus-meter i{display:block;height:100%;width:0;background:var(--blue);transition:width .3s ease}
+.focus-stage{position:relative;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:clamp(14px,3vw,40px) clamp(16px,4vw,48px) 0;outline:none}
+:root .focus-overlay .focus-stage>.panel{max-width:1040px;margin:0 auto;padding:0 0 24px;border:0;border-radius:0;background:transparent;box-shadow:none}
+.focus-stage .workspace-top,.focus-stage .progress-track{display:none}
+.focus-stage .question-top{font-size:13px;gap:10px;flex-wrap:wrap}
+.focus-stage .question-body,.focus-stage .exam-prompt,.focus-stage .exam-passage{font-size:clamp(17px,calc(15px + .45vw),23px);line-height:1.7;padding:clamp(16px,2.6vw,32px);margin:0 0 16px;border-radius:12px}
+.focus-stage .question-note{font-size:.85em}
+.focus-stage .exam-question-image{max-height:min(72vh,900px)}
+.focus-stage .options-list,.focus-stage .exam-options{gap:12px;margin-top:0}
+.focus-stage .option-button,.focus-stage .exam-option{min-height:58px;padding:15px 18px;gap:14px;font-size:clamp(16px,calc(14px + .35vw),21px);line-height:1.5;border-radius:10px}
+.focus-stage .exam-option-letter,.focus-stage .option-letter{width:34px;height:34px;font-size:15px}
+.focus-stage .focus-preselected{outline:3px solid var(--blue);outline-offset:2px}
+.focus-stage .exam-answer-feedback,.focus-stage .inline-result{font-size:16px;padding:14px 16px}
+.focus-stage .reason-row,.focus-stage .exam-reason-prompt{font-size:14px}
+.focus-stage .exam-answer-feedback,.focus-stage .exam-reason-prompt,.focus-stage .reason-row{scroll-margin:16px 0 96px}
+.focus-stage .question-actions,.focus-stage .exam-quiz-actions{position:sticky;bottom:0;z-index:1;margin-top:16px;padding:12px 0;padding-bottom:max(12px,env(safe-area-inset-bottom));background:var(--canvas)}
+.focus-stage .exam-quiz-actions .button,.focus-stage #finalize-diagnostic{font-size:14px;padding:13px 22px}
+.focus-stage .blank-button{font-size:13px}
+.focus-stage .exam-final-summary,.focus-stage .subject-table{font-size:14px}
+.focus-ghost{position:absolute;margin:0!important;pointer-events:none}
+.focus-in-right{animation:focus-in-right .3s ease-out}.focus-in-left{animation:focus-in-left .3s ease-out}
+.focus-out-left{animation:focus-out-left .3s ease-in forwards}.focus-out-right{animation:focus-out-right .3s ease-in forwards}
+@keyframes focus-in-right{from{transform:translateX(min(40vw,320px));opacity:0}to{transform:none;opacity:1}}
+@keyframes focus-in-left{from{transform:translateX(max(-40vw,-320px));opacity:0}to{transform:none;opacity:1}}
+@keyframes focus-out-left{to{transform:translateX(max(-40vw,-320px));opacity:0}}
+@keyframes focus-out-right{to{transform:translateX(min(40vw,320px));opacity:0}}
+@media(prefers-reduced-motion:reduce){.focus-in-right,.focus-in-left{animation:none}.focus-ghost{display:none}}
+@media(max-width:700px),(hover:none){.focus-hint{display:none}.focus-bar{justify-content:space-between}}
+@media(max-width:700px){.focus-stage{padding:12px 14px 0}.focus-stage .question-body,.focus-stage .exam-prompt,.focus-stage .exam-passage{padding:14px;font-size:17px;line-height:1.65}.focus-stage .option-button,.focus-stage .exam-option{padding:13px 14px;font-size:16px}.focus-stage .exam-quiz-actions .button{padding:13px 16px}}
+html[data-theme="dark"] .focus-exit{background:#172431}
+/* ==== Modo foco — fim ==== */
 .source-question-image-panel>summary{cursor:pointer;font-size:11px;font-weight:700;color:var(--muted)}
 .history-item{cursor:default}.history-open{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}.history-delete{flex:none;width:30px;height:30px;border:1px solid var(--line);border-radius:7px;background:transparent;color:#b45b53;font-size:19px;line-height:1;cursor:pointer}.history-delete:hover{background:#fff0ed;border-color:#d99a93}.history-delete:disabled{opacity:.5;cursor:wait}
 /* Mapa do conhecimento (Fase 7) */
