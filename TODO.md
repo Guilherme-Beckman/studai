@@ -190,3 +190,4 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-19 | Claude / `claude/knowledge-map-depth-progress-5b2ceb` | Fase 7: profundidade por nó (`depth.py`), "Hoje" de cima para baixo, API e tela "Mapa" em grafo | 0708b1d |
 | 2026-10-19 | Claude / `claude/fuvest-extrator-2021-741e19` | Fase 3: extrator lê os formatos FUVEST de 1998–2021 (alternativas `a)`, número inline, página inteira, dígitos em imagem); 2021 em bitmap fica para OCR | b7b922b |
 | 2026-10-19 | Claude / `claude/peaceful-robinson-bc3448` | Fase 3: OCR (Tesseract) nas provas sem texto legível; 2021 com 90 questões | 5f296ff |
+| 2026-10-19 | Claude / `claude/diagnostico-questoes-gabarito-f159ce` | Correção: acervo publicado sem gabaritos (o banco não é versionado) bloqueava o diagnóstico; `gabarito.json` por prova é importado automaticamente e o erro explica as exclusões | 60d5719 |

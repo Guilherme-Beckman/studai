@@ -4,7 +4,7 @@ Este manual prepara uma cópia local do StudAI com o acervo processado que acomp
 
 ## O que vem pronto
 
-O clone inclui cinco provas Fuvest de primeira fase (2022 K, 2023 K, 2024 K, 2025 V1 e 2026 V1), com 90 questões por prova, imagens extraídas, classificações e estado de revisão humana. As 450 questões estão marcadas como revisadas. Os dados ficam em `simulados/processados/`, o diretório que a aplicação já consulta.
+O clone inclui cinco provas Fuvest de primeira fase (2022 K, 2023 K, 2024 K, 2025 V1 e 2026 V1), com 90 questões por prova, imagens extraídas, classificações e estado de revisão humana. As 450 questões estão marcadas como revisadas. Cada prova traz também o gabarito oficial em `gabarito.json`, importado automaticamente no histórico local na primeira vez que a aplicação roda (provas que já têm gabarito no banco não são alteradas). Os dados ficam em `simulados/processados/`, o diretório que a aplicação já consulta.
 
 O histórico de respostas e diagnósticos (`diagnostico/historico.sqlite3`), arquivos enviados, PDFs locais, cache de IA e chaves de API não são distribuídos. Cada instalação começa com histórico de estudo próprio; o acervo de questões é compartilhado pelo repositório.
 
