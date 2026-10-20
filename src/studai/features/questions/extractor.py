@@ -10,10 +10,14 @@ Saída:
     <pasta do simulado>/questoes.json  questões estruturadas
     <pasta do simulado>/img/*.png      figuras e recortes das questões
 
-Ideia: o PDF tem camada de texto, então NÃO fazemos OCR. Lemos linhas e figuras
+Ideia: o PDF tem camada de texto, então em geral NÃO fazemos OCR. Lemos linhas e figuras
 com coordenadas, ordenamos por coluna (esquerda inteira, depois direita) e rodamos
 uma máquina de estados: número da questão abre uma nova questão, "(A)".."(E)" abrem
 alternativas, "Texto para as questões X e Y" abre um texto compartilhado.
+
+Páginas sem camada de texto legível (1997 escaneada, 2002 dia 2 com codificação
+trocada, 2021 em bitmap) passam pelo OCR de ``ocr.py`` (Tesseract, opcional) e
+seguem pela mesma máquina de estados.
 
 Dependência: pip install pymupdf
 """
@@ -23,13 +27,19 @@ import argparse
 import collections
 import colorsys
 import json
+import logging
 import re
+import subprocess
 import unicodedata
 
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pymupdf  # pip install pymupdf
+
+from studai.features.questions import ocr as ocr_mod
+
+log = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------- constantes
 HEADER_Y = 35.0        # linhas acima disso são cabeçalho ("Simulado da Prova...")
@@ -61,6 +71,9 @@ NOTE_RE = re.compile(r"^(?:Note e adote|Dados\b)", re.I)   # "Dados:" é a caixa
 COVER_RE = re.compile(r"abra este caderno", re.I)    # capa com as instruções da prova
 # Título da capa e da contracapa; em 2021 é o único texto legível delas (o resto está em bitmap).
 COVER_TITLE_RE = re.compile(r"Fase\s*[−–-]\s*Conhecimentos Gerais", re.I)
+# Página de rascunho ("O que for escrito no RASCUNHO NÃO SERÁ CONSIDERADO NA CORREÇÃO", 2024 p. 35):
+# lida em colunas, a marca d'água grudava na alternativa E da última questão (2024 K Q90).
+DRAFT_RE = re.compile(r"\bRASCUNHO\b", re.I)
 KEY_ENTRY_RE = re.compile(r"\b[VKQXZ]\s?\d{1,3}\s?-\s?[A-E]\b")  # gabarito no fim da prova (2003): "V 45- A"
 # Número de página ("3V", "4 V", "v") perto da margem e título de matéria entre questões.
 PAGE_MARK_RE = re.compile(r"^(?:\d{1,2}\s?)?[VTvt]$")
@@ -69,6 +82,17 @@ SUBJECT_RE = re.compile(r"^(?:LÍNGUA PORTUGUESA|PORTUGUÊS|LITERATURA|INGLÊS|L
                         r"HISTÓRIA GERAL|HISTÓRIA DO BRASIL|CIÊNCIAS)$")
 BOLD_FONT_RE = re.compile(r"bold|black|heavy|,bd\b", re.I)
 LEAD_NUM_RE = re.compile(r"^(?:[A-Z]\.)?(\d{2,3})[–—-]?$")
+# Número lido pelo OCR num escaneado (1997): "K.15 - ...", com dígitos às vezes trocados
+# ("K. lá -" = K.14, "K.5h -" = K.54). Só vale com a letra do dia e o travessão.
+OCR_MARKER_RE = re.compile(r"^([A-Z])\s?[.,]\s?(\S{2})\s*[-–—~]+(?:\s+(.*)|$)", re.S)
+OCR_INLINE_RE = re.compile(r"^\d{2,3}\s+[A-ZÀ-Ú“\"]")   # "02 Considere as afirmações"
+OCR_LEAD_JUNK_RE = re.compile(r"^[(|\[]\s+(?=[A-Z])")    # "( Note e adote:" (borda da caixa lida como "(")
+# Letra de alternativa mal lida: "(Ajc<", "(JV=1,6", "(Qe<", "(EJc<1", "A) 10 bilhões" e, nas
+# provas "a)" escaneadas (1997), "aj) À e B", "bh) 30º", "co) 45º".
+OCR_ALT_RE = re.compile(r"^(?:[(\[{]\s?([A-Za-z0-9ÇÉ])|([A-Ea-e])[a-z]?[)\]}jJ|](?=\s|$))\s?([)\]}J|]?)\s?(.*)$",
+                        re.S)
+OCR_DIGIT_LOOKALIKES = {"l": "1", "I": "1", "i": "1", "|": "1", "!": "1", "O": "0", "o": "0",
+                        "S": "5", "s": "5", "B": "8", "G": "6", "b": "6", "T": "7", "Z": "2", "z": "2"}
 
 MATH_FONTS = ("cambria", "math", "symbol", "mt-extra")
 # Alguns PDFs FUVEST mapeiam glifos de Cambria Math para blocos Unicode
@@ -587,14 +611,43 @@ def _unreadable(chars) -> bool:
     return bool(solid) and sum((ch.get("size") or 1) < BITMAP_FONT_SIZE for ch in solid) >= 0.5 * len(solid)
 
 
+def _ocr_fix_marker(txt: str) -> str:
+    """
+    "K. lá - Duas esferas" -> "K.1á - ..." -> número com sósias trocados ("l" = 1, "O" = 0).
+    Só os dois caracteres do número mudam; o que não vira dígito fica como está
+    e a linha só abre questão se bater com o número esperado (ver _ocr_marker).
+    """
+    m = OCR_MARKER_RE.match(txt)
+    if not m:
+        return txt
+    num = "".join(OCR_DIGIT_LOOKALIKES.get(c, c) for c in m.group(2))
+    return f"{m.group(1)}.{num} – {m.group(3) or ''}".strip()
+
+
 def _normalize_alt(txt: str, alt_style: str) -> str:
     """Na prova de alternativas "a)" a linha passa a ser "(A)", o formato do resto do código."""
     m = LOWER_ALT_RE.match(txt) if alt_style == "lower" else None
     return f"({m.group(1).upper()}) {m.group(2)}".strip() if m else txt
 
 
+def _ocr_merge(lines: list[dict], ocr: dict) -> list[dict]:
+    """
+    Junta as linhas do OCR às da camada de texto. Página ilegível ("garbage"): do PDF
+    ficam só os números de questão legíveis (em 2021 eles estão em fonte de verdade,
+    e o Tesseract às vezes pula um número sozinho). Página escaneada ("missing"): o
+    texto de verdade (rodapé, título) fica e o OCR entra onde não há texto.
+    """
+    native = [ln for ln in lines if not _unreadable(ln["chars"])]
+    if ocr["status"] == ocr_mod.GARBAGE:
+        native = [ln for ln in native if MARKER_RE.match("".join(c["c"] for c in ln["chars"]).strip())]
+    extra = [o for o in ocr["lines"]
+             if not any(_overlap_ratio(o["bbox"], n["bbox"]) > 0.5 and o["bbox"].intersects(n["bbox"])
+                        for n in native)]
+    return native + extra
+
+
 def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
-                alt_style: str = "upper") -> tuple[list[Row], list[tuple[int, float]]]:
+                alt_style: str = "upper", ocr: dict | None = None) -> tuple[list[Row], list[tuple[int, float]]]:
     pw = page.rect.width
     header_y, footer_y = _margins(page)
     lines = _raw_lines(page)
@@ -603,6 +656,8 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
     _rebuild_fractions(lines, page)
     _merge_script_lines(lines)
     _mark_scripts(lines)
+    if ocr:
+        lines = _ocr_merge(lines, ocr)
 
     cands = []
     ends: list[tuple[int, float]] = []     # "#####" = marca de fim de questão (texto oculto no PDF)
@@ -621,6 +676,8 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
         # desordena enunciados e alternativas que continuam na linha seguinte.
         row_col = 0 if b.width >= pw * 0.55 else _col_of(b, pw)
         solid = [c for c in ln["chars"] if c["c"].strip()]
+        if ln.get("ocr"):
+            txt = OCR_LEAD_JUNK_RE.sub("", _ocr_fix_marker(txt))
         cands.append(Row(txt, b, row_col, set(ln["fonts"]),
                          n_math=sum(_is_math(c) for c in solid), n_chars=len(solid),
                          size=_ref_size(ln["chars"]), ink=pymupdf.Rect(ln.get("ink", b)),
@@ -699,6 +756,13 @@ def _merge_rects(rects: list[pymupdf.Rect]) -> list[pymupdf.Rect]:
     return rects
 
 
+def _invisible(drawing: dict) -> bool:
+    """Preenchimento branco sem contorno: some contra o papel."""
+    fill = drawing.get("fill")
+    return (drawing.get("type") == "f" and fill is not None and len(fill) >= 3
+            and min(fill[:3]) >= 0.98)
+
+
 def _figure_parts(page: pymupdf.Page) -> list[pymupdf.Rect]:
     """Imagens e grupos de desenho que podem ser figura, antes de juntar os vizinhos."""
     rects: list[pymupdf.Rect] = []
@@ -709,7 +773,10 @@ def _figure_parts(page: pymupdf.Page) -> list[pymupdf.Rect]:
         if r.height < SEP_MAX_H and r.width > 60:
             continue                                  # separador colorido entre questões
         rects.append(r)
-    for r in page.cluster_drawings():
+    # Fundo branco atrás do texto (2023 K Q28: um retângulo por linha) não desenha nada
+    # e transformava o enunciado em figura.
+    drawings = [d for d in page.get_drawings() if not _invisible(d)]
+    for r in page.cluster_drawings(drawings=drawings) if drawings else ():
         r = pymupdf.Rect(r)
         if r.width < 4 or r.height < 4:
             continue                                  # linha divisória de coluna / filete
@@ -912,10 +979,21 @@ def _learn_digits(doc: pymupdf.Document, pages: list[int]) -> dict[bytes, str]:
 
 
 def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
-                 digits: dict[bytes, str] | None = None) -> list[Item]:
+                 digits: dict[bytes, str] | None = None, ocr: dict | None = None) -> list[Item]:
+    """``ocr``: {"status": "garbage"|"missing", "lines": linhas de ocr.as_raw_lines} para página sem texto legível."""
     pw = page.rect.width
     parts = _figure_parts(page)
-    rows, ends = _build_rows(page, parts, alt_style)
+    if ocr and ocr["status"] == ocr_mod.MISSING:
+        # As faixas escaneadas são a página, não figuras; as figuras de verdade são
+        # a tinta dentro delas que o OCR não leu como texto.
+        scans = ocr_mod.scan_rects(page)
+        parts = [r for r in parts if not any(_overlap_ratio(r, s) > 0.9 and (r & s).width > 0.9 * r.width
+                                             for s in scans)]
+        header_y, footer_y = _margins(page)
+        text_boxes = [ln["bbox"] for ln in ocr["lines"] if _ocr_prose(ln)]
+        parts += [r for r in ocr_mod.scan_figures(page, text_boxes, scans)
+                  if r.y0 >= header_y - 5 and r.y1 <= footer_y + 5]
+    rows, ends = _build_rows(page, parts, alt_style, ocr)
     for r, ds in _digit_groups(page) if digits else ():
         if all(d in digits for d in ds):
             text = "".join(digits[d] for d in ds)
@@ -965,7 +1043,7 @@ def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
         # Em alguns PDFs oficiais o marcador numérico fica dentro da caixa de
         # uma imagem; ele continua sendo texto estrutural e não pode sumir.
         # Vale também para o número em negrito colado ao texto (2013 Q61).
-        if MARKER_RE.match(r.text) or r.lead_num is not None:
+        if MARKER_RE.match(r.text) or r.lead_num is not None or (r.fonts == {"OCR"} and OCR_INLINE_RE.match(r.text)):
             items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
             continue
         if id(r) in captions:
@@ -988,6 +1066,12 @@ def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
 
     items.sort(key=_reading_order(items, pw))
     return items
+
+
+def _ocr_prose(ln: dict) -> bool:
+    """Linha do OCR que é texto mesmo (não rótulo de figura lido como letras soltas)."""
+    words = "".join(ch["c"] for ch in ln["chars"]).split()
+    return ln.get("conf", 0) >= 55 and (len(words) >= 3 or any(len(w) >= 4 for w in words))
 
 
 def _reading_order(items: list[Item], pw: float):
@@ -1055,11 +1139,12 @@ def new_question(num: int, page: int) -> dict:
     }
 
 
-def _alt_style(doc: pymupdf.Document) -> str:
+def _alt_style(doc: pymupdf.Document, texts: dict[int, str] | None = None) -> str:
     """"lower" quando a prova marca as alternativas com "a)" em vez de "(A)" (provas até 2017)."""
     upper = lower = 0
-    for page in doc:
-        for line in page.get_text("text").splitlines():
+    for pno, page in enumerate(doc):
+        text = texts[pno] if texts and pno in texts else page.get_text("text")
+        for line in text.splitlines():
             line = line.strip()
             upper += bool(ALT_RE.match(line))
             lower += bool(LOWER_ALT_RE.match(line))
@@ -1072,6 +1157,58 @@ def _inline_marker(t: str, expected: int) -> str | None:
     if not m or int(m.group(1)) != expected:
         return None
     return (m.group(2) or "").strip()
+
+
+OCR_SKIP = 3     # números que o OCR pode ter perdido antes de um número lido certo
+
+
+def _ocr_marker(row: Row, expected: int) -> tuple[int, str] | None:
+    """
+    Número de questão lido pelo OCR ("K.1? – texto"): com a letra do dia e o travessão
+    a linha só pode abrir questão, então aceita até um caractere errado no número.
+    Se o OCR perdeu a linha de uma questão, um número lido certo logo adiante
+    (até ``OCR_SKIP``) retoma a sequência em vez de travar a prova ali (1997 K.71).
+    """
+    if row.fonts != {"OCR"}:
+        return None
+    m = OCR_MARKER_RE.match(row.text)
+    want = f"{expected:02d}"
+    if not m or len(want) != 2:
+        return None
+    rest, token = (m.group(3) or "").strip(), m.group(2)
+    close = sum(a != b for a, b in zip(token, want)) <= 1
+    if token.isdigit():
+        n = int(token)
+        # Número lido inteiro à frente: o OCR perdeu os do meio. Atrás e quase igual
+        # ("15" depois da 17): dígito trocado.
+        if expected < n <= expected + OCR_SKIP:
+            return n, rest
+        return (expected, rest) if n == expected or (n < expected and close) else None
+    return (expected, rest) if close else None
+
+
+def _ocr_alt(row: Row, cur: dict, mode: str) -> tuple[str, str] | None:
+    """
+    Alternativa numa linha do OCR com a letra borrada. As alternativas vêm em ordem,
+    então a letra é a próxima esperada. Antes da primeira alternativa vale só a forma
+    com fecho ("(A)", "A)") ou com o que segue sem cara de palavra ("(Adaptado)" é texto).
+    """
+    if row.fonts != {"OCR"} or NOTE_RE.match(row.text):
+        return None
+    m = OCR_ALT_RE.match(row.text)
+    if not m:
+        return None
+    letters = sorted(cur["alternativas"])
+    want = chr(ord(letters[-1]) + 1) if letters else "A"
+    if want > "E":
+        return None
+    read, closed, rest = (m.group(1) or m.group(2)).upper(), bool(m.group(3)) or bool(m.group(2)), m.group(4)
+    if mode != "alts":
+        if read != want or not (closed or (rest[:1] and not rest[:1].islower())):
+            return None
+    elif not closed and read.isalpha() and rest[:1].islower() and (m.group(1) or m.group(2)) not in "ABCDEQJGO":
+        return None
+    return want, rest.strip()
 
 
 def _order_by_markers(items: list[Item]) -> list[Item]:
@@ -1097,7 +1234,37 @@ def _order_by_markers(items: list[Item]) -> list[Item]:
     return [it for _, block in sorted(blocks, key=lambda b: b[0]) for it in block]
 
 
-def parse(doc: pymupdf.Document):
+def _ocr_pages(doc: pymupdf.Document, engine, progress=None) -> dict[int, dict]:
+    """
+    OCR das páginas sem texto legível. Sem motor (Tesseract ausente, STUDAI_OCR=0)
+    ou se o motor falhar, a página segue só com a camada de texto, como antes.
+    """
+    if engine is None:
+        return {}
+    todo = [(pno, st) for pno in range(len(doc))
+            if (st := ocr_mod.text_layer_status(doc[pno])) != ocr_mod.OK]
+    out: dict[int, dict] = {}
+    for k, (pno, status) in enumerate(todo, 1):
+        if progress:
+            progress({"stage": "ocr", "message": f"OCR da página {pno + 1} ({k}/{len(todo)})",
+                      "page": pno + 1})
+        page = doc[pno]
+        try:
+            lines = engine(page, ocr_mod.ocr_dpi(page, status))
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("OCR indisponível (%s); páginas sem texto ficam para revisão", exc)
+            return out
+        raw = ocr_mod.as_raw_lines(lines)
+        out[pno] = {"status": status, "lines": raw,
+                    "text": "\n".join("".join(ch["c"] for ch in ln["chars"]) for ln in raw)}
+    return out
+
+
+def parse(doc: pymupdf.Document, ocr="auto", progress=None):
+    """
+    Questões e textos compartilhados da prova. ``ocr``: motor de OCR
+    (``ocr.OcrEngine``), "auto" para o Tesseract instalado, ou None para não usar.
+    """
     questions: dict[int, dict] = {}
     shared: dict[str, dict] = {}
     cur: dict | None = None
@@ -1105,12 +1272,16 @@ def parse(doc: pymupdf.Document):
     mode = "none"                      # none | stem | alts | shared
     active_shared: str | None = None
     expected = 1
-    alt_style = _alt_style(doc)
+    engine = ocr_mod.default_engine() if ocr == "auto" else ocr
+    ocr_pages = _ocr_pages(doc, engine, progress)
+    texts = {pno: o["text"] for pno, o in ocr_pages.items()}
+    alt_style = _alt_style(doc, texts)
     pages = []
     for pno in range(len(doc)):
-        text = doc[pno].get_text()
+        text = texts.get(pno) or doc[pno].get_text()
         cover = COVER_RE.search(text) or (pno in (0, len(doc) - 1) and COVER_TITLE_RE.search(text))
-        if not (cover or len(KEY_ENTRY_RE.findall(text)) >= 20):
+        draft = DRAFT_RE.search(text) and len(text.split()) < 40
+        if not (cover or draft or len(KEY_ENTRY_RE.findall(text)) >= 20):
             pages.append(pno)
     digits = _learn_digits(doc, pages)
 
@@ -1121,7 +1292,7 @@ def parse(doc: pymupdf.Document):
         seg[2], seg[3] = min(seg[2], b.x0), max(seg[3], b.x1)
 
     for pno in pages:
-        for it in _order_by_markers(extract_page(doc[pno], pno, alt_style, digits)):
+        for it in _order_by_markers(extract_page(doc[pno], pno, alt_style, digits, ocr_pages.get(pno))):
             if it.kind == "end":
                 if mode != "shared":       # fim da questão: ignora o que vier até o próximo marcador
                     cur, cur_alt, mode = None, None, "none"
@@ -1145,11 +1316,23 @@ def parse(doc: pymupdf.Document):
                 # no meio de um enunciado não é marcador.
                 if not (mk and int(mk.group(1)) == expected) and (
                         it.row.lead_num == expected
-                        or cur is None or mode != "stem" and "E" in cur["alternativas"]):
+                        or cur is None or mode != "stem" and "E" in cur["alternativas"]
+                        # OCR não sabe o negrito: "02 Considere..." (2002 dia 2) abre questão
+                        # quando o número esperado vem seguido de palavra em maiúscula.
+                        or it.row.fonts == {"OCR"} and OCR_INLINE_RE.match(t)):
                     rest = _inline_marker(t, expected)
+                num = expected
+                if not (mk and int(mk.group(1)) == expected) and rest is None:
+                    if found := _ocr_marker(it.row, expected):
+                        num, rest = found
+                    elif it.row.fonts == {"OCR"} and OCR_INLINE_RE.match(t):
+                        # "09 A construção..." com a 08 perdida pelo OCR (dentro de figura):
+                        # um número logo adiante retoma a sequência.
+                        n = int(INLINE_MARKER_RE.match(t).group(1))
+                        if expected < n <= expected + OCR_SKIP:
+                            num, rest = n, _inline_marker(t, n)
                 if (mk and int(mk.group(1)) == expected) or rest is not None:
-                    num = expected
-                    expected += 1
+                    expected = num + 1
                     cur = questions[num] = new_question(num, pno)
                     cur_alt, mode = None, "stem"
                     if active_shared and num in shared[active_shared]["questoes"]:
@@ -1171,9 +1354,12 @@ def parse(doc: pymupdf.Document):
                     touch(cur, it)
                     cur["_fonts"] |= it.row.fonts
                     am = ALT_RE.match(t)
-                    if am:
-                        cur_alt, mode = am.group(1), "alts"
-                        cur["alternativas"][cur_alt] = {"texto": [am.group(2)] if am.group(2) else [],
+                    alt = (am.group(1), am.group(2)) if am else _ocr_alt(it.row, cur, mode)
+                    if am and it.row.fonts == {"OCR"} and am.group(1) in cur["alternativas"]:
+                        alt = _ocr_alt(it.row, cur, mode) or alt    # "(B)" lido no lugar de "(E)"
+                    if alt:
+                        cur_alt, mode = alt[0], "alts"
+                        cur["alternativas"][cur_alt] = {"texto": [alt[1]] if alt[1] else [],
                                                         "figuras": []}
                     elif mode == "alts" and cur_alt:
                         cur["alternativas"][cur_alt]["texto"].append(t)
@@ -1283,8 +1469,12 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
                     crop(doc, p, rect, imgdir / name, dpi)
                     q["imagens_completas"].append(f"img/{name}")
             else:
-                for k, ((p, col), (y0, y1, _x0, _x1)) in enumerate(sorted(q["_segs"].items()), 1):
+                for k, ((p, col), (y0, y1, sx0, sx1)) in enumerate(sorted(q["_segs"].items()), 1):
                     x0, x1 = colx[col]
+                    # Faixa de página inteira (comando e alternativas de 2025 Q1): o recorte
+                    # da coluna cortava o fim das linhas; alarga até o conteúdo.
+                    x0 = max(22.0, min(x0, sx0 - 3))
+                    x1 = min(doc[p].rect.width - 22, max(x1, sx1 + 3))
                     name = f"q{n}_completa{k}.png"
                     crop(doc, p, pymupdf.Rect(x0, y0 - 3, x1, y1 + 3), imgdir / name, dpi)
                     q["imagens_completas"].append(f"img/{name}")
@@ -1307,7 +1497,8 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
             q["revisar"].append("glifo_estranho")
         if sorted(q["alternativas"]) != list("ABCDE"):
             q["revisar"].append("alternativas_incompletas")
-        if not q["enunciado"] and not q["figuras_enunciado"]:
+        # Também com figura: enunciado lido como figura (2023 K Q28, 2026 Q42) passava sem aviso.
+        if not q["enunciado"].strip():
             q["revisar"].append("enunciado_vazio")
         if any(not a["texto"] and not a["figuras"] for a in q["alternativas"].values()):
             q["revisar"].append("alternativa_vazia")
@@ -1318,7 +1509,7 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
 
 
 def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bool = True,
-                detailed_crops: bool = False, progress=None) -> Path:
+                detailed_crops: bool = False, progress=None, ocr="auto") -> Path:
     """Extrai um PDF e grava questoes.json e imagens dentro de outdir."""
     input_pdf = input_pdf.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
@@ -1326,7 +1517,7 @@ def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bo
     try:
         if progress:
             progress({"stage": "extracting", "message": f"Lendo PDF · {len(doc)} páginas", "pages": len(doc)})
-        questions, shared = parse(doc)
+        questions, shared = parse(doc, ocr=ocr, progress=progress)
         if progress:
             progress({"stage": "rendering", "message": f"Extraindo imagens de {len(questions)} questões", "questions": len(questions)})
         finalize(doc, questions, shared, outdir, dpi, full_crops, detailed_crops)

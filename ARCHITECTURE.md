@@ -12,6 +12,8 @@ src/studai/
 ├── settings.py              caminhos do serviço e cache_dir() (STUDAI_CACHE_DIR)
 ├── features/
 │   ├── questions/           extractor.py (PDF → questoes.json), batch.py (lote), review.py (revisão humana)
+│   │                        ocr.py (Tesseract nas páginas sem texto legível; STUDAI_OCR=0 desliga),
+│   │                        reprocess.py, manual_crop.py, source_pdf.py (reextração e recorte manual)
 │   ├── classification/      service.py (etapas e driver), taxonomy.py, cache.py (resultados e vetores RAG),
 │   │                        rag.py (exemplos revisados), topic_embeddings.py, legacy_mapping.py
 │   ├── answer_keys/         service.py: associação, leitura e importação de gabaritos
