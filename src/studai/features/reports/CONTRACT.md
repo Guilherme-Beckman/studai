@@ -57,8 +57,8 @@ Erros: curso ou nó desconhecido → 404 com `{"error": "..."}`.
 
 * `POST /api/exams/<examId>/sessions` `{courseId}` → `{"id": attemptId, "questions": [{"ordinal", "number"}]}`
   Cria `attempts` com `mode='exam'` contendo as questões elegíveis daquela prova (mesmos filtros do pool).
-* `POST /api/exam-sessions/<attemptId>/answers` `{ordinal, answer, reason?}` → igual ao diagnóstico, mas o
-  motivo é opcional (erro sem motivo grava `error_reason = null`).
+* `POST /api/exam-sessions/<attemptId>/answers` `{ordinal, answer, reason?}` → igual ao diagnóstico:
+  resposta incorreta exige `reason`; respostas corretas e em branco não recebem motivo.
 * `POST /api/exam-sessions/<attemptId>/finish` → finaliza (status `completed`, grava `metrics_json`).
 
 ## Mapa do conhecimento (Fase 7)

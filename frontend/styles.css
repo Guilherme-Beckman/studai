@@ -302,6 +302,8 @@ html[data-theme="dark"] .forecast-day{border-color:#2a3a4b}html[data-theme="dark
 .focus-exit{display:none}
 .source-question-image-panel>summary{cursor:pointer;font-size:11px;font-weight:700;color:var(--muted)}
 .history-item{cursor:default}.history-open{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}.history-delete{flex:none;width:30px;height:30px;border:1px solid var(--line);border-radius:7px;background:transparent;color:#b45b53;font-size:19px;line-height:1;cursor:pointer}.history-delete:hover{background:#fff0ed;border-color:#d99a93}.history-delete:disabled{opacity:.5;cursor:wait}
+.option-button.selected{border-color:#f28b3c;background:#fff8f1;box-shadow:0 0 0 2px #f28b3c1c}.option-button:disabled,.blank-button:disabled{opacity:.55;cursor:default}
+.blank-button.selected{color:var(--blue);font-weight:700;text-decoration:underline;text-underline-offset:3px}
 /* Mapa do conhecimento (Fase 7) */
 .km-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
 .km-kpi small{display:block;margin-top:4px;color:var(--muted);font-size:10px;line-height:1.4}
