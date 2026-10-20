@@ -179,5 +179,20 @@ class AICacheTests(unittest.TestCase):
         self.assertEqual(offline.calls, 4)  # failed run retried; explicit "no match" stored
 
 
+class AICallsBenchmarkTests(unittest.TestCase):
+    def test_offline_benchmark_counts_calls_and_cache_reuse(self):
+        import contextlib
+        import io
+        from studai.tools import benchmark_ai_calls
+        with contextlib.redirect_stdout(io.StringIO()):
+            report = benchmark_ai_calls.main(["--questions", "4", "--examples", "3"])
+        rows = {row["scenario"]: row for row in report["scenarios"]}
+        self.assertEqual(rows["classificacao_inicial"]["llm_calls"], 12)
+        self.assertEqual(rows["reprocessar_igual"]["llm_calls"], 0)
+        self.assertEqual(rows["reprocessar_apos_revisao"]["embedding_texts"], 0)
+        self.assertEqual(rows["gabarito_lote_2x"]["llm_calls"], 1)
+        self.assertEqual(rows["analise_diagnostica_2x"]["llm_calls"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

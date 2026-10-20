@@ -215,11 +215,18 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": "não encontrado"}, 404)
 
 
-def main():
+def main(argv: list[str] | None = None):
+    import sys
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["ai-calls"]:
+        # Contagem offline de chamadas de IA (sem Ollama): ver studai.tools.benchmark_ai_calls.
+        from studai.tools.benchmark_ai_calls import main as ai_calls_main
+        ai_calls_main(argv[1:])
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1", help="padrão seguro: apenas localhost")
     parser.add_argument("--port", type=int, default=8765)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     clf.load_dotenv(HERE / ".env")
     print(f"Benchmark Ollama em http://{args.host}:{args.port}")
     ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
