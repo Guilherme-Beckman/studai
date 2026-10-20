@@ -9,6 +9,10 @@ dentro dela vira sugestão de enunciado e alternativas.
 O recorte entra como camada de correção (``edits`` em ``revisao.json``), igual às
 imagens enviadas à mão: a extração original fica intacta.
 """
+# TODO(cross-agent): extractor.py deveria sinalizar ``enunciado_vazio`` mesmo com figura
+# (FUVEST 2023 Q28, 2026 Q42), anexar imagens de coluna lateral (2025 Q1), recortar a faixa
+# de página inteira com a largura da página e tirar o aviso de rascunho das alternativas
+# (2024 Q90). Detalhes em docs/bad-crops-survey.md.
 from __future__ import annotations
 
 import json

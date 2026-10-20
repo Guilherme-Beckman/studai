@@ -44,6 +44,7 @@ Inicie a aplicação local com `python api.py`; ela serve a interface e a API na
 - `POST /api/diagnostics` gera uma tentativa em background; `GET /api/diagnostics/{id}` mostra progresso e questões sem expor o gabarito.
 - `POST /api/diagnostics/{id}/answers` registra `{ "ordinal": 1, "answer": "A", "reason": "calc_error" }`; motivo é exigido para resposta incorreta.
 - `POST /api/diagnostics/{id}/finalize` calcula métricas e plano de estudo em background.
+- Revisão de recortes: `POST /api/exams/{id}/questions/{n}/reprocess` (prévia em job) e `.../reprocess/{previewId}/confirm` reextraem uma questão mantendo a revisão (`questions/reprocess.py`); `GET /api/exams/{id}/source/pages[/{p}.png]` e `POST /api/exams/{id}/questions/{n}/manual-crop` fazem o recorte manual por região (`questions/manual_crop.py`); `POST /api/exams/{id}/source` associa o PDF original.
 - `GET /api/knowledge-map?courseId=` e `GET /api/knowledge-map/nodes/{id}?courseId=` alimentam a tela "Mapa" (grafo da taxonomia com domínio e profundidade).
 
 As rotas são locais e não têm autenticação nesta fase. Tarefas longas ficam em memória; dados de provas, respostas e diagnósticos continuam nos diretórios persistentes existentes.
