@@ -30,6 +30,7 @@ from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
+from studai.integrations.ocr import default_ocr
 from studai.features.questions import review as question_review
 from studai.integrations.llm import (
     GeminiProvider, OllamaProvider, RotatingPoolProvider, load_dotenv, make_provider,
@@ -755,7 +756,7 @@ def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
 
     try:
         extracted_path = extract_pdf(source, workdir / "extracted", dpi=200, full_crops=True,
-                                     detailed_crops=True, progress=progress)
+                                     detailed_crops=True, progress=progress, ocr=default_ocr())
     except Exception:
         shutil.rmtree(workdir, ignore_errors=True)
         raise
@@ -1149,7 +1150,8 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
     if extracted_path.exists():
         extraction_progress({"stage": "extracted", "message": "Extração da prova reutilizada do cache", "questions": len(json.loads(extracted_path.read_text(encoding="utf-8")).get("questoes", []))})
     else:
-        extracted_path = extract_pdf(source, output_dir, dpi=dpi, progress=extraction_progress)
+        extracted_path = extract_pdf(source, output_dir, dpi=dpi, progress=extraction_progress,
+                                     ocr=default_ocr())
         extracted_data = json.loads(extracted_path.read_text(encoding="utf-8"))
         extracted_data["prova"] = stable_exam_id
         extracted_data["arquivo_origem"] = clean_name

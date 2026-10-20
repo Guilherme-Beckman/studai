@@ -10,7 +10,7 @@ Saída:
     <pasta do simulado>/questoes.json  questões estruturadas
     <pasta do simulado>/img/*.png      figuras e recortes das questões
 
-Ideia: o PDF tem camada de texto, então NÃO fazemos OCR. Lemos linhas e figuras
+Ideia: o PDF tem camada de texto, então o OCR é só o último recurso (ver _needs_ocr). Lemos linhas e figuras
 com coordenadas, ordenamos por coluna (esquerda inteira, depois direita) e rodamos
 uma máquina de estados: número da questão abre uma nova questão, "(A)".."(E)" abrem
 alternativas, "Texto para as questões X e Y" abre um texto compartilhado.
@@ -31,6 +31,8 @@ from pathlib import Path
 
 import pymupdf  # pip install pymupdf
 
+from studai.features.questions.ocr import OcrLine, OcrProvider, OcrWord
+
 # ----------------------------------------------------------------- constantes
 HEADER_Y = 35.0        # linhas acima disso são cabeçalho ("Simulado da Prova...")
 FOOTER_Y = 805.0
@@ -38,6 +40,15 @@ A4_H = 842.0           # HEADER_Y/FOOTER_Y valem para A4; carta (2006) e página
 SEP_MAX_H = 12.0       # imagens/desenhos mais baixos que isso e largos = separador colorido
 TINY_W, TINY_H = 15.0, 18.0   # imagens minúsculas = glifos faltando (ex.: "ℓ")
 BITMAP_FONT_SIZE = 0.5   # corpo nominal das fontes Type3 em bitmap (texto ilegível)
+OCR_MIN_CHARS = 50       # abaixo disso a página é só cabeçalho/rodapé, não vale OCR
+SCAN_MAX_CHARS = 200     # página escaneada (1997): pouco texto real e imagens cobrindo a mancha
+SCAN_MIN_AREA = 0.3      # fração da página coberta por imagens
+GARBLED_MIN_CHARS = 300  # fonte com codificação quebrada (2002 dia 2): texto longo sem palavras comuns
+GARBLED_MAX_COMMON = 0.03
+OCR_RULE_W = 0.85        # fio horizontal quase da largura da página: separa faixas (2021)
+OCR_WORD_GAP = 2.0
+OCR_BOX_INSET = 2.0
+OCR_BOX_MIN, OCR_BOX_AREA = 60.0, 2000.0   # desenho grande com menos de 1 palavra a cada 2000 pt²: relido recortado       # vão (em alturas de linha) que separa uma linha de OCR em duas (calha entre colunas)
 DIGIT_W, DIGIT_H = (3.0, 10.0), (6.0, 12.0)   # dígito do número da questão desenhado como imagem (2018)
 MERGE_TOL = 4.0        # tolerância p/ juntar pedaços de uma mesma figura
 CROP_PAD = 2.0
@@ -587,6 +598,93 @@ def _unreadable(chars) -> bool:
     return bool(solid) and sum((ch.get("size") or 1) < BITMAP_FONT_SIZE for ch in solid) >= 0.5 * len(solid)
 
 
+OCR_FONT = "OCR"          # "fonte" das linhas lidas por OCR: a questão sai com revisar "texto_ocr"
+# Rótulo de alternativa como o OCR costuma ler: "(B]", "(B|", "(B 8,5", "D)", "(a)" ou "(AJA Tropa".
+# Um "l"/"J" no lugar do ")" só conta antes de maiúscula ou espaço: "(Ela..." não é alternativa E.
+OCR_ALT_RE = re.compile(r"^(?:\(([A-E])(?:\s?[)\]}|]|[lj1IJ](?=[A-Z\s])|(?=\s|$))|\(([a-e])\)"
+                        r"|([A-E])[)\]}|])\s*")
+# Palavras que aparecem em qualquer página de prova legível (português e inglês).
+COMMON_WORDS = frozenset("""a o e é de da do das dos que em um uma para com não no na nos nas por se
+os as ao mais como the of and to in is that""".split())
+
+
+def _bitmap_chars(chars) -> int:
+    return sum((ch.get("size") or 1) < BITMAP_FONT_SIZE for ch in chars if ch["c"].strip())
+
+
+def _needs_ocr(page: pymupdf.Page, lines) -> str | None:
+    """
+    Página cuja camada de texto não serve: fonte em bitmap (2021), escaneada (1997,
+    o texto é imagem) ou fonte com codificação quebrada (2002 dia 2: "RTQEGUUQU").
+    Só essas páginas passam pelo OCR; as demais seguem idênticas. Devolve o motivo
+    ("bitmap", "scan", "garbled") ou None.
+    """
+    solid = [ch for ln in lines for ch in ln["chars"] if ch["c"].strip()]
+    bitmap = sum(_bitmap_chars(ln["chars"]) for ln in lines)
+    if bitmap >= OCR_MIN_CHARS and bitmap >= 0.5 * len(solid):
+        return "bitmap"
+    if len(solid) < SCAN_MAX_CHARS:
+        area = page.rect.width * page.rect.height
+        covered = sum(r.get_area() for r in _merge_rects([pymupdf.Rect(im["bbox"]) & page.rect
+                                                          for im in page.get_image_info()]))
+        return "scan" if covered >= SCAN_MIN_AREA * area else None
+    if len(solid) >= GARBLED_MIN_CHARS:
+        words = re.findall(r"[^\W\d_]+", _clean(" ".join("".join(ch["c"] for ch in ln["chars"]) for ln in lines)).lower())
+        return "garbled" if sum(w in COMMON_WORDS for w in words) < GARBLED_MAX_COMMON * max(1, len(words)) else None
+    return None
+
+
+def _ocr_lines(ocr_lines: list[OcrLine], pw: float) -> list[dict]:
+    """
+    Linhas do OCR no formato de _raw_lines: cada palavra vira caracteres de largura igual
+    dentro da caixa dela. O corpo de todas é a altura mediana das linhas (o OCR mede cada
+    linha pelas letras que ela tem); só títulos bem maiores ficam com o próprio corpo.
+    A linha do OCR que atravessa a calha entre as colunas vira duas, e o fio entre elas
+    (lido como "|") sai.
+    """
+    pieces: list[list] = []
+    for ol in ocr_lines:
+        # Bordas de tabela e fios de coluna chegam como "|" grudado nas palavras.
+        words = sorted((OcrWord(t, w.bbox) for w in ol.words if (t := w.text.strip().strip("|"))),
+                       key=lambda w: w.bbox[0])
+        cur: list = []
+        for w in words:
+            h = max(1.0, w.bbox[3] - w.bbox[1])
+            gap = w.bbox[0] - cur[-1].bbox[2] if cur else 0.0
+            if cur and (gap > OCR_WORD_GAP * h or gap > 0 and cur[-1].bbox[2] <= pw / 2 <= w.bbox[0]):
+                pieces.append(cur)
+                cur = []
+            cur.append(w)
+        if cur:
+            pieces.append(cur)
+    heights = sorted(max(w.bbox[3] for w in p) - min(w.bbox[1] for w in p) for p in pieces)
+    body = heights[len(heights) // 2] if heights else 10.0
+    out = []
+    for p in pieces:
+        bbox = pymupdf.Rect(min(w.bbox[0] for w in p), min(w.bbox[1] for w in p),
+                            max(w.bbox[2] for w in p), max(w.bbox[3] for w in p))
+        size = round((bbox.height if bbox.height > 1.4 * body else body) * 0.8, 1)
+        chars = []
+        for k, w in enumerate(p):
+            r = pymupdf.Rect(w.bbox)
+            if k:
+                chars.append(_ocr_char(" ", pymupdf.Rect(chars[-1]["bbox"].x1, r.y0, r.x0, r.y1), size))
+            step = r.width / len(w.text)
+            chars += [_ocr_char(c, pymupdf.Rect(r.x0 + i * step, r.y0, r.x0 + (i + 1) * step, r.y1), size)
+                      for i, c in enumerate(w.text)]
+        m = OCR_ALT_RE.match("".join(ch["c"] for ch in chars))
+        if m:                     # "(Blhb=c<a." / "D)jb<c=a." -> "(B) hb..." / "(D) b..."
+            head = chars[:m.end()]
+            chars = ([_ocr_char(c, pymupdf.Rect(head[0]["bbox"]), size) for c in f"({(m.group(1) or m.group(2) or m.group(3)).upper()})"]
+                     + [_ocr_char(" ", pymupdf.Rect(head[-1]["bbox"]), size)] + chars[m.end():])
+        out.append({"chars": chars, "bbox": bbox, "fonts": {OCR_FONT}})
+    return out
+
+
+def _ocr_char(c: str, bbox: pymupdf.Rect, size: float) -> dict:
+    return {"c": c, "bbox": bbox, "oy": bbox.y1, "size": size, "color": 0, "font": OCR_FONT, "bold": False}
+
+
 def _normalize_alt(txt: str, alt_style: str) -> str:
     """Na prova de alternativas "a)" a linha passa a ser "(A)", o formato do resto do código."""
     m = LOWER_ALT_RE.match(txt) if alt_style == "lower" else None
@@ -594,15 +692,45 @@ def _normalize_alt(txt: str, alt_style: str) -> str:
 
 
 def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
-                alt_style: str = "upper") -> tuple[list[Row], list[tuple[int, float]]]:
+                alt_style: str = "upper", ocr: OcrProvider | None = None
+                ) -> tuple[list[Row], list[tuple[int, float]]]:
     pw = page.rect.width
     header_y, footer_y = _margins(page)
     lines = _raw_lines(page)
-    _patch_missing_glyphs(lines, page)
-    _decode_glyphs(lines)
-    _rebuild_fractions(lines, page)
-    _merge_script_lines(lines)
-    _mark_scripts(lines)
+    reason = _needs_ocr(page, lines) if ocr is not None else None
+    if reason:
+        # Fotos, mapas e tirinhas ficam de fora do OCR; desenhos vetoriais não, porque
+        # tabelas (alternativas da 2021 Q15) também são desenho. Na página escaneada o
+        # texto é a própria imagem: nada fica de fora.
+        photos = [] if reason == "scan" else [r for r in parts or [] if any(
+            r.intersects(im["bbox"]) for im in page.get_image_info())]
+        found = ocr.read_page(page, photos)
+        # O Tesseract pula as tabelas com borda na página inteira; recortadas, elas saem.
+        # Uma tabela fundida com o desenho de cima (2021 Q28) tem só as palavras da legenda:
+        # vale a densidade, e o que o recorte relê não se repete.
+        for box in _merge_rects([r for r in parts or [] if r not in photos]):
+            seen = [pymupdf.Rect(w.bbox) for ln in found for w in ln.words]
+            inside = sum(box.contains(pymupdf.Point(w.x0, w.y0)) for w in seen)
+            if box.width >= OCR_BOX_MIN and box.height >= OCR_BOX_MIN and inside < box.get_area() / OCR_BOX_AREA:
+                # Sem a borda externa: a tabela inteira com a moldura vira um bloco "imagem" e sai vazia.
+                for ln in ocr.read_page(page, photos, box + (OCR_BOX_INSET, OCR_BOX_INSET, -OCR_BOX_INSET, -OCR_BOX_INSET)):
+                    ln.words = [w for w in ln.words if not any(
+                        s.contains(pymupdf.Point((w.bbox[0] + w.bbox[2]) / 2, (w.bbox[1] + w.bbox[3]) / 2)) for s in seen)]
+                    found.append(ln)
+        read = _ocr_lines(found, page.rect.width)
+        # O que a camada de texto tem de legível fica (em 2021, os números das questões em
+        # SegoeUIBlack, que o OCR às vezes perde); o OCR preenche o resto. Com a codificação
+        # quebrada nada da camada de texto presta.
+        keep = [] if reason == "garbled" else [ln for ln in lines if not _bitmap_chars(ln["chars"])
+                                                 and any(ch["c"].strip() for ch in ln["chars"])]
+        lines = keep + [ln for ln in read if not any(_overlap_ratio(ln["bbox"], k["bbox"]) > 0.5
+                                                     and ln["bbox"].intersects(k["bbox"]) for k in keep)]
+    else:
+        _patch_missing_glyphs(lines, page)
+        _decode_glyphs(lines)
+        _rebuild_fractions(lines, page)
+        _merge_script_lines(lines)
+        _mark_scripts(lines)
 
     cands = []
     ends: list[tuple[int, float]] = []     # "#####" = marca de fim de questão (texto oculto no PDF)
@@ -912,10 +1040,10 @@ def _learn_digits(doc: pymupdf.Document, pages: list[int]) -> dict[bytes, str]:
 
 
 def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
-                 digits: dict[bytes, str] | None = None) -> list[Item]:
+                 digits: dict[bytes, str] | None = None, ocr: OcrProvider | None = None) -> list[Item]:
     pw = page.rect.width
     parts = _figure_parts(page)
-    rows, ends = _build_rows(page, parts, alt_style)
+    rows, ends = _build_rows(page, parts, alt_style, ocr)
     for r, ds in _digit_groups(page) if digits else ():
         if all(d in digits for d in ds):
             text = "".join(digits[d] for d in ds)
@@ -986,7 +1114,16 @@ def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
     for col, y in ends:
         items.append(Item("end", pno, col, y + 0.5))
 
-    items.sort(key=_reading_order(items, pw))
+    order = _reading_order(items, pw)
+    if any(OCR_FONT in r.fonts for r in rows):
+        # 2021 separa as questões com fios; um fio de largura total fecha as duas colunas
+        # acima dele (Q90: enunciado à esquerda e alternativas à direita, abaixo da Q89).
+        header_y, footer_y = _margins(page)
+        rules = sorted(r.y0 for d in page.get_drawings() if (r := d["rect"]).width >= OCR_RULE_W * pw
+                       and r.height < 3 and header_y < r.y0 < footer_y)
+        items.sort(key=lambda it: (sum(y < it.y0 for y in rules), order(it)))
+    else:
+        items.sort(key=order)
     return items
 
 
@@ -1097,7 +1234,8 @@ def _order_by_markers(items: list[Item]) -> list[Item]:
     return [it for _, block in sorted(blocks, key=lambda b: b[0]) for it in block]
 
 
-def parse(doc: pymupdf.Document):
+def parse(doc: pymupdf.Document, ocr: OcrProvider | None = None):
+    """Questões e textos compartilhados; ``ocr`` lê as páginas sem texto legível (ver _needs_ocr)."""
     questions: dict[int, dict] = {}
     shared: dict[str, dict] = {}
     cur: dict | None = None
@@ -1121,7 +1259,7 @@ def parse(doc: pymupdf.Document):
         seg[2], seg[3] = min(seg[2], b.x0), max(seg[3], b.x1)
 
     for pno in pages:
-        for it in _order_by_markers(extract_page(doc[pno], pno, alt_style, digits)):
+        for it in _order_by_markers(extract_page(doc[pno], pno, alt_style, digits, ocr)):
             if it.kind == "end":
                 if mode != "shared":       # fim da questão: ignora o que vier até o próximo marcador
                     cur, cur_alt, mode = None, None, "none"
@@ -1302,6 +1440,8 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
         # ---- sinalizadores p/ revisão humana
         if any(any(m in f.lower() for m in MATH_FONTS) for f in q["_fonts"]):
             q["revisar"].append("formula_matematica")
+        if OCR_FONT in q["_fonts"]:
+            q["revisar"].append("texto_ocr")
         blob = q["enunciado"] + "".join(a["texto"] for a in q["alternativas"].values())
         if CORRUPT_GLYPH_RE.search(blob):
             q["revisar"].append("glifo_estranho")
@@ -1318,7 +1458,7 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
 
 
 def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bool = True,
-                detailed_crops: bool = False, progress=None) -> Path:
+                detailed_crops: bool = False, progress=None, ocr: OcrProvider | None = None) -> Path:
     """Extrai um PDF e grava questoes.json e imagens dentro de outdir."""
     input_pdf = input_pdf.resolve()
     outdir.mkdir(parents=True, exist_ok=True)
@@ -1326,7 +1466,7 @@ def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bo
     try:
         if progress:
             progress({"stage": "extracting", "message": f"Lendo PDF · {len(doc)} páginas", "pages": len(doc)})
-        questions, shared = parse(doc)
+        questions, shared = parse(doc, ocr)
         if progress:
             progress({"stage": "rendering", "message": f"Extraindo imagens de {len(questions)} questões", "questions": len(questions)})
         finalize(doc, questions, shared, outdir, dpi, full_crops, detailed_crops)
@@ -1356,7 +1496,8 @@ def main():
     if not args.pdf.is_file():
         ap.error(f"PDF não encontrado: {args.pdf}")
     outdir = args.outdir or args.pdf.parent / args.pdf.stem
-    output = extract_pdf(args.pdf, outdir, dpi=args.dpi, full_crops=not args.no_full_crops)
+    from studai.integrations.ocr import default_ocr   # o CLI monta as dependências
+    output = extract_pdf(args.pdf, outdir, dpi=args.dpi, full_crops=not args.no_full_crops, ocr=default_ocr())
     print(f"Extração concluída: {output} ({json.loads(output.read_text(encoding='utf-8'))['total_questoes']} questões)")
 
 
