@@ -146,6 +146,19 @@ class OcrParseTests(unittest.TestCase):
         # nada do texto embaralhado entra na questão
         self.assertNotIn("CpqÇåuruâçq", str(questions))
 
+    def test_inline_number_opens_question_without_bold(self):
+        # 2002 dia 2: "02 Considere..." com o número colado; a questão 1 tem fotos
+        # como alternativas, então não chegou a "(E)" em texto.
+        lines = [_line("01 Identifique, entre as fotos abaixo, a correta.", 40, 100),
+                 _line("02 Considere as afirmações abaixo.", 40, 200),
+                 _line("Há 12 frascos de detergente.", 40, 214),
+                 _line("a) I e II.", 40, 230), _line("b) II.", 40, 243), _line("c) III.", 40, 256),
+                 _line("d) I.", 40, 269), _line("e) IV.", 40, 282)]
+        questions, _ = parse(_garbled_doc(), ocr=FakeEngine({0: lines}))
+        self.assertEqual(sorted(questions), [1, 2])
+        self.assertEqual(questions[2]["enunciado"], ["Considere as afirmações abaixo.", "Há 12 frascos de detergente."])
+        self.assertEqual(sorted(questions[2]["alternativas"]), list("ABCDE"))
+
     def test_without_engine_the_page_is_skipped(self):
         questions, _ = parse(_garbled_doc(), ocr=None)
         self.assertEqual(questions, {})

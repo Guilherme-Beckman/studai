@@ -85,6 +85,7 @@ LEAD_NUM_RE = re.compile(r"^(?:[A-Z]\.)?(\d{2,3})[–—-]?$")
 # Número lido pelo OCR num escaneado (1997): "K.15 - ...", com dígitos às vezes trocados
 # ("K. lá -" = K.14, "K.5h -" = K.54). Só vale com a letra do dia e o travessão.
 OCR_MARKER_RE = re.compile(r"^([A-Z])\s?[.,]\s?(\S{2})\s*[-–—~]+(?:\s+(.*)|$)", re.S)
+OCR_INLINE_RE = re.compile(r"^\d{2,3}\s+[A-ZÀ-Ú“\"]")   # "02 Considere as afirmações"
 OCR_LEAD_JUNK_RE = re.compile(r"^[(|\[]\s+(?=[A-Z])")    # "( Note e adote:" (borda da caixa lida como "(")
 # Letra de alternativa mal lida: "(Ajc<", "(JV=1,6", "(Qe<", "(EJc<1", "A) 10 bilhões" e, nas
 # provas "a)" escaneadas (1997), "aj) À e B", "bh) 30º", "co) 45º".
@@ -1315,7 +1316,10 @@ def parse(doc: pymupdf.Document, ocr="auto", progress=None):
                 # no meio de um enunciado não é marcador.
                 if not (mk and int(mk.group(1)) == expected) and (
                         it.row.lead_num == expected
-                        or cur is None or mode != "stem" and "E" in cur["alternativas"]):
+                        or cur is None or mode != "stem" and "E" in cur["alternativas"]
+                        # OCR não sabe o negrito: "02 Considere..." (2002 dia 2) abre questão
+                        # quando o número esperado vem seguido de palavra em maiúscula.
+                        or it.row.fonts == {"OCR"} and OCR_INLINE_RE.match(t)):
                     rest = _inline_marker(t, expected)
                 num = expected
                 if not (mk and int(mk.group(1)) == expected) and rest is None:
