@@ -78,7 +78,7 @@ CLASSIFICATION_RETRY_ROUNDS = max(0, int(os.environ.get("STUDAI_CLASSIFICATION_R
 CLASSIFICATION_RETRY_DELAYS = (5, 15, 30, 60, 120)
 if CLASSIFICATION_ROUTING not in {"hierarchical", "flat"}:
     raise ValueError("STUDAI_CLASSIFICATION_ROUTING deve ser 'hierarchical' ou 'flat'")
-PROMPT_VERSION = "v11-language-rules" if CLASSIFICATION_ROUTING == "hierarchical" else "v9-language-rules"
+PROMPT_VERSION = "v12-language-rules" if CLASSIFICATION_ROUTING == "hierarchical" else "v10-language-rules"
 _DEFAULT = object()
 _CACHE_WRITE_LOCK = threading.Lock()
 _CACHE_WARM_LOCK = threading.Lock()
@@ -89,13 +89,11 @@ _CACHE_WARMED = False
 # Matérias da 1ª fase FUVEST (Conhecimentos Gerais). Troque com --taxonomia arquivo.json
 # (formato: {"Nome da matéria": "descrição curta que ajuda o modelo", ...}).
 DEFAULT_TAXONOMY: dict[str, str] = {
-    "Língua Portuguesa": "gramática, norma culta, variação linguística, coesão, conectivos, sentido de palavras, "
-                         "figuras de linguagem, interpretação de textos não literários em português (notícia, "
-                         "artigo, ensaio, charge, tirinha, publicidade, canção popular)",
+    "Língua Portuguesa": "gramática, norma culta, variação linguística, coesão, figuras de linguagem, "
+                         "estratégias de linguagem, interpretação de textos em português",
     "Literatura": "obras, autores e escolas literárias (Brasil, Portugal, África lusófona), lista de leitura "
-                  "obrigatória, análise de poemas e trechos de romance, conto ou crônica literária",
-    "Inglês": "compreensão de textos em inglês (inclusive poema e letra de canção em inglês), "
-              "mesmo com enunciado e alternativas em português",
+                  "obrigatória, análise de poemas e trechos literários",
+    "Inglês": "compreensão de textos em inglês",
     "Matemática": "álgebra, funções, geometria, trigonometria, progressões, probabilidade, estatística, contagem",
     "Física": "mecânica, termologia, óptica, ondas, eletricidade, magnetismo, física moderna",
     "Química": "química geral, físico-química, química orgânica, estequiometria, equilíbrio, termoquímica, radioatividade",
@@ -123,8 +121,8 @@ DEFAULT_TOPIC_TAXONOMY: dict[str, list[str]] = {
 # efeitos de sentido são objetos de Língua Portuguesa, e a Literatura cobra obra, autor, período,
 # gênero literário e versificação. Entram no prompt de matéria (roteado) e no prompt plano.
 LANGUAGE_SUBJECT_RULES = """\
-- Texto-base em INGLÊS (artigo, anúncio, poema, letra de canção) → "Inglês", sempre, mesmo que o enunciado \
-e as alternativas estejam em português.
+- Se a questão exige compreender um texto em inglês, a matéria é "Inglês", mesmo que o tema seja de outra área \
+e mesmo que o texto seja poema ou letra de canção.
 - Texto em português de autor literário (poema, conto, romance, obra da lista de leitura) cuja pergunta trata \
 do sentido literário (eu lírico, narrador, personagens, tema da obra, estilo, escola, autor) → "Literatura".
 - Texto em português usado para cobrar gramática, conectivos, sentido de uma palavra, figura de linguagem, \

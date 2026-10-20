@@ -63,12 +63,12 @@ def toy_model() -> SubjectModel:
 class LanguageSubjectRulesTests(unittest.TestCase):
     def test_subject_prompt_has_language_tiebreak_rules_and_richer_descriptions(self):
         system = service.build_subject_system(service.DEFAULT_TAXONOMY)
-        self.assertIn("Texto-base em INGLÊS", system)
-        self.assertIn("letra de canção", system)
+        self.assertIn("poema ou letra de canção", system)
+        self.assertIn("eu lírico", system)
         self.assertIn("eu lírico", system)
         self.assertIn("figura de linguagem", system)
         # Descrições das matérias também guiam o desempate.
-        self.assertIn("inclusive poema e letra de canção em inglês", system)
+        self.assertIn("lista de leitura obrigatória", system)
         self.assertIn("lista de leitura obrigatória", system)
         self.assertNotIn("{regras_linguagens}", system)
 
