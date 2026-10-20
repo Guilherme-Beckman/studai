@@ -65,7 +65,9 @@ def load_jsonl(path: Path, *, require_labels: bool = True) -> list[dict]:
             content = CONTENT_INDEX.get(str(row["content_id"]))
             if row.get("taxonomy_version") != CONTENT_TAXONOMY_VERSION:
                 raise ValueError(f"linha {line_no}: taxonomy_version não corresponde à árvore ativa")
-            if not content or not content["is_leaf"] or content["subject"] != row.get("subject"):
+            # Revisões podem parar no conteúdo pai (refinável) quando ele já descreve a questão.
+            if (not content or not (content["is_leaf"] or content.get("refinable"))
+                    or content["subject"] != row.get("subject")):
                 raise ValueError(f"linha {line_no}: content_id inválido para subject")
         rows.append(row)
     return rows
@@ -75,8 +77,18 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
              image_mode: str = "nunca", limit: int | None = None,
              request_attempts: int = 1, workers: int = 1, progress=None, cancelled=None,
              rag: bool = False, embedding_model: str = DEFAULT_EMBEDDING_MODEL,
-             rag_examples: int = 3, allow_unlabeled: bool = False) -> dict:
+             rag_examples: int = 3, allow_unlabeled: bool = False,
+             subjects: list[str] | None = None, subject_only: bool = False,
+             subject_classifier=None) -> dict:
+    """``subjects`` filtra pela matéria do gabarito (antes do ``limit``); ``subject_only`` mede só
+    a 1ª etapa do roteamento (a matéria), bem mais rápido; ``subject_classifier`` substitui essa
+    etapa quando confiante (``SubjectClassifier``)."""
     data = load_jsonl(dataset, require_labels=not allow_unlabeled)
+    if subjects:
+        wanted = {clf._norm(name) for name in subjects}
+        data = [row for row in data if clf._norm(str(row.get("subject") or "")) in wanted]
+        if not data:
+            raise ValueError(f"nenhuma questão das matérias {subjects!r} no conjunto")
     if limit is not None:
         data = data[:max(1, limit)]
     workers = max(1, min(int(workers), len(data) or 1))
@@ -89,7 +101,9 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
     def classify(index, row):
         question = {"enunciado": row["question"], "numero": index,
                     "nota": row.get("supporting_texts", ""),
-                    "alternativas": {str(k): {"texto": v} for k, v in (row.get("alternatives") or {}).items()},
+                    # Conjuntos novos (fuvest-reviewed.jsonl) já trazem {"texto": ..., "figuras": [...]}.
+                    "alternativas": {str(k): (v if isinstance(v, dict) else {"texto": v})
+                                     for k, v in (row.get("alternatives") or {}).items()},
                     "revisar": []}
         started = time.monotonic()
         usage_history = getattr(getattr(provider, "_thread_state", None), "usage_history", [])
@@ -109,8 +123,18 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
                                               exclude_year=row.get("year"))
             candidate_topics = ({str(item["result"].get("content_id") or item["result"].get("topic")) for item in examples}
                                 if examples else None)
-            result = clf.classify_question(provider, question, None, clf.DEFAULT_TAXONOMY, images,
-                                           clf.DEFAULT_TOPIC_TAXONOMY, examples, candidate_topics)
+            if subject_only:
+                user = clf.render_questao(question, None, bool(images))
+                if examples:
+                    user += "\n\n" + clf.render_examples(examples)
+                (subject, secondary, conf), tries, origin = clf.route_subject(
+                    provider, user, clf.DEFAULT_TAXONOMY, images, question, None, subject_classifier)
+                result = {"materia": subject, "materias_secundarias": secondary, "confianca": conf,
+                          "tentativas": tries, "materia_origem": origin}
+            else:
+                result = clf.classify_question(provider, question, None, clf.DEFAULT_TAXONOMY, images,
+                                               clf.DEFAULT_TOPIC_TAXONOMY, examples, candidate_topics,
+                                               subject_classifier=subject_classifier)
             error = None
         except Exception as exc:
             result, error = {}, str(exc)
@@ -142,7 +166,9 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
         else:
             usage = dict(getattr(thread_state, "usage", {}) or {})
             usage["calls"] = int(bool(usage))
-        outcome = {"gold_subject": row.get("subject"), "pred_subject": result.get("materia"),
+        outcome = {"id": row.get("id"), "gold_subject": row.get("subject"), "pred_subject": result.get("materia"),
+                   "pred_subject_origin": result.get("materia_origem", "llm" if result else None),
+                   "pred_subject_confidence": result.get("confianca") if subject_only else None,
                    "gold_topic": row.get("topic"), "pred_topic": result.get("assunto"),
                    "gold_content_id": row.get("content_id"),
                    "pred_content_id": result.get("conteudo_principal_id"),
@@ -210,6 +236,10 @@ def evaluate(dataset: Path, provider, *, output: Path, source: str, version: str
               "image_mode": image_mode,
               "http_attempts_per_request": request_attempts,
               "count": len(data), "workers": workers, "rag": bool(retriever),
+              "subjects_filter": list(subjects or []), "subject_only": subject_only,
+              "subject_model": getattr(subject_classifier, "signature", None),
+              "subject_model_answers": sum(item.get("pred_subject_origin") == "subject_model"
+                                           for item in outcomes),
               "embedding_model": embedding_model if retriever else None,
               "invalid_json_or_classification": invalid,
               "attempts": attempts, "latency_seconds": {"mean": statistics.mean(latencies) if latencies else 0,
@@ -263,17 +293,37 @@ def main() -> None:
     parser.add_argument("--allow-unlabeled", action="store_true",
                         help="permite linhas sem subject/topic e calcula acurácia apenas nas rotuladas")
     parser.add_argument("--ollama-threads", type=int, default=0)
+    parser.add_argument("--subjects", help="só questões destas matérias do gabarito, separadas por vírgula "
+                                           "(ex.: 'Inglês,Língua Portuguesa,Literatura'); aplicado antes do --limit")
+    parser.add_argument("--subject-only", action="store_true",
+                        help="mede só a etapa de matéria do roteamento hierárquico (1 chamada por questão)")
+    parser.add_argument("--subject-model", type=Path,
+                        help="modelo leve de matéria (JSON de train_subject_classifier) que substitui a "
+                             "chamada de matéria quando a confiança passa de --subject-model-min-conf")
+    parser.add_argument("--subject-model-min-conf", type=float, default=0.9)
     args = parser.parse_args()
     if args.timeout <= 0 or args.http_attempts < 1 or args.max_tokens < 1 or args.ollama_threads < 0:
         parser.error("timeout, http-attempts e max-tokens devem ser positivos; ollama-threads não pode ser negativo")
     provider = make_provider(args.provider, args.model, base_url=args.base_url, key_env=None, temperature=0,
                              max_tokens=args.max_tokens, json_mode=True, timeout=args.timeout,
                              request_attempts=args.http_attempts, num_threads=args.ollama_threads)
+    subject_classifier = None
+    if args.subject_model:
+        from studai.features.classification.rag import ollama_embed
+        from studai.features.classification.subject_model import SubjectClassifier, SubjectModel
+        model = SubjectModel.load(args.subject_model)
+        embed_url = args.base_url.split(",")[0]
+        subject_classifier = SubjectClassifier(
+            model, lambda texts: ollama_embed(texts, base_url=embed_url, model=model.embedding_model),
+            min_confidence=args.subject_model_min_conf)
     result = evaluate(args.dataset, provider, output=args.output, source=args.source, version=args.version,
                       image_mode=args.images, limit=args.limit, request_attempts=args.http_attempts,
                       workers=args.workers, rag=args.rag, embedding_model=args.embedding_model,
-                      rag_examples=args.rag_examples, allow_unlabeled=args.allow_unlabeled)
-    print(json.dumps({key: result[key] for key in ("count", "subject", "content_stage1", "refinement",
+                      rag_examples=args.rag_examples, allow_unlabeled=args.allow_unlabeled,
+                      subjects=[name.strip() for name in (args.subjects or "").split(",") if name.strip()],
+                      subject_only=args.subject_only, subject_classifier=subject_classifier)
+    print(json.dumps({key: result[key] for key in ("count", "subject", "subject_model_answers",
+                                                   "content_stage1", "refinement",
                                                    "latency_seconds", "stages",
                                                    "invalid_json_or_classification", "attempts", "hosts")},
                      ensure_ascii=False, indent=2))

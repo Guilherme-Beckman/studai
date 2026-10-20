@@ -78,7 +78,8 @@ CLASSIFICATION_RETRY_ROUNDS = max(0, int(os.environ.get("STUDAI_CLASSIFICATION_R
 CLASSIFICATION_RETRY_DELAYS = (5, 15, 30, 60, 120)
 if CLASSIFICATION_ROUTING not in {"hierarchical", "flat"}:
     raise ValueError("STUDAI_CLASSIFICATION_ROUTING deve ser 'hierarchical' ou 'flat'")
-PROMPT_VERSION = "v9-hierarchical-keep-parent" if CLASSIFICATION_ROUTING == "hierarchical" else "v7-two-stage-content"
+PROMPT_VERSION = "v12-language-rules" if CLASSIFICATION_ROUTING == "hierarchical" else "v10-language-rules"
+_DEFAULT = object()
 _CACHE_WRITE_LOCK = threading.Lock()
 _CACHE_WARM_LOCK = threading.Lock()
 _CACHE_WARMED = False
@@ -88,8 +89,10 @@ _CACHE_WARMED = False
 # Matérias da 1ª fase FUVEST (Conhecimentos Gerais). Troque com --taxonomia arquivo.json
 # (formato: {"Nome da matéria": "descrição curta que ajuda o modelo", ...}).
 DEFAULT_TAXONOMY: dict[str, str] = {
-    "Língua Portuguesa": "gramática, norma culta, variação linguística, coesão, estratégias de linguagem, interpretação de textos em português",
-    "Literatura": "obras, autores e escolas literárias (Brasil, Portugal, África lusófona), análise de trechos literários",
+    "Língua Portuguesa": "gramática, norma culta, variação linguística, coesão, figuras de linguagem, "
+                         "estratégias de linguagem, interpretação de textos em português",
+    "Literatura": "obras, autores e escolas literárias (Brasil, Portugal, África lusófona), lista de leitura "
+                  "obrigatória, análise de poemas e trechos literários",
     "Inglês": "compreensão de textos em inglês",
     "Matemática": "álgebra, funções, geometria, trigonometria, progressões, probabilidade, estatística, contagem",
     "Física": "mecânica, termologia, óptica, ondas, eletricidade, magnetismo, física moderna",
@@ -113,6 +116,19 @@ DEFAULT_TOPIC_TAXONOMY: dict[str, list[str]] = {
     for subject in DEFAULT_CONTENT_TAXONOMY["subjects"]
 }
 
+# Regras de desempate entre as matérias de Linguagens (Inglês × Língua Portuguesa × Literatura).
+# Canções e poemas confundiam a matéria; os critérios seguem o Programa FUVEST: figuras de linguagem e
+# efeitos de sentido são objetos de Língua Portuguesa, e a Literatura cobra obra, autor, período,
+# gênero literário e versificação. Entram no prompt de matéria (roteado) e no prompt plano.
+LANGUAGE_SUBJECT_RULES = """\
+- Se a questão exige compreender um texto em inglês, a matéria é "Inglês", mesmo que o tema seja de outra área \
+e mesmo que o texto seja poema ou letra de canção.
+- Texto em português de autor literário (poema, conto, romance, obra da lista de leitura) cuja pergunta trata \
+do sentido literário (eu lírico, narrador, personagens, tema da obra, estilo, escola, autor) → "Literatura".
+- Texto em português usado para cobrar gramática, conectivos, sentido de uma palavra, figura de linguagem, \
+tipo ou gênero textual, ou texto não literário (notícia, ensaio, charge, tirinha, quadrinhos) → "Língua Portuguesa"."""
+
+
 SYSTEM_TEMPLATE = """Você classifica questões de vestibular (FUVEST) por matéria e conteúdo.
 
 Matérias permitidas (use exatamente estes nomes):
@@ -120,7 +136,7 @@ Matérias permitidas (use exatamente estes nomes):
 
 Regras:
 - "materia" é a matéria que o aluno precisa dominar para RESOLVER a questão, e deve ser UMA das permitidas.
-- Se a questão exige compreender um texto em inglês, a matéria é "Inglês", mesmo que o tema seja de outra área.
+{regras_linguagens}
 - Interprete a questão pelo conteúdo cobrado, não pelo contexto do texto-base (ex.: um texto sobre um tema de saúde \
 que cobra cálculo de probabilidade é Matemática).
 - "materias_secundarias": outras matérias permitidas claramente envolvidas (lista, pode ser vazia).
@@ -159,7 +175,7 @@ Matérias permitidas (use exatamente estes nomes):
 
 Regras:
 - "materia" é a matéria que o aluno precisa dominar para RESOLVER a questão, e deve ser UMA das permitidas.
-- Se a questão exige compreender um texto em inglês, a matéria é "Inglês", mesmo que o tema seja de outra área.
+{regras_linguagens}
 - Interprete a questão pelo conteúdo cobrado, não pelo contexto do texto-base (ex.: um texto sobre um tema de saúde \
 que cobra cálculo de probabilidade é Matemática).
 - "materias_secundarias": outras matérias permitidas claramente envolvidas, da mais para a menos provável (pode ser vazia).
@@ -234,6 +250,7 @@ def build_system(taxonomy: dict[str, str], topics_by_subject: dict[str, list[str
     demo_topics = {subject: (topics[:1] if topics else [])
                    for subject, topics in topics_by_subject.items()}
     return SYSTEM_TEMPLATE.format(taxonomia="\n".join(f"- {n}: {d}" for n, d in taxonomy.items()),
+                                  regras_linguagens=LANGUAGE_SUBJECT_RULES,
                                   topicos=("\n".join(topic_lines) or "(nenhum conteúdo candidato; responda REVISAR)") +
                                   "\nTAXONOMIA_TOPICOS_JSON: " + json.dumps(demo_topics, ensure_ascii=False))
 
@@ -453,7 +470,8 @@ def _confidence(value) -> float:
 
 
 def build_subject_system(taxonomy: dict[str, str]) -> str:
-    return SUBJECT_TEMPLATE.format(taxonomia="\n".join(f"- {n}: {d}" for n, d in taxonomy.items()))
+    return SUBJECT_TEMPLATE.format(taxonomia="\n".join(f"- {n}: {d}" for n, d in taxonomy.items()),
+                                   regras_linguagens=LANGUAGE_SUBJECT_RULES)
 
 
 def subject_content_options(subject: str, candidate_topics: set[str] | None = None) -> list[dict]:
@@ -531,9 +549,29 @@ def _parse_content(obj: dict, target: str, others: list[str], subject_conf: floa
                     taxonomy, None, DEFAULT_CONTENT_TAXONOMY)
 
 
+def route_subject(provider: Provider, user: str, taxonomy: dict[str, str], images: list[bytes],
+                  q: dict | None = None, shared: dict | None = None,
+                  subject_classifier=None) -> tuple[tuple[str, list[str], float], int, str]:
+    """First routing step: ((subject, secondary, confidence), LLM attempts, origin).
+
+    ``subject_classifier`` (optional, e.g. ``SubjectClassifier``) answers without the LLM when
+    it is confident; otherwise, or when it returns ``None``, the LLM chooses the subject.
+    """
+    subjects = list(taxonomy)
+    if subject_classifier is not None and q is not None:
+        guess = subject_classifier(q, shared, subjects)
+        if guess is not None and guess[0] in taxonomy:
+            return (guess[0], [name for name in guess[1] if name in taxonomy and name != guess[0]],
+                    float(guess[2])), 0, "subject_model"
+    found, attempts = _ask_json(
+        provider, build_subject_system(taxonomy), user, _subject_schema(subjects), images,
+        lambda obj: _parse_subject(obj, subjects), "materia")
+    return found, attempts, "llm"
+
+
 def classify_routed(provider: Provider, q: dict, shared: dict | None, taxonomy: dict[str, str],
                     images: list[bytes], examples: list[dict] | None = None,
-                    candidate_topics: set[str] | None = None) -> dict:
+                    candidate_topics: set[str] | None = None, subject_classifier=None) -> dict:
     """Hierarchical routing: subject, then the subject's contents, then subcontent refinement.
 
     Each step sends a short, stable system prompt (fixed per subject) instead of the whole tree,
@@ -542,10 +580,8 @@ def classify_routed(provider: Provider, q: dict, shared: dict | None, taxonomy: 
     user = render_questao(q, shared, bool(images))
     if examples:
         user += "\n\n" + render_examples(examples)
-    subjects = list(taxonomy)
-    (subject, secondary, subject_conf), attempts = _ask_json(
-        provider, build_subject_system(taxonomy), user, _subject_schema(subjects), images,
-        lambda obj: _parse_subject(obj, subjects), "materia")
+    (subject, secondary, subject_conf), attempts, subject_origin = route_subject(
+        provider, user, taxonomy, images, q, shared, subject_classifier)
 
     def content_step(target: str):
         options = subject_content_options(target, candidate_topics)
@@ -565,6 +601,8 @@ def classify_routed(provider: Provider, q: dict, shared: dict | None, taxonomy: 
     result["origem"] = "llm"
     result["roteamento"] = "hierarchical"
     result["tentativas"] = attempts
+    if subject_origin != "llm":
+        result["materia_origem"] = subject_origin
     if refinement_options(result.get("conteudo_principal_id") or ""):
         result = refine_one(provider, user, result, images)
     return result
@@ -662,10 +700,14 @@ def classify_batch_routed(provider: Provider, entries: list[tuple[str, str]],
 def classify_question(provider: Provider, q: dict, shared: dict | None, taxonomy: dict[str, str],
                       images: list[bytes], topics_by_subject: dict[str, list[str]] | None = None,
                       examples: list[dict] | None = None, candidate_topics: set[str] | None = None,
-                      system: str | None = None) -> dict:
-    """Classify with the configured routing; ``system`` is only used by the flat routing."""
+                      system: str | None = None, subject_classifier=None) -> dict:
+    """Classify with the configured routing; ``system`` is only used by the flat routing.
+
+    ``subject_classifier`` (hierarchical routing only) may replace the subject call.
+    """
     if CLASSIFICATION_ROUTING == "hierarchical":
-        return classify_routed(provider, q, shared, taxonomy, images, examples, candidate_topics)
+        return classify_routed(provider, q, shared, taxonomy, images, examples, candidate_topics,
+                               subject_classifier)
     if system is None:
         system = build_system(taxonomy, topics_by_subject, candidate_topics)
     return classify_one(provider, system, q, shared, taxonomy, images, topics_by_subject,
@@ -768,7 +810,7 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                 use_rag: bool = True, embedding_model: str = DEFAULT_EMBEDDING_MODEL,
                 rag_examples: int = 3, batch_size: int | None = None,
                 retry_rounds: int | None = None, retry_delays=CLASSIFICATION_RETRY_DELAYS,
-                sleep=time.sleep) -> dict:
+                sleep=time.sleep, subject_classifier=_DEFAULT) -> dict:
     data = json.loads(input_json.read_text(encoding="utf-8"))
     base = input_json.parent
     if batch_size is None:
@@ -798,6 +840,20 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
             rag_status = "no_reviewed_index"
     elif use_rag:
         rag_status = "requires_ollama"
+    if subject_classifier is _DEFAULT:
+        # Desligado por padrão; STUDAI_SUBJECT_MODEL=1 e um modelo treinado em STUDAI_CACHE_DIR ligam.
+        subject_classifier = None
+        if CLASSIFICATION_ROUTING == "hierarchical":
+            from studai.features.classification.subject_model import load_default_subject_classifier
+            embed_url = (",".join(provider.base_urls) if isinstance(provider, OllamaProvider)
+                         else "http://localhost:11434")
+            try:
+                subject_classifier = load_default_subject_classifier(embed_url)
+            except (OSError, ValueError) as exc:
+                log(f"Classificador leve de matéria ignorado: {exc}")
+    # Resultados com a matéria escolhida pelo modelo leve não se misturam no cache com os do LLM.
+    cache_variant = rag_version + (f"+subject-model:{subject_classifier.signature}"
+                                   if getattr(subject_classifier, "signature", None) else "")
     cached_model_default = provider.models[0] if isinstance(provider, GeminiProvider) else provider.label
     if use_cache:
         _warm_cache_from_processed()
@@ -813,12 +869,13 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
     # Fase de lote opcional (faixas de nuvem com cota diária): questões só de texto e fora do
     # cache vão em grupos; as que voltarem completas pulam a chamada individual.
     prebatched: dict[int, tuple[dict, str]] = {}
-    if batch_size > 1 and CLASSIFICATION_ROUTING == "hierarchical" and retriever is None:
+    if (batch_size > 1 and CLASSIFICATION_ROUTING == "hierarchical" and retriever is None
+            and subject_classifier is None):
         eligible = []
         for q in todo:
             shared = shared_all.get(q.get("texto_id") or "")
             imgs = load_images(base, q, shared, imagens)
-            key = _cache_key(q, shared, imgs, provider.label, tax_hash, imagens, rag_version)
+            key = _cache_key(q, shared, imgs, provider.label, tax_hash, imagens, cache_variant)
             if imgs or (use_cache and cache_db and cache_db.get(key) is not None):
                 continue
             eligible.append((str(q["numero"]), render_questao(q, shared, False)))
@@ -857,7 +914,7 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
             raise InterruptedError("classificação cancelada")
         shared = shared_all.get(q.get("texto_id") or "")
         imgs = load_images(base, q, shared, imagens)
-        k = _cache_key(q, shared, imgs, provider.label, tax_hash, imagens, rag_version)
+        k = _cache_key(q, shared, imgs, provider.label, tax_hash, imagens, cache_variant)
         cached = cache_db.get(k) if use_cache and cache_db else None
         if cached:
             result = dict(cached[0])
@@ -901,13 +958,15 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                     with request_context(numero, on_route, avoid=avoid) as used_lanes:
                         try:
                             res = classify_question(provider, q, shared, taxonomy, imgs, topics_by_subject,
-                                                    examples, candidate_topics, question_system)
+                                                    examples, candidate_topics, question_system,
+                                                    subject_classifier)
                         finally:
                             with lock:
                                 tried_lanes.setdefault(numero, set()).update(used_lanes)
                 else:
                     res = classify_question(provider, q, shared, taxonomy, imgs, topics_by_subject,
-                                            examples, candidate_topics, question_system)
+                                            examples, candidate_topics, question_system,
+                                            subject_classifier)
             if retriever:
                 res["exemplos_referencia"] = [
                     {"id": item["identity"], "similaridade": round(item["score"], 4),
@@ -1056,6 +1115,9 @@ def classificar(input_json: Path, provider: Provider, taxonomy: dict[str, str], 
                              "prompt_version": PROMPT_VERSION, "rag": rag_status,
                              "rag_embedding_model": embedding_model if retriever else None,
                              "rag_version": rag_version,
+                             "classificador_materia": (subject_classifier.signature
+                                                       if getattr(subject_classifier, "signature", None)
+                                                       else None),
                              "imagens": imagens, "erros": errors}
     data["processamento_cache"] = {"questoes_reutilizadas": cached_hits,
                                    "cache_misses": max(0, len(todo) - cached_hits - len(errors)),
