@@ -691,7 +691,8 @@ def _reprocess_question(exam_id: str, number: int, uploaded: bytes | None,
         preview = question_reprocess.create_preview(
             exam_id=exam_id, exam_json=exam_json, number=number, workspace_root=QUESTION_REPROCESS_ROOT,
             extract=extract, source_pdf=lambda: _source_pdf(exam_id, exam_json),
-            uploaded=uploaded, filename=filename, progress=progress, cancelled=cancelled)
+            uploaded=uploaded, filename=filename, progress=progress, cancelled=cancelled,
+            processed_root=PROCESSED_ROOT)
     except question_reprocess.ReprocessCancelled:
         raise JobCancelled() from None
     _set_job(job_id, stage="preview_ready", message=f"Prévia da questão {number} pronta", progress=100)
@@ -1132,7 +1133,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 return self._static("index.html")
-            if path in ("/app.js", "/reports.js", "/knowledge-map.js", "/styles.css"):
+            if path in ("/app.js", "/reports.js", "/knowledge-map.js", "/crop-editor.js", "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})

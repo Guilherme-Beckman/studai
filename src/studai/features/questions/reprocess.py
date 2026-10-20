@@ -73,7 +73,8 @@ def create_preview(*, exam_id: str, exam_json: Path, number: int, workspace_root
                    extract: ExtractFn, source_pdf: Path | Callable[[], Path] | None = None,
                    uploaded: bytes | None = None, filename: str | None = None,
                    progress: Callable[[dict], None] | None = None,
-                   cancelled: Callable[[], bool] = lambda: False) -> dict:
+                   cancelled: Callable[[], bool] = lambda: False,
+                   processed_root: Path | None = None) -> dict:
     """Extrai a questão de novo numa área isolada e devolve a prévia (sem alterar a prova).
 
     ``uploaded`` (PDF enviado pelo usuário) tem prioridade sobre ``source_pdf`` (o PDF
@@ -86,6 +87,8 @@ def create_preview(*, exam_id: str, exam_json: Path, number: int, workspace_root
     old_question = find_question(original, number)
     if old_question is None:
         raise FileNotFoundError(f"questão {number} não encontrada nesta prova")
+    if processed_root is not None:
+        _inherit_reviews(processed_root, original, exam_id, exam_json)
     review = question_review.read_reviews(exam_json).get("questions", {}).get(str(number), {})
     if uploaded is not None:
         source = stage_uploaded_pdf(exam_json, uploaded, filename, workspace_root)
@@ -139,6 +142,12 @@ def create_preview(*, exam_id: str, exam_json: Path, number: int, workspace_root
     (workdir / "preview.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"previewId": preview_id, "examId": exam_id, "number": number,
             "question": replacement, "sharedText": shared_text}
+
+
+def _inherit_reviews(processed_root: Path, data: dict, exam_id: str, exam_json: Path) -> None:
+    """Sem revisao.json ao lado desta extração (p. ex. a prova foi processada de novo
+    noutro diretório), herda as decisões humanas da extração anterior da mesma prova."""
+    question_review.preserve_reviews(processed_root, str(data.get("prova") or exam_id), exam_json)
 
 
 def _preview_dir(workspace_root: Path, preview_id: str) -> Path:
@@ -248,9 +257,7 @@ def confirm_preview(*, exam_id: str, exam_json: Path, number: int, preview_id: s
     if _question_hash(question) != preview.get("originalQuestionSha256"):
         raise ValueError("a questão mudou desde a criação da prévia; gere uma nova prévia")
     if processed_root is not None:
-        # Sem revisao.json ao lado desta extração (p. ex. a prova foi processada de novo
-        # noutro diretório), herda as decisões humanas da extração anterior da mesma prova.
-        question_review.preserve_reviews(processed_root, str(data.get("prova") or exam_id), exam_json)
+        _inherit_reviews(processed_root, data, exam_id, exam_json)
     reviews = question_review.read_reviews(exam_json)
     review = reviews.get("questions", {}).get(str(number), {})
     if review.get("status") != preview.get("originalReviewStatus"):
