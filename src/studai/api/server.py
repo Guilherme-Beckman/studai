@@ -1315,7 +1315,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 return self._static("index.html")
-            if path in ("/app.js", "/reports.js", "/knowledge-map.js", "/styles.css"):
+            if path in ("/app.js", "/focus-mode.js", "/reports.js", "/knowledge-map.js", "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})
