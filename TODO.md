@@ -28,7 +28,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 1 | Taxonomia | em andamento | 6/7 |
 | 2 | Revisão de questões → fonte de verdade | concluída | 8/8 |
 | 3 | Questões mal recortadas | concluída | 7/7 |
-| 4 | Reorganização e otimização (código + IA) | em andamento | 9/13 |
+| 4 | Reorganização e otimização (código + IA) | concluída | 13/13 |
 | 5 | Diagnóstico inicial | concluída | 6/6 |
 | 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
 | 7 | Mapa do conhecimento e progresso por profundidade | concluída | 5/5 |
@@ -111,11 +111,15 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
 - [x] Medir o roteamento hierárquico contra o modo plano (`--limit 10`, qwen3.5:4b): 2,8× mais rápido (76 s contra 212 s por questão), conteúdo da 1ª etapa 50% contra 20%; ver `docs/benchmarks/two-stage-routing.md` (2026-10-15)
 - [x] Ordenar o processamento local por etapa (flag `STUDAI_STAGE_ORDER`): medido sem ganho (483 s contra 496 s em 10 questões). O código foi removido e fica no commit cf44202; ver `docs/benchmarks/two-stage-routing.md` (commit cf44202, 2026-10-15)
 - [x] Pôr o enunciado antes das instruções de cada etapa (flag `STUDAI_QUESTION_FIRST`): medido 26% **mais lento** (85 s contra 68 s por questão, questões 11 a 20). O qwen3.5 é híbrido, e o llama.cpp só retoma o cache em checkpoints a 4 e a ~1 024 tokens do fim do prompt, nunca no fim da questão. Acurácia igual ou melhor (qwen 8 contra 6 de 10 no conteúdo; Gemini 14 contra 14 de 20). O código foi removido e fica no commit f2430e2; ver `docs/benchmarks/two-stage-routing.md` (2026-10-15)
-- [ ] Testar um modelo local sem camadas recorrentes (o cache de prefixo volta a valer para qualquer prefixo) ou o llama.cpp direto com checkpoint no fim da questão
-- [ ] Melhorar regras e descrições de Inglês × Língua Portuguesa × Literatura (canções e poemas confundem a matéria)
+- [x] Testar um modelo local sem camadas recorrentes: `qwen3:4b`, `--limit 10`, 64,5 s contra 74,3 s por questão (13% mais rápido), matéria 80% nos dois, mas conteúdo da 1ª etapa cai de 60% para 40%; não trocar. Ver [`docs/benchmarks/phase4-subject-routing.md`](docs/benchmarks/phase4-subject-routing.md) (commit b1df956, 2026-10-20)
+  - [ ] Testar `qwen3:4b` com o enunciado antes das instruções (código do `STUDAI_QUESTION_FIRST` no commit f2430e2), que é onde o cache de prefixo ajudaria
+- [x] Melhorar regras de Inglês × Língua Portuguesa × Literatura: prompt `v12-language-rules` mantém a regra original de Inglês e acrescenta o desempate Literatura × Língua Portuguesa; 37/42 contra 36/42 antes (Literatura 12/12), ganho pequeno; taxonomia não mudou de versão para não invalidar as 450 revisões (commits a552b18, 5325f1c, 2026-10-20)
+  - [ ] Corrigir à mão 4 revisões aprovadas que põem questões com texto em inglês em Língua Portuguesa/Literatura (IDs no doc do benchmark)
+  - [ ] A letra de canção em inglês (Q9 do benchmark) ainda sai como Língua Portuguesa
 - [x] Medir recall por matéria: top-15 de 92,7% (qwen3-embedding) e 82,9% (bge-m3), abaixo de 98%, então o pré-filtro **não** foi ativado (2026-10-15)
-- [ ] Testar o backend Vulkan do Ollama na iGPU AMD e medir com `evaluate_classifier --limit 10`
-- [ ] Depois de mais revisões: classificador leve de matéria (regressão logística/SetFit sobre embeddings bge-m3, revisões + BLUEX) para substituir a 1ª chamada quando a confiança for alta
+- [x] Testar o backend Vulkan do Ollama na iGPU AMD: roda sem root numa instância à parte (`OLLAMA_VULKAN=1 OLLAMA_IGPU_ENABLE=1`, porta 11435), 33/33 camadas na GPU, mas 84,5 s contra 74,3 s por questão na CPU; não vale adotar (commit b1df956, 2026-10-20)
+- [x] Classificador leve de matéria (regressão logística sobre bge-m3, `subject_model.py`, CLI `train_subject_classifier`), desligado por padrão (`STUDAI_SUBJECT_MODEL=1` liga): 70,2% deixando provas inteiras de fora; com confiança alta responde 14% das questões com 96,9% de acerto; fica desligado (commit a552b18, 2026-10-20)
+  - [ ] Reavaliar com o BLUEX e mais revisões humanas; declarar `numpy` no `requirements.txt` se for ativado
 
 ## Fase 5 — Diagnóstico inicial
 
@@ -198,3 +202,4 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-20 | Claude (swarm) / `feature/infra/phase4-consolidation` | Fase 4: inventário de chamadas de IA, cache de respostas e embeddings, scraper em `src/`, benchmark offline, ARCHITECTURE.md | 026afd2 |
 | 2026-10-20 | Claude (swarm) / `feature/questions/bad-crop-flow` | Fase 3: levantamento de recortes ruins, recorte manual por região, reprocessamento como caso de uso | 0e64891 |
 | 2026-10-20 | Claude (swarm) / `feature/questions/ocr-shared-text` | Fase 3: OCR (Tesseract) para 2021, 1997 e 2002 dia 2; correções de recorte do levantamento | c264bac |
+| 2026-10-20 | Claude (swarm) / `feature/classification/phase4-subject-rules` | Fase 4: regras Inglês × Português × Literatura (prompt v12), `qwen3:4b` e Vulkan medidos sem ganho, classificador leve de matéria desligado por padrão | 7c74794 |
