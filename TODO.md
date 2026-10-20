@@ -5,7 +5,7 @@
 > Este arquivo é o **roadmap do produto** e serve para o usuário acompanhar o progresso.
 > Coordenação de quem está trabalhando em quê agora → [`WORK_STATUS.md`](WORK_STATUS.md). Regras gerais → [`AGENTS.md`](AGENTS.md).
 >
-> **Última atualização:** 2026-10-19
+> **Última atualização:** 2026-10-20
 
 ---
 
@@ -27,12 +27,12 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 |---|---|---|---|
 | 1 | Taxonomia | em andamento | 6/7 |
 | 2 | Revisão de questões → fonte de verdade | concluída | 8/8 |
-| 3 | Questões mal recortadas | em andamento | 1/7 |
-| 4 | Reorganização e otimização (código + IA) | em andamento | 4/13 |
+| 3 | Questões mal recortadas | concluída | 7/7 |
+| 4 | Reorganização e otimização (código + IA) | em andamento | 9/13 |
 | 5 | Diagnóstico inicial | concluída | 6/6 |
 | 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
 | 7 | Mapa do conhecimento e progresso por profundidade | concluída | 5/5 |
-| 8 | Modo foco (tela cheia) para responder questões | em andamento | 0/5 |
+| 8 | Modo foco (tela cheia) para responder questões | concluída | 5/5 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -80,24 +80,28 @@ Base: `src/studai/features/questions/review.py` (já tem os status `reviewed`/`u
 
 Base: `src/studai/features/questions/extractor.py`, `batch.py`.
 
-- [ ] Levantar casos reais (prova/ano/número) e classificar as causas: duas colunas, imagens laterais, texto-base compartilhado entre questões, figura em outra página
-- [ ] Modo de extração alternativo para esses casos (ex.: recorte manual por região na UI e/ou render da página + modelo de visão)
-- [ ] Reprocessar uma questão isolada sem perder a revisão já feita (reaproveitar `preserve_reviews`)
-- [ ] Associar corretamente as imagens e o texto-base compartilhado a cada questão
-- [ ] Fixtures de teste com os casos problemáticos (`tests/test_question_reprocessing.py`, `tests/test_math_question_extraction.py`)
+- [x] Levantar casos reais (prova/ano/número) e classificar as causas: duas colunas, imagens laterais, texto-base compartilhado entre questões, figura em outra página — [`docs/bad-crops-survey.md`](docs/bad-crops-survey.md). As 450 questões revisadas de 2022–2026 estavam todas aprovadas, mas 3 tinham recorte quebrado (2023 Q28, 2025 Q1, 2026 Q42): a revisão confere texto e classificação, não o recorte (commit 2f9e620, 2026-10-20)
+- [x] Modo de extração alternativo para esses casos: recorte manual por região na revisão ("Recortar região do PDF", `frontend/crop-editor.js`), com o texto da região sugerido para enunciado e alternativas; salvo em `edits` do `revisao.json`, sem mudar a extração (`questions/manual_crop.py`, `source_pdf.py`) (commits b42217a, 5770748, 2026-10-20)
+  - [ ] Opcional: modo com modelo de visão sobre o render da página
+- [x] Reprocessar uma questão isolada sem perder a revisão já feita: lógica saiu do `server.py` para o caso de uso `questions/reprocess.py`, mesma API; herda as decisões da extração anterior quando falta `revisao.json` (commits b42217a, 9934944, 2026-10-20)
+- [x] Associar corretamente as imagens e o texto-base compartilhado a cada questão: fundo branco atrás do texto não vira mais figura (2023 Q28, 2026 Q42), página de rascunho ignorada (2024 Q90), recorte alarga para a faixa de página inteira (2025 Q1), `enunciado_vazio` sinalizado mesmo com figura (commit 63aed1b, 2026-10-20)
+- [x] Fixtures de teste com os casos problemáticos: PDFs sintéticos em `tests/test_questions_bad_crops.py`, `tests/test_questions_ocr.py`, `tests/test_questions_manual_crop.py`, `tests/test_questions_reprocess_usecase.py` (2026-10-20)
 - [x] Extrator para os formatos de 2021 para trás (commit b7b922b, 2026-10-19). Todas as provas de 1998 a 2021 com camada de texto saem com o total de questões (80 por dia em 1998–2002, 100 em 2003–2006, 90 depois); antes, de 1998 a 2018 só 2011 passava. Testes em `tests/test_questions_legacy_layouts.py`
   - alternativas `a)` (até 2017), número colado ao texto em negrito/corpo maior (`07 Na…`, `V.01 – …`), 100 questões, páginas carta e ampliadas, capa/contracapa e folha de gabarito ignoradas, número de página e título de matéria fora do texto, caixa "Dados:" como nota
   - ordem de leitura: faixa de página inteira entre colunas (2015, 2017), blocos reordenados pelo número (2005 Q45), linhas largas picadas no PDF; números desenhados como imagens de dígitos (2018)
   - 2021: o texto inteiro é fonte Type3 em bitmap sem Unicode; saem as 90 questões sem texto (o lixo é descartado) e caem em `enunciado_vazio`, com o recorte da página para revisão
-- [ ] OCR para as provas sem camada de texto legível: 2021 (bitmap), 1997 e 2002 dia 2 (sem texto/fonte quebrada). Não há OCR instalado; decidir entre Tesseract (`por`) e modelo de visão
+- [x] OCR para as provas sem camada de texto legível: Tesseract (`por`) via subprocess, automático nas páginas sem texto ou com lixo, `STUDAI_OCR=0` desliga (`questions/ocr.py`). Questões com texto: 2021 0 → 89/90, 1997 dia 1 0 → 76/80, dia 2 0 → 77/80, 2002 dia 2 0 → 76/80; sem regressão nas outras 44 provas (commits 776e424, 0e7182b, 2b75759, 2026-10-20)
+  - [ ] Alternativas ainda incompletas nas provas com OCR (19 em 2021, 24/28 em 1997, 13 em 2002 dia 2): matemática, alternativas dentro de figuras e lado a lado; testar uma 2ª passada com `--psm 11`
+  - [ ] 2 a 4 questões por prova antiga somem quando o OCR perde o número; 1996 não foi medida
 
 ## Fase 4 — Reorganização e otimização (código + leituras/análises de IA)
 
-- [ ] Inventariar todas as chamadas de IA (extração, classificação, embeddings, diagnóstico): modelo, prompt, custo e tempo
-- [ ] Eliminar chamadas duplicadas e cachear resultados (`STUDAI_CACHE_DIR`)
-- [ ] Consolidar os scripts da raiz (`extract.py`, `classifier.py`, `diagnostico_core.py`…) em `src/studai/`
-- [ ] Medir antes/depois com `benchmark.py` e registrar em `docs/benchmarks/`
-- [ ] Atualizar `ARCHITECTURE.md` com a estrutura final
+- [x] Inventariar todas as chamadas de IA (extração, classificação, embeddings, diagnóstico): modelo, prompt, custo e tempo — [`docs/ai-calls-inventory.md`](docs/ai-calls-inventory.md) (commit 8d5b1d0, 2026-10-20)
+- [x] Eliminar chamadas duplicadas e cachear resultados (`STUDAI_CACHE_DIR`): `integrations/ai_cache.py` guarda respostas validadas e vetores de embedding; `STUDAI_AI_CACHE=off` desliga (commit 09d3856, 2026-10-20)
+  - [ ] A chave do cache da classificação inclui a versão do índice RAG, então qualquer revisão reclassifica a prova inteira; usar os exemplos efetivamente recuperados por questão na chave
+- [x] Consolidar os scripts da raiz (`extract.py`, `classifier.py`, `diagnostico_core.py`…) em `src/studai/`: `fuvest_scraper.py` foi para `studai.tools`; um teste garante que nenhum script da raiz tenha lógica própria (commit 8e086fb, 2026-10-20)
+- [x] Medir antes/depois com `benchmark.py` e registrar em `docs/benchmarks/`: `python benchmark.py ai-calls`, offline; numa prova sintética de 30 questões, textos de embedding 133 → 43, reprocessar após revisão 30 → 0 embeddings — [`docs/benchmarks/ai-calls-cache.md`](docs/benchmarks/ai-calls-cache.md) (commits e387352, 82451df, 2026-10-20)
+- [x] Atualizar `ARCHITECTURE.md` com a estrutura final (commit 8d5b1d0, 2026-10-20)
 - [x] Classificação mais rápida (2026-10-15; detalhes no README, seção "Velocidade da classificação")
   - [x] Roteamento hierárquico: matéria → conteúdo da matéria → subconteúdo, com prompts de sistema fixos e cerca de 8× menores (`classify_routed`; `STUDAI_CLASSIFICATION_ROUTING=flat` volta ao modo antigo)
   - [x] Ollama registra o tempo de leitura do prompt e a etapa de cada chamada; `evaluate_classifier` soma por etapa
@@ -150,11 +154,12 @@ Base: `diagnostics/mastery.py` (posterior Beta por nó), `study/service.py` ("Ho
 Ideia: na tela "Hoje" e em todo lugar onde se respondem questões (Diagnósticos, "Responder prova"), um botão "Modo foco" abre a questão em tela cheia, sem menus nem distrações; você responde e a próxima entra deslizando de lado (carrossel).
 Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `frontend/app.js`, `frontend/styles.css`.
 
-- [~] Componente de questão em tela cheia (Fullscreen API + fallback com sobreposição), reutilizável no "Hoje", nos Diagnósticos e no "Responder prova" (em andamento: Codex, feature/frontend/focus-mode)
-- [ ] Questão ocupando a tela: enunciado, imagens e alternativas grandes e legíveis, com rolagem só quando necessário (inclusive no celular)
-- [ ] Navegação lateral: depois de responder, mostra o feedback e a próxima questão entra deslizando de lado; atalhos de teclado (A–E, Enter, ←/→, Esc para sair) e gesto de deslizar no celular
-- [ ] Indicador discreto de progresso (questão X de N) e saída sem perder o que já foi respondido (as respostas continuam sendo salvas no fluxo atual)
-- [ ] Teste manual nas três telas e em largura de celular
+- [x] Componente de questão em tela cheia (Fullscreen API + fallback com sobreposição), reutilizável no "Hoje", nos Diagnósticos e no "Responder prova": `frontend/focus-mode.js`; o rascunho do Codex foi substituído (commit 9b58514, 2026-10-20)
+- [x] Questão ocupando a tela: enunciado, imagens e alternativas grandes e legíveis, com rolagem só quando necessário (inclusive no celular) (commit 9b58514, 2026-10-20)
+- [x] Navegação lateral: depois de responder, mostra o feedback e a próxima questão entra deslizando de lado; atalhos de teclado (A–E, Enter, ←/→, Esc para sair) e gesto de deslizar no celular. Nos Diagnósticos a letra só destaca e o Enter confirma, porque o clique já salva (commit 9b58514, 2026-10-20)
+- [x] Indicador discreto de progresso (questão X de N) e saída sem perder o que já foi respondido (as respostas continuam sendo salvas no fluxo atual) (commit 9b58514, 2026-10-20)
+- [x] Teste manual nas três telas e em largura de celular, no navegador embutido (2026-10-20)
+  - [ ] Conferir a Fullscreen API real num Chrome/Firefox normal (o navegador embutido recusou; só a sobreposição foi testada) e o deslizar num celular de verdade
 
 ## Expansão do acervo/RAG (depois das fases 1–3)
 
@@ -189,3 +194,7 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-19 | Claude / `claude/topic-progress-visualization-bfe261` | Fase 8 adicionada: modo foco em tela cheia com navegação lateral entre questões | — |
 | 2026-10-19 | Claude / `claude/knowledge-map-depth-progress-5b2ceb` | Fase 7: profundidade por nó (`depth.py`), "Hoje" de cima para baixo, API e tela "Mapa" em grafo | 0708b1d |
 | 2026-10-19 | Claude / `claude/fuvest-extrator-2021-741e19` | Fase 3: extrator lê os formatos FUVEST de 1998–2021 (alternativas `a)`, número inline, página inteira, dígitos em imagem); 2021 em bitmap fica para OCR | b7b922b |
+| 2026-10-20 | Claude (swarm) / `feature/frontend/focus-mode` | Fase 8: modo foco em tela cheia no "Hoje", Diagnósticos e "Responder prova" | 9b58514 |
+| 2026-10-20 | Claude (swarm) / `feature/infra/phase4-consolidation` | Fase 4: inventário de chamadas de IA, cache de respostas e embeddings, scraper em `src/`, benchmark offline, ARCHITECTURE.md | 026afd2 |
+| 2026-10-20 | Claude (swarm) / `feature/questions/bad-crop-flow` | Fase 3: levantamento de recortes ruins, recorte manual por região, reprocessamento como caso de uso | 0e64891 |
+| 2026-10-20 | Claude (swarm) / `feature/questions/ocr-shared-text` | Fase 3: OCR (Tesseract) para 2021, 1997 e 2002 dia 2; correções de recorte do levantamento | c264bac |
