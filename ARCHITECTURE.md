@@ -4,7 +4,7 @@ O StudAI é um monólito modular Python: um processo e uma base de código, orga
 
 ## Mapa do código
 
-- `src/studai/features/questions/`: extração de PDF e processamento em lote.
+- `src/studai/features/questions/`: extração de PDF e processamento em lote; `ocr.py` faz o OCR (Tesseract, opcional, `STUDAI_OCR=0` desliga) das páginas sem camada de texto legível.
 - `src/studai/features/classification/`: classificação e validação de questões.
 - `src/studai/features/answer_keys/`: associação, leitura e importação de gabaritos.
 - `src/studai/features/diagnostics/`: sorteio, respostas, métricas e análise diagnóstica; domínio Beta por nó (`mastery.py`) e profundidade propagada pela árvore (`depth.py`).
