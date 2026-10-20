@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pymupdf
 
+from studai.integrations.ai_cache import cached_ai_result
+
 
 def _normalize(value: str) -> str:
     value = unicodedata.normalize("NFD", value)
@@ -48,28 +50,40 @@ def associate_answer_key(exam_pdf: Path, key_pdfs: list[Path], provider=None) ->
     prompt = ("Associe um PDF de prova ao gabarito correspondente usando somente identidade da prova, ano, edição, fase e versão. "
               "Não infira respostas. Responda somente JSON {\"arquivo\": nome_exato_ou_null, \"confianca\": 0..1}.\n"+
               json.dumps(payload, ensure_ascii=False))
-    for correction in (None, "A resposta anterior não passou na validação. Escolha apenas um nome da lista ou null; JSON estrito."):
-        try:
-            raw = provider.complete("Você associa arquivos de provas e gabaritos com cautela.",
-                                    prompt if correction is None else correction+"\n"+prompt)
-            obj = json.loads(raw)
-            filename = obj.get("arquivo") if isinstance(obj, dict) else None
-            confidence = float(obj.get("confianca", 0)) if isinstance(obj, dict) else 0
-            found = next((p for p in candidates if p.name == filename), None)
-            if found and confidence >= 0.8:
-                years_exam = set(re.findall(r"20\d{2}", exam_pdf.stem))
-                years_key = set(re.findall(r"20\d{2}", found.stem))
-                key_variant = exam_variant(found)
-                exam_version = exam_variant(exam_pdf)
-                generic = {"fuvest", "simulado", "prova", "gabarito", "retificado"}
-                exam_tokens = set(re.findall(r"[a-z]+|\d+", exam_key(exam_pdf))) - generic
-                key_tokens = set(re.findall(r"[a-z]+|\d+", exam_key(found))) - generic
-                identity_overlap = len(exam_tokens & key_tokens)
-                if (years_exam and years_exam == years_key and identity_overlap >= 2
-                        and not (key_variant and exam_version and key_variant != exam_version)):
-                    return found, "llm"
-        except Exception:
-            continue
+    system = "Você associa arquivos de provas e gabaritos com cautela."
+
+    def ask():
+        failures = 0
+        for correction in (None, "A resposta anterior não passou na validação. Escolha apenas um nome da lista ou null; JSON estrito."):
+            try:
+                raw = provider.complete(system, prompt if correction is None else correction+"\n"+prompt)
+                obj = json.loads(raw)
+                filename = obj.get("arquivo") if isinstance(obj, dict) else None
+                confidence = float(obj.get("confianca", 0)) if isinstance(obj, dict) else 0
+                found = next((p for p in candidates if p.name == filename), None)
+                if found and confidence >= 0.8:
+                    years_exam = set(re.findall(r"20\d{2}", exam_pdf.stem))
+                    years_key = set(re.findall(r"20\d{2}", found.stem))
+                    key_variant = exam_variant(found)
+                    exam_version = exam_variant(exam_pdf)
+                    generic = {"fuvest", "simulado", "prova", "gabarito", "retificado"}
+                    exam_tokens = set(re.findall(r"[a-z]+|\d+", exam_key(exam_pdf))) - generic
+                    key_tokens = set(re.findall(r"[a-z]+|\d+", exam_key(found))) - generic
+                    identity_overlap = len(exam_tokens & key_tokens)
+                    if (years_exam and years_exam == years_key and identity_overlap >= 2
+                            and not (key_variant and exam_version and key_variant != exam_version)):
+                        return {"arquivo": found.name}
+            except Exception:
+                failures += 1
+                continue
+        # Sem resposta aproveitável por falha de rede/JSON: não guarda, tenta de novo na próxima execução.
+        return None if failures == 2 else {"arquivo": None}
+
+    # O prompt traz só nomes de arquivos: rodar o lote de novo reaproveita a decisão anterior.
+    decision = cached_ai_result("answer_key_match", provider, system, prompt, ask)
+    found = next((p for p in candidates if decision and p.name == decision.get("arquivo")), None)
+    if found:
+        return found, "llm"
     return None, "ambiguous"
 
 def parse_answer_key_pdf(path: Path, variant: str | None = None) -> dict[int, str]:

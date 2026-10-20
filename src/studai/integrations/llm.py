@@ -116,6 +116,8 @@ class Provider(ABC):
 
     default_key_env: str | None = None
     default_base_url: str | None = None
+    # Respostas validadas podem ser reaproveitadas pelo cache de IA (integrations.ai_cache).
+    cacheable = True
 
     def __init__(self, model: str = "", api_key: str | None = None, base_url: str | None = None,
                  timeout: float = 120, temperature: float | None = None, max_tokens: int = 1024,
@@ -712,6 +714,7 @@ class OllamaProvider(Provider):
 
 class MockProvider(Provider):
     """Heurística por palavras-chave. Serve só para testar o pipeline sem API."""
+    cacheable = False  # offline e gratuito: não há chamada a economizar
     KW = {
         "Matemática": ["probabilidade", "função", "triângulo", "cosseno", "progressão", "pa de", "prisma"],
         "Física": ["velocidade", "energia cinética", "campo elétrico", "laser", "bateria", "força"],

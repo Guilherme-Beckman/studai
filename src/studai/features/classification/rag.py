@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from studai.features.classification.cache import ClassificationCache
+from studai.integrations.ai_cache import EmbeddingCache, embed_with_cache
 from studai.integrations.llm import LLMError, http_post
 from studai.settings import SERVICE_ROOT
 
@@ -117,15 +118,33 @@ def index_examples(dataset: Path, cache: ClassificationCache, *, base_url: str,
 
     pending = [entry for entry in prepared if entry[2] is None]
     vectors_by_id = {}
-    for start in range(0, len(pending), batch_size):
-        batch = pending[start:start + batch_size]
-        vectors = ollama_embed([entry[1] for entry in batch], base_url=base_url, model=model)
-        vectors_by_id.update({entry[0]: vector for entry, vector in zip(batch, vectors)})
+    # Cache de vetores por texto (integrations.ai_cache): reindexar outro conjunto com os mesmos
+    # textos, ou voltar a um texto já visto, não chama o Ollama de novo.
+    with _embedding_cache(cache) as vector_cache:
+        for start in range(0, len(pending), batch_size):
+            batch = pending[start:start + batch_size]
+            vectors = embed_with_cache([entry[1] for entry in batch], model=model, cache=vector_cache,
+                                       embed=lambda texts, **kw: ollama_embed(texts, **kw), base_url=base_url)
+            vectors_by_id.update({entry[0]: vector for entry, vector in zip(batch, vectors)})
     for identity, text, vector, metadata in prepared:
         cache.put_embedding(identity, text, vectors_by_id.get(identity, vector), metadata, source=source)
     cache.delete_embeddings_not_in_source(source, identities)
     return {"indexed": len(pending), "reused": reused, "skipped": 0, "source": str(dataset),
             "embedding_model": model, "version": digest}
+
+
+class _NoCache:
+    def __enter__(self):
+        return None
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
+
+def _embedding_cache(cache: ClassificationCache):
+    """Vetores ficam numa tabela à parte no mesmo arquivo SQLite do cache de classificação."""
+    path = getattr(cache, "path", None)
+    return EmbeddingCache(Path(path)) if isinstance(path, (str, Path)) else _NoCache()
 
 
 class LocalExampleRetriever:
@@ -143,16 +162,19 @@ class LocalExampleRetriever:
     def retrieve(self, text: str, *, exclude_ids: set[str] | None = None,
                  exclude_year: str | int | None = None,
                  exclude_exam: str | None = None) -> list[dict]:
-        last_error = None
-        query = None
-        for url in self.base_urls:
-            try:
-                query = ollama_embed([text], base_url=url, model=self.model)[0]
-                break
-            except Exception as exc:
-                last_error = exc
-        if query is None:
+        def embed_any_host(texts: list[str], *, model: str) -> list[list[float]]:
+            last_error = None
+            for url in self.base_urls:
+                try:
+                    return ollama_embed(texts, base_url=url, model=model)
+                except Exception as exc:
+                    last_error = exc
             raise last_error or LLMError("nenhum servidor Ollama disponível para embeddings")
+
+        # A mesma questão (nova rodada de reprocessamento, índice revisado de novo, avaliação)
+        # reaproveita o vetor já calculado em vez de chamar o Ollama outra vez.
+        with _embedding_cache(self.cache) as vector_cache:
+            query = embed_with_cache([text], model=self.model, embed=embed_any_host, cache=vector_cache)[0]
         hits = self.cache.nearest(query, limit=self.limit * 4, exclude=exclude_ids,
                                   exclude_year=exclude_year, exclude_exam=exclude_exam,
                                   embedding_model=self.model, source_prefix=self.source_prefix)

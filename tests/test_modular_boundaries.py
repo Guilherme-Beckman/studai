@@ -135,5 +135,42 @@ class ModularFeatureTests(unittest.TestCase):
         self.assertEqual(analysis["steps"][0]["subject"], "Matemática")
 
 
+class RootScriptShimTests(unittest.TestCase):
+    """Root scripts keep the old commands but only delegate to studai.*."""
+    SHIMS = {
+        "api.py": "studai.api.server",
+        "benchmark.py": "studai.tools.benchmark",
+        "classifier.py": "studai.features.classification.service",
+        "diagnostico.py": "studai.features.diagnostics.cli",
+        "diagnostico_core.py": "studai.features.diagnostics.service",
+        "extract.py": "studai.features.questions.extractor",
+        "fuvest_scraper.py": "studai.tools.fuvest_scraper",
+        "processar_simulados.py": "studai.features.questions.batch",
+    }
+
+    def test_every_root_script_is_a_thin_delegating_shim(self):
+        scripts = {path.name for path in APP.glob("*.py")}
+        self.assertEqual(scripts, set(self.SHIMS))
+        for name, module in self.SHIMS.items():
+            source = (APP / name).read_text(encoding="utf-8")
+            self.assertIn(f"from {module} import", source, name)
+            self.assertNotRegex(source, r"(?m)^\s*(def|class) ", f"{name} must not define logic")
+            self.assertLess(len(source.splitlines()), 15, name)
+
+    def test_fuvest_scraper_selection_rules_work_without_network_dependencies(self):
+        from studai.tools import fuvest_scraper as scraper
+        item = lambda secao, texto, url="https://x/prova.pdf": {"secao": secao, "texto": texto, "url": url}
+        self.assertEqual(scraper.classificar(item("primeira", "Prova 2026 V1"), "V1", False, False),
+                         ("1a_fase", "provas"))
+        self.assertIsNone(scraper.classificar(item("primeira", "Prova 2026 V2"), "V1", False, False))
+        self.assertEqual(scraper.classificar(item("segunda", "Gabarito"), "V1", False, False),
+                         ("2a_fase", "gabaritos"))
+        self.assertEqual(scraper.classificar(item("segunda", "Prova da 2ª fase – 2º dia"), "V1", False, False),
+                         ("2a_fase", "provas_dia2"))
+        self.assertIsNone(scraper.classificar(item("segunda", "Prova da 2ª fase – 1º dia"), "V1", False, False))
+        self.assertEqual(scraper.nome_arquivo("https://x/a%20b.pdf", "t"), "a b.pdf")
+        self.assertEqual(scraper.nome_arquivo("https://x/pagina", "Prova 1ª Fase"), "prova_1a_fase.pdf")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -14,6 +14,7 @@ from pathlib import Path
 import pymupdf
 
 from studai.features.classification import service as clf
+from studai.integrations.ai_cache import cached_ai_result
 from studai.integrations.sqlite import connect as connect_sqlite
 from studai.features.answer_keys.service import (
     associate_answer_key, exam_key, exam_variant, import_answer_key,
@@ -281,13 +282,22 @@ def plan_topics(provider, profile: dict, available: dict[str, list[str]]) -> tup
                        "tarefa": "Escolha uma ordem de tópicos ampla para cada matéria, usando apenas tópicos disponíveis. "
                                  "Não informe quantidade de questões nem identificadores."}, ensure_ascii=False)
     error = None
-    for attempt in range(2):
-        prompt = user if attempt == 0 else user + "\n\nSua resposta anterior falhou: " + str(error) + ". Corrija o JSON."
-        try:
-            result = validate_topic_plan(clf.extract_json(provider.complete(system, prompt)), available)
-            return result, {"status": "llm", "attempts": attempt + 1, "error": None}
-        except Exception as exc:
-            error = str(exc)
+
+    def ask():
+        nonlocal error
+        for attempt in range(2):
+            prompt = user if attempt == 0 else user + "\n\nSua resposta anterior falhou: " + str(error) + ". Corrija o JSON."
+            try:
+                result = validate_topic_plan(clf.extract_json(provider.complete(system, prompt)), available)
+                return {"topics": result, "attempts": attempt + 1}
+            except Exception as exc:
+                error = str(exc)
+        return None
+
+    # Mesmo curso e mesmos tópicos disponíveis: o plano validado é reaproveitado.
+    planned = cached_ai_result("diagnostic_topic_plan", provider, system, user, ask)
+    if planned is not None:
+        return planned["topics"], {"status": "llm", "attempts": planned["attempts"], "error": None}
     return deterministic_topics_from_available(available), {
         "status": "deterministic_fallback", "attempts": 2, "error": error}
 
@@ -809,14 +819,20 @@ def analyze(provider, metrics: dict, profile: dict) -> tuple[dict | None, str | 
                        "valid_actions": sorted(ACTIONS), "valid_reasons": sorted(REASONS),
                        "valid_subjects": subjects}, ensure_ascii=False)
     error = None
-    for attempt in range(2):
-        prompt = user if attempt == 0 else user + "\n\nA resposta anterior é inválida: " + str(error) + ". Corrija-a."
-        try:
-            result = validate_analysis(clf.extract_json(provider.complete(system, prompt)), metrics, subjects)
-            return result, None
-        except Exception as exc:
-            error = str(exc)
-    return None, error
+
+    def ask():
+        nonlocal error
+        for attempt in range(2):
+            prompt = user if attempt == 0 else user + "\n\nA resposta anterior é inválida: " + str(error) + ". Corrija-a."
+            try:
+                return validate_analysis(clf.extract_json(provider.complete(system, prompt)), metrics, subjects)
+            except Exception as exc:
+                error = str(exc)
+        return None
+
+    # Concluir de novo a mesma tentativa (ou métricas idênticas) não chama a IA outra vez.
+    result = cached_ai_result("diagnostic_analysis", provider, system, user, ask)
+    return (result, None) if result is not None else (None, error)
 
 
 def finalize_attempt(db: sqlite3.Connection, attempt_id: str, provider, *, include_analysis: bool = True) -> dict:
