@@ -118,8 +118,10 @@ def text_layer_status(page: pymupdf.Page) -> str:
     if len(chars) >= MIN_CHARS:
         if sum(_bad_char(ch) for ch in chars) >= 0.3 * len(chars):
             return GARBAGE
-        words = [w.lower() for w in WORD_RE.findall("".join(text_parts))]
-        if len(words) >= 40 and sum(w in STOPWORDS for w in words) < 0.04 * len(words):
+        # Só palavras de 2+ letras: "é"/"à" sobrevivem à codificação trocada e páginas de
+        # matemática têm muita letra solta (2002 dia 2, p. 12).
+        words = [w.lower() for w in WORD_RE.findall("".join(text_parts)) if len(w) >= 2]
+        if len(words) >= 15 and sum(w in STOPWORDS for w in words) < 0.04 * len(words):
             return GARBAGE
         return OK
     body = pymupdf.Rect(page.rect.x0, top, page.rect.x1, bottom)

@@ -1043,7 +1043,7 @@ def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
         # Em alguns PDFs oficiais o marcador numérico fica dentro da caixa de
         # uma imagem; ele continua sendo texto estrutural e não pode sumir.
         # Vale também para o número em negrito colado ao texto (2013 Q61).
-        if MARKER_RE.match(r.text) or r.lead_num is not None:
+        if MARKER_RE.match(r.text) or r.lead_num is not None or (r.fonts == {"OCR"} and OCR_INLINE_RE.match(r.text)):
             items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
             continue
         if id(r) in captions:
@@ -1325,6 +1325,12 @@ def parse(doc: pymupdf.Document, ocr="auto", progress=None):
                 if not (mk and int(mk.group(1)) == expected) and rest is None:
                     if found := _ocr_marker(it.row, expected):
                         num, rest = found
+                    elif it.row.fonts == {"OCR"} and OCR_INLINE_RE.match(t):
+                        # "09 A construção..." com a 08 perdida pelo OCR (dentro de figura):
+                        # um número logo adiante retoma a sequência.
+                        n = int(INLINE_MARKER_RE.match(t).group(1))
+                        if expected < n <= expected + OCR_SKIP:
+                            num, rest = n, _inline_marker(t, n)
                 if (mk and int(mk.group(1)) == expected) or rest is not None:
                     expected = num + 1
                     cur = questions[num] = new_question(num, pno)
