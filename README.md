@@ -143,6 +143,8 @@ python benchmark.py
 
 Acesse <http://127.0.0.1:8765>. Informe os endereços Ollama separados por vírgula, escolha o arquivo `questoes.json` e defina a amostra, os workers e os threads a comparar (por exemplo, `1,2` workers e `0,4,8` threads). O painel mostra as requisições em andamento e ordena os resultados por tempo, destacando a configuração mais rápida. Cada questão da amostra é enviada novamente para cada combinação, sem alterar o JSON ou o cache do processamento normal.
 
+Para contar chamadas de IA sem Ollama nem rede (cache, reprocessamento, gabarito e análise diagnóstica), use `python benchmark.py ai-calls`; o resultado de referência está em `docs/benchmarks/ai-calls-cache.md` e o inventário das chamadas em `docs/ai-calls-inventory.md`. Respostas validadas de IA e vetores de embeddings ficam em cache em `STUDAI_CACHE_DIR`; `STUDAI_AI_CACHE=off` desliga esse cache.
+
 O status por servidor usa a API `/api/ps` do Ollama: modelo carregado e memória de GPU reportada, além de requisições ativas observadas pelo painel. O Ollama não informa uso percentual de CPU/RAM por API; para esses números seria necessário instalar um agente de métricas em cada computador. O painel fica restrito a `127.0.0.1` por padrão.
 
 ## Diagnóstico inicial por curso
