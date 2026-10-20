@@ -1,5 +1,9 @@
 import hashlib
 import json
+import threading
+import urllib.error
+import urllib.request
+from http.server import ThreadingHTTPServer
 import tempfile
 import unittest
 from pathlib import Path
@@ -183,6 +187,32 @@ class ManualCropApiTests(unittest.TestCase):
         self.assertEqual(sorted(edits["alternativas"]), list("ABCDE"))
         with self.assertRaises(FileNotFoundError):
             server._manual_crop("exam-id", 7, {"page": 1, "region": [0, 0, 1, 1]})
+
+    def test_http_routes_serve_crop_editor_pages_and_crop(self):
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        try:
+            with urllib.request.urlopen(base + "/crop-editor.js") as response:
+                self.assertIn(b"data-manual-crop", response.read())
+            with urllib.request.urlopen(base + "/api/exams/exam-id/source/pages") as response:
+                self.assertEqual(len(json.loads(response.read())["pages"]), 2)
+            with urllib.request.urlopen(base + "/api/exams/exam-id/source/pages/1.png?dpi=40") as response:
+                self.assertEqual(response.headers["Content-Type"], "image/png")
+            request = urllib.request.Request(base + "/api/exams/exam-id/questions/1/manual-crop", method="POST",
+                                             data=json.dumps({"page": 1, "region": [0, 0, 0.5, 0.3]}).encode(),
+                                             headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(request) as response:
+                self.assertEqual(response.status, 201)
+                self.assertTrue(json.loads(response.read())["path"].startswith("img/crop_"))
+            (self.uploads / "exam-id.pdf").unlink()
+            with self.assertRaises(urllib.error.HTTPError) as missing:
+                urllib.request.urlopen(base + "/api/exams/exam-id/source/pages")
+            self.assertEqual(missing.exception.code, 404)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
 
 if __name__ == "__main__":
