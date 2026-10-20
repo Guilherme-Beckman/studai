@@ -186,6 +186,28 @@ class OcrParseTests(unittest.TestCase):
         self.assertLess(figs[0].width, 160)
         self.assertFalse(questions[1].get("_figs"))
 
+    def test_ocr_marker_tolerates_misread_digit_and_skips_lost_number(self):
+        from studai.features.questions.extractor import Row, _ocr_marker
+
+        def row(text):
+            return Row(text, pymupdf.Rect(0, 0, 10, 10), 0, {"OCR"})
+
+        self.assertEqual(_ocr_marker(row("K. 1á - Duas esferas"), 14), (14, "Duas esferas"))
+        self.assertEqual(_ocr_marker(row("K.73 – Em frente"), 71), (73, "Em frente"))
+        self.assertIsNone(_ocr_marker(row("K.79 – longe demais"), 71))
+        native = Row("K.15 - texto", pymupdf.Rect(0, 0, 10, 10), 0, {"Courier"})
+        self.assertIsNone(_ocr_marker(native, 15))
+
+    def test_garbled_lowercase_alternatives_follow_the_sequence(self):
+        # 1997 "a)": o OCR lê "aj)", "bh)", "co)".
+        doc = _scan_doc()
+        lines = [_line("K.01 - Quanto vale o ângulo?", 35, 80, size=8)]
+        for k, label in enumerate(("aj) 0º", "bh) 30º", "co) 45º", "d) 60º", "e) 90º")):
+            lines.append(_line(label, 35, 100 + 12 * k, size=8))
+        questions, _ = parse(doc, ocr=FakeEngine({0: lines}))
+        alts = {k: " ".join(v["texto"]) for k, v in questions[1]["alternativas"].items()}
+        self.assertEqual(alts, {"A": "0º", "B": "30º", "C": "45º", "D": "60º", "E": "90º"})
+
     def test_scan_figures_ignores_text_boxes(self):
         doc = _scan_doc()
         page = doc[0]

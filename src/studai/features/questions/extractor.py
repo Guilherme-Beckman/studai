@@ -86,8 +86,10 @@ LEAD_NUM_RE = re.compile(r"^(?:[A-Z]\.)?(\d{2,3})[–—-]?$")
 # ("K. lá -" = K.14, "K.5h -" = K.54). Só vale com a letra do dia e o travessão.
 OCR_MARKER_RE = re.compile(r"^([A-Z])\s?[.,]\s?(\S{2})\s*[-–—~]+(?:\s+(.*)|$)", re.S)
 OCR_LEAD_JUNK_RE = re.compile(r"^[(|\[]\s+(?=[A-Z])")    # "( Note e adote:" (borda da caixa lida como "(")
-# Letra de alternativa mal lida: "(Ajc<", "(JV=1,6", "(Qe<", "(EJc<1", "A) 10 bilhões".
-OCR_ALT_RE = re.compile(r"^(?:[(\[{]\s?([A-Za-z0-9ÇÉ])|([A-E])[)\]])\s?([)\]}J|]?)\s?(.*)$", re.S)
+# Letra de alternativa mal lida: "(Ajc<", "(JV=1,6", "(Qe<", "(EJc<1", "A) 10 bilhões" e, nas
+# provas "a)" escaneadas (1997), "aj) À e B", "bh) 30º", "co) 45º".
+OCR_ALT_RE = re.compile(r"^(?:[(\[{]\s?([A-Za-z0-9ÇÉ])|([A-Ea-e])[a-z]?[)\]}jJ|](?=\s|$))\s?([)\]}J|]?)\s?(.*)$",
+                        re.S)
 OCR_DIGIT_LOOKALIKES = {"l": "1", "I": "1", "i": "1", "|": "1", "!": "1", "O": "0", "o": "0",
                         "S": "5", "s": "5", "B": "8", "G": "6", "b": "6", "T": "7", "Z": "2", "z": "2"}
 
@@ -753,6 +755,13 @@ def _merge_rects(rects: list[pymupdf.Rect]) -> list[pymupdf.Rect]:
     return rects
 
 
+def _invisible(drawing: dict) -> bool:
+    """Preenchimento branco sem contorno: some contra o papel."""
+    fill = drawing.get("fill")
+    return (drawing.get("type") == "f" and fill is not None and len(fill) >= 3
+            and min(fill[:3]) >= 0.98)
+
+
 def _figure_parts(page: pymupdf.Page) -> list[pymupdf.Rect]:
     """Imagens e grupos de desenho que podem ser figura, antes de juntar os vizinhos."""
     rects: list[pymupdf.Rect] = []
@@ -763,7 +772,10 @@ def _figure_parts(page: pymupdf.Page) -> list[pymupdf.Rect]:
         if r.height < SEP_MAX_H and r.width > 60:
             continue                                  # separador colorido entre questões
         rects.append(r)
-    for r in page.cluster_drawings():
+    # Fundo branco atrás do texto (2023 K Q28: um retângulo por linha) não desenha nada
+    # e transformava o enunciado em figura.
+    drawings = [d for d in page.get_drawings() if not _invisible(d)]
+    for r in page.cluster_drawings(drawings=drawings) if drawings else ():
         r = pymupdf.Rect(r)
         if r.width < 4 or r.height < 4:
             continue                                  # linha divisória de coluna / filete
@@ -1146,18 +1158,32 @@ def _inline_marker(t: str, expected: int) -> str | None:
     return (m.group(2) or "").strip()
 
 
-def _ocr_marker(row: Row, expected: int) -> str | None:
+OCR_SKIP = 3     # números que o OCR pode ter perdido antes de um número lido certo
+
+
+def _ocr_marker(row: Row, expected: int) -> tuple[int, str] | None:
     """
     Número de questão lido pelo OCR ("K.1? – texto"): com a letra do dia e o travessão
     a linha só pode abrir questão, então aceita até um caractere errado no número.
+    Se o OCR perdeu a linha de uma questão, um número lido certo logo adiante
+    (até ``OCR_SKIP``) retoma a sequência em vez de travar a prova ali (1997 K.71).
     """
     if row.fonts != {"OCR"}:
         return None
     m = OCR_MARKER_RE.match(row.text)
     want = f"{expected:02d}"
-    if not m or len(want) != 2 or sum(a != b for a, b in zip(m.group(2), want)) > 1:
+    if not m or len(want) != 2:
         return None
-    return (m.group(3) or "").strip()
+    rest, token = (m.group(3) or "").strip(), m.group(2)
+    close = sum(a != b for a, b in zip(token, want)) <= 1
+    if token.isdigit():
+        n = int(token)
+        # Número lido inteiro à frente: o OCR perdeu os do meio. Atrás e quase igual
+        # ("15" depois da 17): dígito trocado.
+        if expected < n <= expected + OCR_SKIP:
+            return n, rest
+        return (expected, rest) if n == expected or (n < expected and close) else None
+    return (expected, rest) if close else None
 
 
 def _ocr_alt(row: Row, cur: dict, mode: str) -> tuple[str, str] | None:
@@ -1175,11 +1201,11 @@ def _ocr_alt(row: Row, cur: dict, mode: str) -> tuple[str, str] | None:
     want = chr(ord(letters[-1]) + 1) if letters else "A"
     if want > "E":
         return None
-    read, closed, rest = m.group(1) or m.group(2), bool(m.group(3)) or bool(m.group(2)), m.group(4)
+    read, closed, rest = (m.group(1) or m.group(2)).upper(), bool(m.group(3)) or bool(m.group(2)), m.group(4)
     if mode != "alts":
         if read != want or not (closed or (rest[:1] and not rest[:1].islower())):
             return None
-    elif not closed and read.isalpha() and rest[:1].islower() and read not in "ABCDEQJGO":
+    elif not closed and read.isalpha() and rest[:1].islower() and (m.group(1) or m.group(2)) not in "ABCDEQJGO":
         return None
     return want, rest.strip()
 
@@ -1291,11 +1317,12 @@ def parse(doc: pymupdf.Document, ocr="auto", progress=None):
                         it.row.lead_num == expected
                         or cur is None or mode != "stem" and "E" in cur["alternativas"]):
                     rest = _inline_marker(t, expected)
+                num = expected
                 if not (mk and int(mk.group(1)) == expected) and rest is None:
-                    rest = _ocr_marker(it.row, expected)
+                    if found := _ocr_marker(it.row, expected):
+                        num, rest = found
                 if (mk and int(mk.group(1)) == expected) or rest is not None:
-                    num = expected
-                    expected += 1
+                    expected = num + 1
                     cur = questions[num] = new_question(num, pno)
                     cur_alt, mode = None, "stem"
                     if active_shared and num in shared[active_shared]["questoes"]:
@@ -1432,8 +1459,12 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
                     crop(doc, p, rect, imgdir / name, dpi)
                     q["imagens_completas"].append(f"img/{name}")
             else:
-                for k, ((p, col), (y0, y1, _x0, _x1)) in enumerate(sorted(q["_segs"].items()), 1):
+                for k, ((p, col), (y0, y1, sx0, sx1)) in enumerate(sorted(q["_segs"].items()), 1):
                     x0, x1 = colx[col]
+                    # Faixa de página inteira (comando e alternativas de 2025 Q1): o recorte
+                    # da coluna cortava o fim das linhas; alarga até o conteúdo.
+                    x0 = max(22.0, min(x0, sx0 - 3))
+                    x1 = min(doc[p].rect.width - 22, max(x1, sx1 + 3))
                     name = f"q{n}_completa{k}.png"
                     crop(doc, p, pymupdf.Rect(x0, y0 - 3, x1, y1 + 3), imgdir / name, dpi)
                     q["imagens_completas"].append(f"img/{name}")
