@@ -57,3 +57,13 @@
 ## Regra de coordenação
 
 O Antigravity deve limitar suas alterações à árvore editorial. O ChatGPT altera código e testes de integração em sua própria branch. Não mesclar arquivos de integração até revisar as fontes, a estrutura e os IDs da árvore.
+
+## Codex — treinamento contínuo
+
+- **Branch:** `feature/frontend/answer-confirm-flow`
+- **Domínio:** `study` + `frontend` (integração pontual em `api` e testes)
+- **Feito:** tarefa diária reunida na aba “Treinamento”; treino livre configurável por matérias e quantidade de questões por bloco, mantendo as respostas no mesmo histórico FSRS.
+- **Validação:** suíte completa aprovada (`PYTHONPATH=src .venv/bin/python -m unittest discover -s tests`, 273 testes), `node --check frontend/app.js` e `git diff --check` aprovados.
+- **Atualização:** botão para resetar contexto de aprendizagem com confirmação; remove progresso/revisões e histórico diagnóstico, zera respostas/métricas de tentativas de prova e preserva arquivos de prova, questões, gabaritos e configurações.
+- **Atualização:** painel de processamento agora acompanha OCR por página, geração de recortes por questão, classificação e importação do gabarito, com barra geral, etapas visuais, contagens e questões ativas. A suíte passou com 274 testes.
+- **Última atualização:** 2026-10-20

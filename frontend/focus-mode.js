@@ -10,7 +10,7 @@
 // (muda => a nova questão entra deslizando). Sem `current`, não há questão na tela.
 (() => {
   const OPTION = "[data-exam-option], [data-today-option], [data-answer]";
-  const SUBMIT = "[data-exam-submit], #today-submit";
+  const SUBMIT = "[data-exam-submit], #today-submit, #diagnostic-submit";
   const CONFIRM = "#confirm-reason, #today-confirm-reason";
   const NEXT = "[data-exam-next], #today-next";
   const PREV = "[data-exam-prev]";

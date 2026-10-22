@@ -106,8 +106,7 @@ def simulate(db: sqlite3.Connection, config: dict, course_id: str, pool: list[di
         for row in rows:
             answer, reason = _answer(rng, row, skill(profile, row["subject"], progress))
             if index in slots:
-                # Na prova completa o motivo é opcional: parte dos erros fica sem motivo.
-                reason = reason if reason and rng.random() < 0.5 else None
+                # Mantém o mesmo contrato dos fluxos reais: erros sempre têm motivo.
                 reports.answer_exam_question(db, attempt_id, row["ordinal"], answer, reason)
             else:
                 diagnostics.record_response(db, attempt_id, row["ordinal"], answer, reason)

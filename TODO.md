@@ -5,7 +5,7 @@
 > Este arquivo é o **roadmap do produto** e serve para o usuário acompanhar o progresso.
 > Coordenação de quem está trabalhando em quê agora → [`WORK_STATUS.md`](WORK_STATUS.md). Regras gerais → [`AGENTS.md`](AGENTS.md).
 >
-> **Última atualização:** 2026-10-20
+> **Última atualização:** 2026-10-22
 
 ---
 
@@ -32,7 +32,8 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 5 | Diagnóstico inicial | concluída | 6/6 |
 | 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
 | 7 | Mapa do conhecimento e progresso por profundidade | concluída | 5/5 |
-| 8 | Modo foco (tela cheia) para responder questões | concluída | 5/5 |
+| 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
+| 9 | Treinamento contínuo | concluída | 6/6 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -159,11 +160,25 @@ Ideia: na tela "Hoje" e em todo lugar onde se respondem questões (Diagnósticos
 Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `frontend/app.js`, `frontend/styles.css`.
 
 - [x] Componente de questão em tela cheia (Fullscreen API + fallback com sobreposição), reutilizável no "Hoje", nos Diagnósticos e no "Responder prova": `frontend/focus-mode.js`; o rascunho do Codex foi substituído (commit 9b58514, 2026-10-20)
+- [x] Padronizar a resposta nos três fluxos: selecionar alternativa, clicar em "Responder", informar o motivo quando errar e seguir para a próxima questão (commit f986a40, 2026-10-20)
 - [x] Questão ocupando a tela: enunciado, imagens e alternativas grandes e legíveis, com rolagem só quando necessário (inclusive no celular) (commit 9b58514, 2026-10-20)
 - [x] Navegação lateral: depois de responder, mostra o feedback e a próxima questão entra deslizando de lado; atalhos de teclado (A–E, Enter, ←/→, Esc para sair) e gesto de deslizar no celular. Nos Diagnósticos a letra só destaca e o Enter confirma, porque o clique já salva (commit 9b58514, 2026-10-20)
 - [x] Indicador discreto de progresso (questão X de N) e saída sem perder o que já foi respondido (as respostas continuam sendo salvas no fluxo atual) (commit 9b58514, 2026-10-20)
 - [x] Teste manual nas três telas e em largura de celular, no navegador embutido (2026-10-20)
   - [ ] Conferir a Fullscreen API real num Chrome/Firefox normal (o navegador embutido recusou; só a sobreposição foi testada) e o deslizar num celular de verdade
+
+## Fase 9 — Treinamento contínuo
+
+- [x] Identificar “Hoje” como tarefa diária, com progresso e acesso direto ao treinamento
+- [x] Reunir a tarefa diária e o treino livre na aba “Treinamento”, com escolha de matérias e quantidade por bloco (até 100 por bloco, sem limite de blocos)
+- [x] Priorizar questões com o algoritmo de revisão, lacunas do diagnóstico e conteúdos ainda não praticados; manter prática do acervo quando a fila prioritária se esgotar
+- [x] Reutilizar o mesmo registro de respostas, agendamento FSRS e progresso por conteúdo
+- [x] Cobrir a extensão da sessão diária para além do plano inicial (`tests/test_study_scheduler.py`)
+- [x] Permitir resetar o contexto de aprendizagem sem apagar provas, questões, gabaritos ou configurações
+
+## Processamento de provas
+
+- [x] Mostrar etapas do processamento com progresso granular por página no OCR, por questão nos recortes e na classificação; incluir estado atual e tarefas ativas
 
 ## Expansão do acervo/RAG (depois das fases 1–3)
 
@@ -200,9 +215,14 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-19 | Claude / `claude/fuvest-extrator-2021-741e19` | Fase 3: extrator lê os formatos FUVEST de 1998–2021 (alternativas `a)`, número inline, página inteira, dígitos em imagem); 2021 em bitmap fica para OCR | b7b922b |
 | 2026-10-19 | Claude / `claude/peaceful-robinson-bc3448` | Fase 3: OCR (Tesseract) nas provas sem texto legível; 2021 com 90 questões | 5f296ff |
 | 2026-10-19 | Claude / `claude/diagnostico-questoes-gabarito-f159ce` | Correção: acervo publicado sem gabaritos (o banco não é versionado) bloqueava o diagnóstico; `gabarito.json` por prova é importado automaticamente e o erro explica as exclusões | 60d5719 |
+| 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Fluxo uniforme de resposta: seleção separada do envio, motivo obrigatório para erro e avanço para a próxima questão nos três fluxos | f986a40 |
+| 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Tarefa diária reunida com treinamento contínuo; blocos de prática configuráveis por matéria e quantidade, integrados ao FSRS | — |
+| 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Botão para zerar progresso e histórico de aprendizagem, mantendo provas, questões e gabaritos | — |
+| 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Acompanhamento visual do processamento: etapas e avanço página a página no OCR e questão a questão em recortes/classificação | — |
 | 2026-10-20 | Claude (swarm) / `feature/frontend/focus-mode` | Fase 8: modo foco em tela cheia no "Hoje", Diagnósticos e "Responder prova" | 9b58514 |
 | 2026-10-20 | Claude (swarm) / `feature/infra/phase4-consolidation` | Fase 4: inventário de chamadas de IA, cache de respostas e embeddings, scraper em `src/`, benchmark offline, ARCHITECTURE.md | 026afd2 |
 | 2026-10-20 | Claude (swarm) / `feature/questions/bad-crop-flow` | Fase 3: levantamento de recortes ruins, recorte manual por região, reprocessamento como caso de uso | 0e64891 |
 | 2026-10-20 | Claude (swarm) / `feature/questions/ocr-shared-text` | Fase 3: OCR (Tesseract) para 2021, 1997 e 2002 dia 2; correções de recorte do levantamento | c264bac |
 | 2026-10-20 | Claude (swarm) / `feature/classification/phase4-subject-rules` | Fase 4: regras Inglês × Português × Literatura (prompt v12), `qwen3:4b` e Vulkan medidos sem ganho, classificador leve de matéria desligado por padrão | 7c74794 |
 | 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Merge com o `main`: ficou o OCR do swarm (1997 e 2002 dia 2 saem com 76–78 questões; o do `peaceful-robinson` achava 0 e 5); o gabarito embutido no acervo foi mantido | — |
+| 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Limpeza: trabalho do Codex (treinamento contínuo, reset, progresso do processamento) commitado e juntado; modo foco adaptado ao botão "Responder" dos Diagnósticos; branches antigas removidas | — |

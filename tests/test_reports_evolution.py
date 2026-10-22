@@ -110,7 +110,7 @@ class ReportsEvolutionTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             reports.overview(self.db, self.config, "curso-inexistente", self.pool)
 
-    def test_exam_session_lifecycle_and_reason_is_optional(self):
+    def test_exam_session_lifecycle_requires_reason_for_wrong_answer(self):
         session = reports.start_exam_session(self.db, self.config, COURSE_ID, self.pool, EXAMS[0])
         self.assertEqual([q["number"] for q in session["questions"]], list(range(1, 21)))
         self.assertEqual([q["ordinal"] for q in session["questions"]], list(range(1, 21)))
@@ -119,8 +119,10 @@ class ReportsEvolutionTests(unittest.TestCase):
                          ("exam", "in_progress", EXAMS[0]))
         rows = diagnostics.list_questions_for_attempt(self.db, session["id"])
         wrong = next(letter for letter in "ABCDE" if letter != rows[0]["correct_answer"])
-        result = reports.answer_exam_question(self.db, session["id"], 1, wrong)
-        self.assertEqual((result["correct"], result["reason"]), (False, None))
+        with self.assertRaises(ValueError):
+            reports.answer_exam_question(self.db, session["id"], 1, wrong)
+        result = reports.answer_exam_question(self.db, session["id"], 1, wrong, "calc_error")
+        self.assertEqual((result["correct"], result["reason"]), (False, "calc_error"))
         reports.answer_exam_question(self.db, session["id"], 2, rows[1]["correct_answer"])
         with self.assertRaises(ValueError):
             reports.answer_exam_question(self.db, session["id"], 2, rows[1]["correct_answer"])

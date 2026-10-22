@@ -291,11 +291,11 @@ def _exam_attempt(db: sqlite3.Connection, attempt_id: str) -> sqlite3.Row:
 
 def answer_exam_question(db: sqlite3.Connection, attempt_id: str, ordinal: int,
                          answer: str | None, reason: str | None = None) -> dict:
-    """Registra uma resposta da prova; o motivo do erro é opcional."""
+    """Registra uma resposta da prova; respostas incorretas exigem motivo."""
     attempt = _exam_attempt(db, attempt_id)
     if attempt["status"] != "in_progress":
         raise ValueError("sessão de prova já finalizada")
-    return diagnostics.record_response(db, attempt_id, int(ordinal), answer, reason or None, require_reason=False)
+    return diagnostics.record_response(db, attempt_id, int(ordinal), answer, reason or None)
 
 
 def finish_exam_session(db: sqlite3.Connection, attempt_id: str) -> dict:

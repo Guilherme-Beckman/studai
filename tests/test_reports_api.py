@@ -100,7 +100,10 @@ class ReportsApiTests(unittest.TestCase):
         wrong = next(letter for letter in "ABCDE" if letter != correct)
         status, answer = self.request(f"/api/exam-sessions/{session['id']}/answers", "POST",
                                       {"ordinal": 1, "answer": wrong})
-        self.assertEqual((status, answer["correct"], answer["reason"]), (200, False, None))
+        self.assertEqual(status, 400)
+        status, answer = self.request(f"/api/exam-sessions/{session['id']}/answers", "POST",
+                                      {"ordinal": 1, "answer": wrong, "reason": "calc_error"})
+        self.assertEqual((status, answer["correct"], answer["reason"]), (200, False, "calc_error"))
         status, answer = self.request(f"/api/exam-sessions/{session['id']}/answers", "POST",
                                       {"ordinal": 2, "answer": "Z"})
         self.assertEqual(status, 400)
