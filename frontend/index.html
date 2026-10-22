@@ -14,7 +14,7 @@
   <main class="layout">
     <aside class="sidebar">
       <p class="eyebrow">WORKSPACE</p>
-      <button class="nav-item" data-view="today"><span>☀</span> Hoje</button>
+      <button class="nav-item" data-view="training"><span>✦</span> Treinamento</button>
       <button class="nav-item active" data-view="overview"><span>⌂</span> Visão geral</button>
       <button class="nav-item" data-view="process"><span>↥</span> Processar prova</button>
       <button class="nav-item" data-view="exams"><span>▤</span> Provas e gabaritos</button>
@@ -31,7 +31,7 @@
         <div class="hero-card"><div class="hero-copy"><span class="pill pill-light">SEU ESPAÇO DE TESTE</span><h2>Da prova ao plano de estudo.</h2><p>Envie uma prova, organize o gabarito e experimente um diagnóstico personalizado com as questões do seu acervo.</p><button class="button button-white" data-go="process">Começar a testar <span>→</span></button></div><div class="hero-art"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-sheet"><div class="sheet-head"></div><i></i><i></i><i></i><div class="sheet-answer">A&nbsp;&nbsp; B&nbsp;&nbsp; C&nbsp;&nbsp; D&nbsp;&nbsp; E</div><div class="sheet-check">✓</div></div><div class="floating-star">✳</div></div></div>
         <div class="section-heading"><div><p class="eyebrow">FLUXO PRINCIPAL</p><h2>O que você quer testar?</h2></div></div>
         <div class="feature-grid">
-          <button class="feature-card" data-go="today"><span class="feature-icon icon-green">☀</span><span class="feature-title">O que estudar hoje</span><span class="feature-desc">Revisões vencidas, questões que você errou e conteúdos novos, pela revisão espaçada.</span><span class="feature-link">Estudar agora <b>→</b></span></button>
+          <button class="feature-card" data-go="training"><span class="feature-icon icon-green">☀</span><span class="feature-title">Tarefa diária e treinamento</span><span class="feature-desc">Siga a recomendação de hoje ou escolha matérias e quantas questões quer praticar.</span><span class="feature-link">Abrir treinamento <b>→</b></span></button>
           <button class="feature-card" data-go="process"><span class="feature-icon icon-blue">↥</span><span class="feature-title">Processar prova</span><span class="feature-desc">Extraia questões de um PDF e classifique os assuntos.</span><span class="feature-link">Abrir fluxo <b>→</b></span></button>
           <button class="feature-card" data-go="exams"><span class="feature-icon icon-green">▤</span><span class="feature-title">Provas e gabaritos</span><span class="feature-desc">Veja seu acervo e importe respostas para uma prova.</span><span class="feature-link">Ver acervo <b>→</b></span></button>
           <button class="feature-card" data-go="diagnostics"><span class="feature-icon icon-violet">◉</span><span class="feature-title">Diagnóstico</span><span class="feature-desc">Responda questões reais e receba métricas e prioridades de estudo.</span><span class="feature-link">Abrir diagnóstico <b>→</b></span></button>
@@ -40,12 +40,21 @@
         <div id="overview-exams" class="exam-strip"><div class="loading-card">Carregando acervo…</div></div>
       </section>
 
-      <section class="view" id="view-today">
-        <div class="page-heading"><div><p class="eyebrow">ESTUDO DIÁRIO</p><h1>O que estudar hoje</h1><p class="muted">Revisão espaçada (FSRS) por conteúdo da taxonomia, com as respostas dos diagnósticos e do estudo diário.</p></div><span class="date-chip" id="today-date">Hoje</span></div>
-        <div class="panel today-controls"><label>Curso<select id="today-course"></select></label></div>
+      <section class="view" id="view-training">
+        <div class="page-heading"><div><p class="eyebrow">PRÁTICA E EVOLUÇÃO</p><h1>Treinamento</h1><p class="muted">Faça sua tarefa diária ou monte blocos de prática por matéria e quantidade.</p></div><span class="date-chip" id="today-date">Hoje</span></div>
+        <div class="panel today-controls"><label>Curso<select id="training-course"></select></label></div>
+        <div class="training-section-heading"><div><span class="daily-task-icon">☀</span><div><p class="eyebrow">TAREFA DIÁRIA</p><h2 id="daily-task-status">Preparando sua tarefa diária…</h2><p class="muted">O algoritmo escolhe revisões vencidas, erros e conteúdos que podem fortalecer seu domínio.</p></div></div><span class="training-count" id="training-count">0 questões respondidas hoje</span></div>
         <div id="today-summary" class="today-summary"></div>
-        <div id="today-workspace" class="panel diagnostic-workspace"><div class="loading-card">Carregando o estudo de hoje…</div></div>
-        <div class="panel today-progress"><div class="panel-heading"><span class="step-number step-green">◷</span><div><h2>Domínio por conteúdo</h2><p>Probabilidade estimada de lembrar cada conteúdo agora; os mais fracos aparecem primeiro.</p></div><button class="icon-button" id="refresh-today" title="Atualizar">↻</button></div><div id="today-progress"></div></div>
+        <div class="panel training-builder">
+          <div class="panel-heading"><span class="step-number step-violet">✦</span><div><h2>Treino livre</h2><p>Escolha as matérias e a quantidade. Você pode adicionar outro bloco a qualquer momento.</p></div></div>
+          <div id="training-subject-list" class="training-subject-list"><div class="loading-card">Carregando matérias…</div></div>
+          <div class="training-builder-actions"><label>Questões neste bloco<input id="training-question-count" type="number" min="1" max="100" value="10"></label><button class="button button-primary" id="add-training-block" type="button">Adicionar ao treino →</button></div>
+          <p class="help-copy">As questões selecionadas entram depois das questões pendentes da tarefa diária. Você pode adicionar novos blocos sem limite.</p>
+          <p class="training-block-status" id="training-block-status" role="status">Nenhum bloco extra adicionado ainda.</p>
+        </div>
+        <div id="today-workspace" class="panel diagnostic-workspace"><div class="loading-card">Carregando sua tarefa diária…</div></div>
+        <div class="panel today-progress"><div class="panel-heading"><span class="step-number step-green">◷</span><div><h2>Domínio por conteúdo</h2><p>Veja o que já consolidou e quais conteúdos precisam de reforço.</p></div><button class="icon-button" id="refresh-today" title="Atualizar">↻</button></div><div id="today-progress"></div></div>
+        <div class="learning-reset-panel"><div><strong>Resetar contexto de aprendizado</strong><p>Apaga progresso, respostas e diagnósticos. Mantém provas, questões, gabaritos e configurações.</p></div><button class="button button-danger" id="reset-learning-context" type="button">Resetar meu contexto</button></div>
       </section>
 
       <section class="view" id="view-process">

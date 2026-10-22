@@ -157,6 +157,19 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 - [ ] Indicador discreto de progresso (questão X de N) e saída sem perder o que já foi respondido (as respostas continuam sendo salvas no fluxo atual)
 - [ ] Teste manual nas três telas e em largura de celular
 
+## Fase 9 — Treinamento contínuo
+
+- [x] Identificar “Hoje” como tarefa diária, com progresso e acesso direto ao treinamento
+- [x] Reunir a tarefa diária e o treino livre na aba “Treinamento”, com escolha de matérias e quantidade por bloco (até 100 por bloco, sem limite de blocos)
+- [x] Priorizar questões com o algoritmo de revisão, lacunas do diagnóstico e conteúdos ainda não praticados; manter prática do acervo quando a fila prioritária se esgotar
+- [x] Reutilizar o mesmo registro de respostas, agendamento FSRS e progresso por conteúdo
+- [x] Cobrir a extensão da sessão diária para além do plano inicial (`tests/test_study_scheduler.py`)
+- [x] Permitir resetar o contexto de aprendizagem sem apagar provas, questões, gabaritos ou configurações
+
+## Processamento de provas
+
+- [x] Mostrar etapas do processamento com progresso granular por página no OCR, por questão nos recortes e na classificação; incluir estado atual e tarefas ativas
+
 ## Expansão do acervo/RAG (depois das fases 1–3)
 
 - [ ] Processar mais provas de `fuvest_acervo/` usando o fluxo novo de revisão
@@ -193,3 +206,6 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-19 | Claude / `claude/peaceful-robinson-bc3448` | Fase 3: OCR (Tesseract) nas provas sem texto legível; 2021 com 90 questões | 5f296ff |
 | 2026-10-19 | Claude / `claude/diagnostico-questoes-gabarito-f159ce` | Correção: acervo publicado sem gabaritos (o banco não é versionado) bloqueava o diagnóstico; `gabarito.json` por prova é importado automaticamente e o erro explica as exclusões | 60d5719 |
 | 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Fluxo uniforme de resposta: seleção separada do envio, motivo obrigatório para erro e avanço para a próxima questão nos três fluxos | f986a40 |
+| 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Tarefa diária reunida com treinamento contínuo; blocos de prática configuráveis por matéria e quantidade, integrados ao FSRS | — |
+| 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Botão para zerar progresso e histórico de aprendizagem, mantendo provas, questões e gabaritos | — |
+| 2026-10-20 | Codex / `feature/frontend/answer-confirm-flow` | Acompanhamento visual do processamento: etapas e avanço página a página no OCR e questão a questão em recortes/classificação | — |

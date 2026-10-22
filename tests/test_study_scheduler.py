@@ -91,6 +91,60 @@ class StudyServiceTests(unittest.TestCase):
     def test_size_limits_the_session(self):
         self.assertEqual(len(self.today(T0, size=2, new_per_day=5)["items"]), 2)
 
+    def test_training_can_append_recommended_questions_beyond_daily_plan(self):
+        session = self.today(T0, size=1, new_per_day=1)
+        expanded = study.append_training_item(self.db, session["id"], self.pool, self.config, T0)
+        self.assertEqual(len(expanded["items"]), 2)
+        self.assertEqual(len({(item["sourceId"], item["number"]) for item in expanded["items"]}), 2)
+        item = next(item for item in expanded["items"] if item["id"].startswith("t"))
+        study.record_study_answer(self.db, session["id"], item["id"], "A", None, T0)
+        continued = study.append_training_item(self.db, session["id"], self.pool, self.config, T0 + timedelta(minutes=1))
+        self.assertEqual(len(continued["items"]), 3)
+        self.assertEqual(continued["answered"], 1)
+
+    def test_training_block_respects_selected_subjects_and_question_count(self):
+        session = self.today(T0, size=1, new_per_day=1)
+        expanded = study.append_training_item(self.db, session["id"], self.pool, self.config, T0,
+                                              subjects=["Física"], count=3)
+        added = [item for item in expanded["items"] if item["id"].startswith("t")]
+        self.assertEqual(len(added), 3)
+        self.assertEqual({item["subject"] for item in added}, {"Física"})
+        with self.assertRaises(ValueError):
+            study.append_training_item(self.db, session["id"], self.pool, self.config, T0,
+                                       subjects=["Química"], count=1)
+        with self.assertRaises(ValueError):
+            study.append_training_item(self.db, session["id"], self.pool, self.config, T0,
+                                       subjects=[], count=1)
+        with self.assertRaises(ValueError):
+            study.append_training_item(self.db, session["id"], self.pool, self.config, T0,
+                                       subjects=["Física"], count=101)
+
+    def test_reset_learning_context_preserves_exam_data_and_answer_keys(self):
+        session = self.today(T0, new_per_day=1)
+        self.answer(session, session["items"][0], "B", "misread")
+        diagnostic_attempt = diagnostics.create_attempt(self.db, self.config, "curso", self.pool, total=1,
+                                                         seed=1, provider=None, mode="static")
+        diagnostics.record_response(self.db, diagnostic_attempt["id"], 1, "B", "misread")
+        exam_attempt = diagnostics.create_attempt(self.db, self.config, "curso", self.pool, total=1,
+                                                   seed=2, provider=None, mode="static")
+        self.db.execute("UPDATE attempts SET mode='exam',metrics_json='{}',analysis_json='{}' WHERE id=?",
+                        (exam_attempt["id"],))
+        diagnostics.record_response(self.db, exam_attempt["id"], 1, "A")
+        self.db.execute("INSERT INTO answer_keys(source_id,question_number,answer,source_pdf,imported_at) "
+                        "VALUES('prova-1',99,'A','gabarito.pdf','2026-10-01')")
+
+        result = study.reset_learning_context(self.db)
+
+        self.assertEqual(result["studyAnswers"], 1)
+        self.assertEqual(result["diagnostics"], 1)
+        self.assertEqual(result["examAttempts"], 1)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM study_sessions").fetchone()[0], 0)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM review_cards").fetchone()[0], 0)
+        self.assertIsNone(self.db.execute("SELECT answered_at FROM attempt_questions WHERE attempt_id=?",
+                                          (exam_attempt["id"],)).fetchone()[0])
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0], 1)
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM answer_keys").fetchone()[0], 1)
+
     def test_wrong_answer_requires_reason_and_returns_as_overdue_question(self):
         session = self.today(T0, new_per_day=1)
         item = session["items"][0]
@@ -282,9 +336,10 @@ class StudyApiTests(unittest.TestCase):
             active.stop()
         self.temp.cleanup()
 
-    def request(self, path, payload=None):
+    def request(self, path, payload=None, method=None):
         body = json.dumps(payload).encode() if payload is not None else None
-        request = urllib.request.Request(self.base + path, data=body, method="POST" if body else "GET",
+        request = urllib.request.Request(self.base + path, data=body,
+                                         method=method or ("POST" if body else "GET"),
                                          headers={"Content-Type": "application/json"} if body else {})
         with urllib.request.urlopen(request) as response:
             return json.loads(response.read())
@@ -303,6 +358,22 @@ class StudyApiTests(unittest.TestCase):
         self.assertTrue(again["items"][0]["answered"])
         progress = self.request("/api/study/progress")
         self.assertEqual(progress["contents"][0]["reviews"], 1)
+
+    def test_learning_context_reset_keeps_question_files_and_answer_keys(self):
+        session = self.request("/api/study/today?courseId=curso")
+        item = session["items"][0]
+        self.request("/api/study/today/answers", {
+            "sessionId": session["id"], "itemId": item["id"], "answer": "A"})
+        result = self.request("/api/learning-context", {}, method="DELETE")
+        self.assertTrue(result["ok"])
+        self.assertTrue((Path(self.temp.name) / "provas" / "prova-1" / "questoes.classificado.json").is_file())
+        db = study.connect_db(Path(self.temp.name) / "historico.sqlite3")
+        try:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM answer_keys").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM review_cards").fetchone()[0], 0)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM study_sessions").fetchone()[0], 0)
+        finally:
+            db.close()
 
 
 if __name__ == "__main__":

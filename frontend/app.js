@@ -111,7 +111,7 @@ function showView(name) {
   if (name === "diagnostics") refreshDiagnostics();
   if (name === "reports") window.refreshReports?.();
   if (name === "map") window.refreshKnowledgeMap?.();
-  if (name === "today") refreshToday();
+  if (name === "training") refreshToday();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -130,10 +130,19 @@ function renderProcessProgress(job) {
   const status = $("#process-status");
   status.classList.remove("empty-state");
   const active = (job.activeQuestions || []).map(item => `Q${String(item.question).padStart(2, "0")} · ${item.provider || "IA"} · ${item.seconds}s`).join(" · ");
-  const count = job.total ? `${job.completed || 0} de ${job.total} questões processadas${job.cachedQuestions ? ` · ${job.cachedQuestions} do cache` : ""}${job.cacheMisses ? ` · ${job.cacheMisses} chamadas novas` : ""}${job.errors ? ` · ${job.errors} falha(s)` : ""}` : "";
+  const unit = job.unit || (job.stage === "classifying" || job.stage === "rendering" ? "questões" : "");
+  const count = job.total ? `${job.completed || 0} de ${job.total} ${unit} ${job.stage === "extracting" ? "lidas" : job.stage === "rendering" ? "preparadas" : "processadas"}${job.cachedQuestions ? ` · ${job.cachedQuestions} do cache` : ""}${job.cacheMisses ? ` · ${job.cacheMisses} chamadas novas` : ""}${job.errors ? ` · ${job.errors} falha(s)` : ""}` : "";
   const progress = Math.max(0, Math.min(100, job.progress || 0));
-  status.innerHTML = `<div class="progress-summary"><div class="progress-summary-top"><strong>${escapeHtml(job.message || "Preparando processamento…")}</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="progress-meta"><span>${escapeHtml(job.stageLabel || stageLabel(job.stage))}</span><span>${escapeHtml(count)}</span></div>${active ? `<div class="active-work"><span class="pulse-dot"></span>Agora: ${escapeHtml(active)}</div>` : ""}</div>`;
-  $("#process-progress-subtitle").textContent = job.status === "cancelling" ? "Cancelamento solicitado; aguardando a etapa atual." : "Atualização em tempo real · detalhes das tarefas ativas abaixo.";
+  const steps = [["extracting", "Leitura e OCR"], ["rendering", "Recortes das questões"], ["classifying", "Classificação por IA"], ["answer_key", "Gabarito"]];
+  const activeStep = job.stage === "upload_saved" || job.stage === "queued" ? -1 : steps.findIndex(([stage]) => stage === job.stage);
+  const isDone = job.status === "completed" || job.stage === "completed";
+  const stepper = steps.map(([stage, label], index) => {
+    const complete = isDone || index < activeStep || (stage === "classifying" && job.stage === "answer_key") || (stage === "rendering" && job.stage === "classifying");
+    const current = !isDone && index === activeStep;
+    return `<div class="process-step ${complete ? "is-complete" : ""} ${current ? "is-current" : ""}" ${current ? 'aria-current="step"' : ""}><span>${complete ? "✓" : index + 1}</span><strong>${label}</strong></div>`;
+  }).join("");
+  status.innerHTML = `<div class="progress-summary"><div class="process-stepper" aria-label="Etapas do processamento">${stepper}</div><div class="progress-summary-top"><strong>${escapeHtml(job.message || "Preparando processamento…")}</strong><span>${progress}%</span></div><div class="progress-track" role="progressbar" aria-label="Progresso do processamento" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><div class="progress-fill" style="width:${progress}%"></div></div><div class="progress-meta"><span>${escapeHtml(job.stageLabel || stageLabel(job.stage))}</span><span>${escapeHtml(count)}</span></div>${active ? `<div class="active-work"><span class="pulse-dot"></span>Agora: ${escapeHtml(active)}</div>` : ""}</div>`;
+  $("#process-progress-subtitle").textContent = job.status === "cancelling" ? "Cancelamento solicitado; aguardando a etapa atual." : job.stage === "extracting" && !job.total ? "A prova está sendo lida. PDFs escaneados podem levar mais tempo porque cada página passa por OCR." : "As etapas e a contagem são atualizadas enquanto o trabalho avança.";
   const cancel = $("#process-cancel");
   cancel.classList.toggle("hidden", !["queued", "running", "cancelling"].includes(job.status));
   cancel.disabled = job.status === "cancelling";
@@ -1102,8 +1111,9 @@ async function refreshCourses() {
   try {
     courses = await api("/api/courses");
     $("#course-select").innerHTML = courses.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.name)} · ${course.subjects.length} matérias</option>`).join("");
-    $("#today-course").innerHTML = courses.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.name)}</option>`).join("");
-    try { const saved = localStorage.getItem("studai-today-course"); if (saved && courses.some(course => course.id === saved)) $("#today-course").value = saved; } catch {}
+    $("#training-course").innerHTML = courses.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.name)}</option>`).join("");
+    try { const saved = localStorage.getItem("studai-today-course"); if (saved && courses.some(course => course.id === saved)) $("#training-course").value = saved; } catch {}
+    renderTrainingSubjects();
   } catch (error) {
     $("#course-select").innerHTML = `<option value="">Não foi possível carregar os cursos</option>`;
     toast(error.message, true);
@@ -1557,23 +1567,40 @@ async function finalizeDiagnostic(id) {
 
 const STUDY_REASONS = {
   overdue_question: "QUESTÃO ERRADA", due_content: "REVISÃO VENCIDA",
-  new_gap: "LACUNA DO DIAGNÓSTICO", new_content: "CONTEÚDO NOVO",
+  new_gap: "LACUNA DO DIAGNÓSTICO", new_content: "CONTEÚDO NOVO", practice: "PRÁTICA",
 };
 
 function formatDay(isoDate) {
   return new Date(`${isoDate}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
 }
 
+function updateTrainingCounters(session) {
+  $("#training-count").textContent = `${session.answered} questão${session.answered === 1 ? "" : "ões"} respondida${session.answered === 1 ? "" : "s"} hoje`;
+  const extra = session.items.filter(item => item.id.startsWith("t"));
+  const done = extra.filter(item => item.answered).length;
+  $("#training-block-status").textContent = extra.length
+    ? `${extra.length} questões extras enfileiradas · ${done} concluídas`
+    : "Nenhum bloco extra adicionado ainda.";
+}
+
 async function refreshToday() {
-  const courseId = $("#today-course").value;
+  const courseId = $("#training-course").value;
   if (!courseId) return;
   try {
     const [session, progress] = await Promise.all([
       api(`/api/study/today?courseId=${encodeURIComponent(courseId)}`),
       api("/api/study/progress"),
     ]);
-    currentStudy = { session, selected: null, pendingReason: null };
+    currentStudy = { session, selected: null, pendingReason: null, training: true,
+      dailyCount: session.items.filter(item => !item.id.startsWith("t")).length };
     $("#today-date").textContent = formatDay(session.date);
+    updateTrainingCounters(session);
+    const dailyItems = session.items.filter(item => !item.id.startsWith("t"));
+    const dailyDone = dailyItems.filter(item => item.answered).length;
+    $("#daily-task-status").textContent = dailyItems.length
+      ? dailyDone >= dailyItems.length ? `Tarefa diária concluída · ${dailyDone} de ${dailyItems.length} questões`
+        : `${dailyDone} de ${dailyItems.length} questões concluídas`
+      : "Tarefa diária concluída · nenhuma questão pendente";
     renderTodaySummary(session, progress);
     renderTodayProgress(progress);
     renderToday();
@@ -1581,6 +1608,14 @@ async function refreshToday() {
     $("#today-workspace").innerHTML = `<div class="inline-result error">Não foi possível montar o estudo de hoje: ${escapeHtml(error.message)}</div>`;
     toast(error.message, true);
   }
+}
+
+function renderTrainingSubjects() {
+  const course = courses.find(item => item.id === $("#training-course").value);
+  const subjects = course?.subjects || [];
+  $("#training-subject-list").innerHTML = subjects.length
+    ? subjects.map((subject, index) => `<label class="training-subject"><input type="checkbox" name="training-subject" value="${escapeHtml(subject)}" checked><span>${escapeHtml(subject)}</span></label>`).join("")
+    : `<p class="help-copy">Este curso não tem matérias disponíveis.</p>`;
 }
 
 function renderTodaySummary(session, progress) {
@@ -1596,8 +1631,17 @@ function renderTodayProgress(progress) {
     : `<div class="empty-state"><div class="empty-icon">◷</div><strong>Nenhum conteúdo em revisão ainda</strong><p>Responda o estudo de hoje ou um diagnóstico para começar o agendamento.</p></div>`;
 }
 
-function renderToday() {
-  const workspace = $("#today-workspace");
+function updateDailyTaskStatus() {
+  if (!currentStudy) return;
+  const daily = currentStudy.session.items.filter(item => !item.id.startsWith("t"));
+  const done = daily.filter(item => item.answered).length;
+  $("#daily-task-status").textContent = daily.length
+    ? done >= daily.length ? `Tarefa diária concluída · ${done} de ${daily.length} questões`
+      : `${done} de ${daily.length} questões concluídas`
+    : "Tarefa diária concluída · nenhuma questão pendente";
+}
+
+function renderToday(workspace = $("#today-workspace")) {
   const { session, selected } = currentStudy;
   const items = session.items;
   if (!items.length) {
@@ -1606,11 +1650,11 @@ function renderToday() {
   }
   const answered = items.filter(item => item.answered).length;
   const progress = Math.round(answered / items.length * 100);
-  const top = `<div class="workspace-top"><div><p class="eyebrow">SESSÃO DE ${escapeHtml(formatDay(session.date)).toUpperCase()}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${session.correct} acertos até agora</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
+  const top = `<div class="workspace-top"><div><p class="eyebrow">${currentStudy.training ? "TREINAMENTO CONTÍNUO" : `SESSÃO DE ${escapeHtml(formatDay(session.date)).toUpperCase()}`}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${session.correct} acertos até agora</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
   const item = currentStudy.lastAnswer ? items.find(entry => entry.id === currentStudy.lastAnswer.itemId) : items.find(entry => !entry.answered);
   if (!item) {
     const list = items.map(entry => `<tr><td><span class="today-reason ${entry.reason}">${STUDY_REASONS[entry.reason]}</span></td><td>${escapeHtml(entry.contentPath)}</td><td>${entry.selectedAnswer ? escapeHtml(entry.selectedAnswer) : "Branco"} / ${escapeHtml(entry.correctAnswer)}</td><td>${entry.correct ? "✓" : "✗"}</td></tr>`).join("");
-    workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>Sessão concluída: ${session.correct} de ${items.length}</strong><p>As próximas revisões já foram agendadas. Veja abaixo quando cada conteúdo volta.</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
+    workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>Bloco concluído: ${session.correct} acertos</strong><p>As revisões foram atualizadas. Ajuste matérias e quantidade acima para adicionar mais questões quando quiser.</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
     return;
   }
   const question = item.question || {};
@@ -1631,13 +1675,13 @@ function renderToday() {
   $$("[data-today-option]", workspace).forEach(button => button.addEventListener("click", () => {
     currentStudy.selected = button.dataset.todayOption;
     currentStudy.pendingReason = null;
-    renderToday();
+    renderToday(workspace);
   }));
   $("#today-submit", workspace)?.addEventListener("click", () => submitStudyAnswer(item, currentStudy.selected));
   $("#today-blank", workspace)?.addEventListener("click", () => {
     currentStudy.selected = currentStudy.selected === "" ? null : "";
     currentStudy.pendingReason = null;
-    renderToday();
+    renderToday(workspace);
   });
   $("#today-confirm-reason", workspace)?.addEventListener("click", () => {
     const reason = $("#today-reason", workspace).value;
@@ -1647,7 +1691,7 @@ function renderToday() {
   $("#today-next", workspace)?.addEventListener("click", () => {
     currentStudy.lastAnswer = null;
     currentStudy.selected = null;
-    renderToday();
+    renderToday(workspace);
   });
 }
 
@@ -1666,10 +1710,15 @@ async function submitStudyAnswer(item, answer, reason = null) {
     }
     currentStudy.submitting = false;
     Object.assign(item, { answered: true, selectedAnswer: result.answer, correct: result.correct, correctAnswer: result.correctAnswer });
+    currentStudy.session.answered++;
     if (result.correct) currentStudy.session.correct++;
     currentStudy.lastAnswer = result;
     currentStudy.pendingReason = null;
     currentStudy.selected = null;
+    updateDailyTaskStatus();
+    if (currentStudy.training) {
+      updateTrainingCounters(currentStudy.session);
+    }
     renderToday();
     window.setTimeout(() => {
       if (currentStudy?.lastAnswer !== result) return;
@@ -1679,6 +1728,61 @@ async function submitStudyAnswer(item, answer, reason = null) {
   } catch (error) {
     if (currentStudy) currentStudy.submitting = false;
     toast(error.message, true);
+  }
+}
+
+async function appendTrainingBlock() {
+  if (!currentStudy?.session || currentStudy.submitting) return toast("Aguarde o carregamento da tarefa diária.", true);
+  const button = $("#add-training-block");
+  const subjects = $$('input[name="training-subject"]:checked').map(input => input.value);
+  const count = Number($("#training-question-count").value);
+  if (!subjects.length) return toast("Selecione ao menos uma matéria.", true);
+  if (!Number.isInteger(count) || count < 1 || count > 100) return toast("Escolha uma quantidade entre 1 e 100 questões.", true);
+  if (button) { button.disabled = true; button.textContent = "Montando seu bloco…"; }
+  try {
+    const previousCount = currentStudy.session.items.length;
+    const session = await api("/api/study/training/next", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: currentStudy.session.id, subjects, count }),
+    });
+    currentStudy.session = session;
+    currentStudy.lastAnswer = null;
+    currentStudy.selected = null;
+    currentStudy.pendingReason = null;
+    updateTrainingCounters(session);
+    const added = session.items.length - previousCount;
+    toast(`${added} ${added === 1 ? "questão adicionada" : "questões adicionadas"}. Elas aparecem uma por vez no treino.`);
+    renderToday();
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = "Adicionar ao treino →"; }
+  }
+}
+
+async function resetLearningContext() {
+  const confirmed = window.confirm(
+    "Zerar o contexto de aprendizado? Isso remove progresso, sessões diárias, cartões de revisão, respostas e histórico de diagnósticos. As tentativas de provas serão mantidas, mas suas respostas e métricas serão zeradas. Arquivos, questões, gabaritos e configurações não serão apagados.",
+  );
+  if (!confirmed) return;
+  const button = $("#reset-learning-context");
+  button.disabled = true;
+  button.textContent = "Zerando progresso…";
+  try {
+    await api("/api/learning-context", { method: "DELETE" });
+    currentStudy = null;
+    currentDiagnostic = null;
+    diagnosticDone.clear();
+    $("#diagnostic-workspace").classList.add("hidden");
+    await Promise.all([refreshToday(), refreshDiagnostics()]);
+    window.refreshReports?.();
+    window.refreshKnowledgeMap?.();
+    toast("Contexto de aprendizado resetado. Suas provas e gabaritos continuam salvos.");
+  } catch (error) {
+    toast(`Não foi possível resetar o contexto: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Resetar meu contexto";
   }
 }
 
@@ -1694,10 +1798,13 @@ function bindEvents() {
   $("#refresh-exams").addEventListener("click", refreshExams);
   $("#refresh-diagnostics").addEventListener("click", refreshDiagnostics);
   $("#refresh-today").addEventListener("click", refreshToday);
-  $("#today-course").addEventListener("change", () => {
-    try { localStorage.setItem("studai-today-course", $("#today-course").value); } catch {}
+  $("#training-course").addEventListener("change", () => {
+    try { localStorage.setItem("studai-today-course", $("#training-course").value); } catch {}
+    renderTrainingSubjects();
     refreshToday();
   });
+  $("#add-training-block").addEventListener("click", appendTrainingBlock);
+  $("#reset-learning-context").addEventListener("click", resetLearningContext);
   $("#pdf-file").addEventListener("change", event => { $("#file-label").textContent = event.target.files[0]?.name || "Escolher PDF"; });
   $("#key-pdf-file").addEventListener("change", event => { $("#key-file-label").textContent = event.target.files[0]?.name || "Escolher PDF do gabarito"; });
   $("#drop-zone").addEventListener("dragover", event => { event.preventDefault(); event.currentTarget.classList.add("dragover"); });

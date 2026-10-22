@@ -42,6 +42,23 @@ class ModularFeatureTests(unittest.TestCase):
         self.assertEqual(result["total_questoes"], 1)
         self.assertEqual(result["questoes"][0]["alternativas"]["E"]["texto"], "opção E")
 
+    def test_pdf_extraction_reports_page_and_question_progress(self):
+        source = self.root / "prova.pdf"
+        doc = pymupdf.open()
+        page = doc.new_page()
+        for index, line in enumerate(("1", "Enunciado da questão", "(A) opção A", "(B) opção B",
+                                      "(C) opção C", "(D) opção D", "(E) opção E")):
+            page.insert_text((72, 72 + index * 20), line)
+        doc.save(source)
+        doc.close()
+
+        events = []
+        extract_pdf(source, self.root / "saida", dpi=40, full_crops=False, progress=events.append)
+        page_events = [event for event in events if event.get("unit") == "páginas"]
+        question_events = [event for event in events if event.get("unit") == "questões"]
+        self.assertEqual(page_events[-1]["completed"], page_events[-1]["total"])
+        self.assertEqual(question_events[-1]["completed"], question_events[-1]["total"])
+
     def test_classification_uses_provider_interface_and_preserves_json_shape(self):
         questions = self.root / "questoes.json"
         questions.write_text(json.dumps({"questoes": [{"numero": 1, "enunciado": "Leia o texto.",

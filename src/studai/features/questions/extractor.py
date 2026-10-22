@@ -1234,7 +1234,7 @@ def _order_by_markers(items: list[Item]) -> list[Item]:
     return [it for _, block in sorted(blocks, key=lambda b: b[0]) for it in block]
 
 
-def parse(doc: pymupdf.Document, ocr: OcrProvider | None = None):
+def parse(doc: pymupdf.Document, ocr: OcrProvider | None = None, progress=None):
     """Questões e textos compartilhados; ``ocr`` lê as páginas sem texto legível (ver _needs_ocr)."""
     questions: dict[int, dict] = {}
     shared: dict[str, dict] = {}
@@ -1258,7 +1258,10 @@ def parse(doc: pymupdf.Document, ocr: OcrProvider | None = None):
         seg[0], seg[1] = min(seg[0], b.y0), max(seg[1], b.y1)
         seg[2], seg[3] = min(seg[2], b.x0), max(seg[3], b.x1)
 
-    for pno in pages:
+    for page_index, pno in enumerate(pages, 1):
+        if progress:
+            progress({"stage": "extracting", "message": f"Lendo página {page_index} de {len(pages)} · OCR e identificação das questões",
+                      "completed": page_index - 1, "total": len(pages), "unit": "páginas"})
         for it in _order_by_markers(extract_page(doc[pno], pno, alt_style, digits, ocr)):
             if it.kind == "end":
                 if mode != "shared":       # fim da questão: ignora o que vier até o próximo marcador
@@ -1335,6 +1338,9 @@ def parse(doc: pymupdf.Document, ocr: OcrProvider | None = None):
                     letter = it.fig.alt or (cur_alt if mode == "alts" else None)
                     cur["_short"] = True             # texto depois de figura começa parágrafo novo
                     cur.setdefault("_figs", []).append((it.page, it.fig.bbox, letter))
+        if progress:
+            progress({"stage": "extracting", "message": f"Página {page_index} de {len(pages)} lida",
+                      "completed": page_index, "total": len(pages), "unit": "páginas"})
     return questions, shared
 
 
@@ -1379,7 +1385,7 @@ def _stem_blocks(doc, stem: list[dict], imgdir: Path, n: str, dpi: int) -> list[
 
 
 def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
-             detailed_crops: bool = False):
+             detailed_crops: bool = False, progress=None):
     imgdir = outdir / "img"
     imgdir.mkdir(parents=True, exist_ok=True)
     pw = doc[0].rect.width
@@ -1392,7 +1398,10 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
             s["figuras"].append(f"img/{name}")
         s["texto"] = _join(s["texto"])
 
-    for num, q in questions.items():
+    for question_index, (num, q) in enumerate(questions.items(), 1):
+        if progress:
+            progress({"stage": "rendering", "message": f"Preparando recortes da questão {num} · {question_index} de {len(questions)}",
+                      "completed": question_index - 1, "total": len(questions), "unit": "questões"})
         n = f"{num:02d}"
         kE = 0
         for p, r, letter in q.pop("_figs", []):
@@ -1455,6 +1464,9 @@ def finalize(doc, questions, shared, outdir: Path, dpi: int, full_crops: bool,
         q.pop("_segs")
         q.pop("_fonts")
         q["resposta"] = None  # o caderno não traz gabarito; preencher depois
+        if progress:
+            progress({"stage": "rendering", "message": f"Recortes prontos · questão {num} de {len(questions)}",
+                      "completed": question_index, "total": len(questions), "unit": "questões"})
 
 
 def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bool = True,
@@ -1466,10 +1478,10 @@ def extract_pdf(input_pdf: Path, outdir: Path, *, dpi: int = 200, full_crops: bo
     try:
         if progress:
             progress({"stage": "extracting", "message": f"Lendo PDF · {len(doc)} páginas", "pages": len(doc)})
-        questions, shared = parse(doc, ocr)
+        questions, shared = parse(doc, ocr, progress)
         if progress:
             progress({"stage": "rendering", "message": f"Extraindo imagens de {len(questions)} questões", "questions": len(questions)})
-        finalize(doc, questions, shared, outdir, dpi, full_crops, detailed_crops)
+        finalize(doc, questions, shared, outdir, dpi, full_crops, detailed_crops, progress)
         data = {
             "prova": input_pdf.stem,
             "arquivo_origem": input_pdf.name,

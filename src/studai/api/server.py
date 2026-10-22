@@ -1098,6 +1098,31 @@ def _study_answer(body: dict) -> dict:
         db.close()
 
 
+def _study_training_next(body: dict) -> dict:
+    session_id = str(body.get("sessionId") or "")
+    if not session_id:
+        raise ValueError("sessão de estudo inválida")
+    config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        row = db.execute("SELECT course_id FROM study_sessions WHERE id=?", (session_id,)).fetchone()
+        if not row:
+            raise ValueError(f"sessão de estudo não encontrada: {session_id}")
+        pool = _study_pool(db, config, row["course_id"])
+        subjects = body.get("subjects")
+        if subjects is not None and (not isinstance(subjects, list)
+                                     or any(not isinstance(subject, str) for subject in subjects)):
+            raise ValueError("matérias deve ser uma lista")
+        try:
+            count = int(body.get("count", 1))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("a quantidade de questões precisa ser um número inteiro") from exc
+        return study.append_training_item(db, session_id, pool, config, datetime.now(timezone.utc),
+                                          subjects=subjects, count=count)
+    finally:
+        db.close()
+
+
 def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | None = None, cancelled=lambda: False) -> dict:
     clean_name = Path(filename).name
     if not clean_name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
@@ -1145,12 +1170,24 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         if cancelled():
             raise JobCancelled()
         if job_id:
-            _set_job(job_id, status="running", stage=event["stage"], message=event["message"], progress=5 if event["stage"] == "extracting" else 16)
+            stage = event["stage"]
+            done, total = int(event.get("completed", 0)), max(1, int(event.get("total", 1)))
+            if stage == "extracting":
+                percent = 5 + int(42 * done / total)
+            elif stage == "rendering":
+                percent = 48 + int(17 * done / total)
+            elif stage == "extracted":
+                percent = 65
+            else:
+                percent = int(event.get("progress", 3))
+            _set_job(job_id, status="running", stage=stage, message=event["message"], progress=percent,
+                     completed=done, total=event.get("total"), unit=event.get("unit"))
 
     extraction_progress({"stage": "upload_saved", "message": "Arquivo recebido e salvo", "progress": 3})
     extracted_path = output_dir / "questoes.json"
     if extracted_path.exists():
-        extraction_progress({"stage": "extracted", "message": "Extração da prova reutilizada do cache", "questions": len(json.loads(extracted_path.read_text(encoding="utf-8")).get("questoes", []))})
+        cached_questions = len(json.loads(extracted_path.read_text(encoding="utf-8")).get("questoes", []))
+        extraction_progress({"stage": "extracted", "message": f"Extração reutilizada do cache · {cached_questions} questões", "questions": cached_questions})
     else:
         extracted_path = extract_pdf(source, output_dir, dpi=dpi, progress=extraction_progress,
                                      ocr=default_ocr())
@@ -1179,7 +1216,7 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         if cached_meta.get("signature") == cache_signature and classified_path.is_file():
             cached_result = json.loads(classified_path.read_text(encoding="utf-8"))
             if job_id:
-                _set_job(job_id, stage="classifying", message="Este simulado já foi classificado · reutilizando resultado", progress=96,
+                _set_job(job_id, stage="classifying", message="Este simulado já foi classificado · reutilizando resultado", progress=99,
                          completed=question_total, total=question_total, cachedQuestions=question_total,
                          cacheMisses=0, estimatedSavedCalls=question_total, activeQuestions=[])
             return {"examId": str(cached_result.get("prova") or stable_exam_id), "name": clean_name,
@@ -1188,13 +1225,13 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
                     "estimatedSavedCalls": question_total,
                     "output": str(classified_path.relative_to(SERVICE_ROOT))}
         if job_id:
-            _set_job(job_id, stage="classifying", message=f"Classificando {question_total} questões", progress=20,
+            _set_job(job_id, stage="classifying", message=f"Classificando {question_total} questões", progress=65,
                      completed=0, total=question_total, activeQuestions=[])
         def classification_progress(event):
             if cancelled():
                 raise JobCancelled()
             done, total = event["completed"], event["total"]
-            percent = 20 + int(70 * done / max(total, 1))
+            percent = 65 + int(33 * done / max(total, 1))
             if job_id:
                 _set_job(job_id, stage="classifying", message=event["message"], progress=percent,
                          completed=done, total=total, errors=event.get("errors", 0),
@@ -1497,6 +1534,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         path = unquote(urlsplit(self.path).path)
         try:
+            if path == "/api/learning-context":
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study.reset_learning_context(db))
+                finally:
+                    db.close()
             match = re.fullmatch(r"/api/diagnostics/([^/]+)", path)
             if match:
                 attempt_id = match.group(1)
@@ -1783,6 +1826,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202, {"jobId": job_id})
             if path == "/api/study/today/answers":
                 return self._json(200, _study_answer(self._read_json()))
+            if path == "/api/study/training/next":
+                return self._json(200, _study_training_next(self._read_json()))
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/answers", path)
             if match:
                 body = self._read_json()

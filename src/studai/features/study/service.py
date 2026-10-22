@@ -357,6 +357,50 @@ def plan_today(db: sqlite3.Connection, pool: list[dict], config: dict, course_id
     return session_payload(db, row["id"], pool)
 
 
+def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dict], config: dict,
+                        now: datetime, *, subjects: list[str] | None = None, count: int = 1) -> dict:
+    """Acrescenta um bloco de questões recomendadas à sessão diária."""
+    if not 1 <= count <= 100:
+        raise ValueError("a quantidade deve ficar entre 1 e 100 questões")
+    row, existing = _session(db, session_id, pool)
+    profile = diagnostics.course_profile(config, row["course_id"])
+    selected = set(profile.get("pesos", {})) if subjects is None else set(subjects)
+    allowed = set(profile.get("pesos", {}))
+    if not selected or not selected <= allowed:
+        raise ValueError("selecione ao menos uma matéria válida para este curso")
+    filtered_pool = [entry for entry in pool if entry["subject"] in selected]
+    # Primeiro usa a fila priorizada pelo mesmo algoritmo da tarefa diária, sem limite diário.
+    ranked = build_plan(db, filtered_pool, profile, row["course_id"], now,
+                        size=max(1, len(filtered_pool)), new_per_day=max(1, len(filtered_pool)))
+    used = {(item["sourceId"], int(item["number"])) for item in existing}
+    plan = json.loads(row["plan_json"])
+    eligible = []
+    for entry in filtered_pool:
+        content_id = content_id_of(entry["question"])
+        if content_id:
+            eligible.append(((entry["source_id"], int(entry["number"])), entry, content_id))
+    if not eligible:
+        raise ValueError("não há questões classificadas e com gabarito para as matérias selecionadas")
+    for offset in range(count):
+        candidate = next((item for item in ranked
+                          if (item["sourceId"], int(item["number"])) not in used), None)
+        if candidate is None:
+            # Quando a fila priorizada se esgota, mantém treino livre sem repetir até necessário.
+            unused = [item for item in eligible if item[0] not in used]
+            choices = unused or eligible
+            _, entry, content_id = random.Random(
+                f"{session_id}:{len(existing) + offset}:{local_date(now)}").choice(choices)
+            candidate = _item("practice", entry, content_id)
+        identity = (candidate["sourceId"], int(candidate["number"]))
+        candidate["id"] = f"t{len(existing) + offset + 1}"
+        used.add(identity)
+        plan["items"].append(candidate)
+    with db:
+        db.execute("UPDATE study_sessions SET plan_json=? WHERE id=?",
+                   (json.dumps(plan, ensure_ascii=False), session_id))
+    return session_payload(db, session_id, pool)
+
+
 def _session(db: sqlite3.Connection, session_id: str,
              pool: list[dict] | None = None) -> tuple[sqlite3.Row, list[dict]]:
     """
@@ -457,3 +501,25 @@ def progress(db: sqlite3.Connection, now: datetime, *, days: int = 7) -> dict:
         if key in forecast:
             forecast[key] += 1
     return {"dueToday": due_today, "forecast": forecast, "contents": contents}
+
+
+def reset_learning_context(db: sqlite3.Connection) -> dict:
+    """Limpa respostas e sinais de aprendizagem, preservando provas e gabaritos."""
+    counts = {
+        "studySessions": db.execute("SELECT COUNT(*) FROM study_sessions").fetchone()[0],
+        "studyAnswers": db.execute("SELECT COUNT(*) FROM study_answers").fetchone()[0],
+        "diagnostics": db.execute("SELECT COUNT(*) FROM attempts WHERE mode!='exam'").fetchone()[0],
+        "examAttempts": db.execute("SELECT COUNT(*) FROM attempts WHERE mode='exam'").fetchone()[0],
+        "reviewCards": db.execute("SELECT COUNT(*) FROM review_cards").fetchone()[0],
+    }
+    with db:
+        db.execute("DELETE FROM study_sessions")
+        db.execute("DELETE FROM review_cards")
+        db.execute("DELETE FROM attempts WHERE mode!='exam'")
+        # Mantém a tentativa e as questões da prova, removendo apenas respostas e métricas pessoais.
+        db.execute("""UPDATE attempt_questions SET selected_answer=NULL,error_reason=NULL,
+            is_correct=NULL,answered_at=NULL WHERE attempt_id IN
+            (SELECT id FROM attempts WHERE mode='exam')""")
+        db.execute("""UPDATE attempts SET status='in_progress',metrics_json=NULL,analysis_json=NULL,
+            analysis_status=NULL,analysis_error=NULL WHERE mode='exam'""")
+    return {"ok": True, **counts}
