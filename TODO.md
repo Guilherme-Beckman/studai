@@ -34,6 +34,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 7 | Mapa do conhecimento e progresso por profundidade | concluída | 5/5 |
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
+| 10 | Calendário de preparação | concluída | 6/6 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -181,6 +182,17 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 - [x] Cobrir a extensão da sessão diária para além do plano inicial (`tests/test_study_scheduler.py`)
 - [x] Permitir resetar o contexto de aprendizagem sem apagar provas, questões, gabaritos ou configurações
 
+## Fase 10 — Calendário de preparação
+
+Base: `src/studai/features/study/calendar.py`, aba “Calendário” (`frontend/calendar.js`).
+
+- [x] Cadastrar datas de provas por curso (1ª fase, 2ª fase ou outra); o plano mira a próxima, e a 2ª fase usa só as matérias de `fase2` do curso (2026-10-22)
+- [x] Mostrar o quão preparado o aluno está: prontidão geral e por matéria pela profundidade (`depth`), com conteúdos consolidados/total (2026-10-22)
+- [x] Calcular sozinho a carga diária (questões/dia) para consolidar os conteúdos até a prova, entre 10 e 60; avisar e cortar pelos de menor prioridade quando não cabe (2026-10-22)
+- [x] Plano dia a dia: até duas matérias por dia com os conteúdos de maior prioridade, simulado (prova completa do acervo) aos domingos, reta final nas 2 últimas semanas com simulado a cada 3 dias, véspera de revisão leve; visões de hoje, 7 dias e mês (2026-10-22)
+- [x] Hoje fixo, futuro adapta: o dia é gravado na primeira consulta (`calendar_days`); os próximos são recalculados pelo desempenho; progresso do dia conta qualquer questão da matéria (2026-10-22)
+- [x] “Treinar agora” leva ao Treinamento com um bloco filtrado por matéria e conteúdos (`contentIds` em `/api/study/training/next`), mostrado antes da tarefa diária; faixa “Plano de hoje” no Treinamento (2026-10-22)
+
 ## Processamento de provas
 
 - [x] Mostrar etapas do processamento com progresso granular por página no OCR, por questão nos recortes e na classificação; incluir estado atual e tarefas ativas
@@ -237,4 +249,5 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Limpeza: trabalho do Codex (treinamento contínuo, reset, progresso do processamento) commitado e juntado; modo foco adaptado ao botão "Responder" dos Diagnósticos; branches antigas removidas | — |
 | 2026-10-22 | Claude / `feature/answer_keys/legacy-formats` | Fase 3: formatos das provas 1996–2021 documentados; leitor de gabarito para todos os formatos do acervo (correspondência, grade sem sigla, impresso na prova); versão pelo texto/OCR; acervo 1997–2026 com gabarito; PDFs alheios removidos de 1996 | — |
 | 2026-10-22 | Claude / `feature/questions/legacy-ocr` | Fase 3: OCR por coluna, `por+eng`, alternativas lado a lado e 2ª passada `--psm 11`; 2021 com 4 questões incompletas (eram 19) | — |
+| 2026-10-22 | Claude / `feature/study/exam-calendar` | Fase 10: aba Calendário com datas de prova, prontidão, carga diária automática, plano dia/semana/mês com simulados e integração com o Treinamento | — |
 | 2026-10-22 | Claude / `claude/frontend-ai-improvement-0dd116` | Interface redesenhada com a skill frontend-design: estilo "cartão-resposta", CSS legível e tokenizado, tema escuro só por tokens | — |

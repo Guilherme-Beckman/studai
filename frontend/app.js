@@ -8,6 +8,7 @@ let diagnosticReasonPrompt = null;
 const diagnosticDone = new Map();
 let currentExamQuiz = null;
 let currentStudy = null;
+let todayRequest = null;
 let currentExamReview = null;
 let currentReprocessPreview = null;
 let activeProvider = { provider: "demo" };
@@ -112,6 +113,7 @@ function showView(name) {
   if (name === "reports") window.refreshReports?.();
   if (name === "map") window.refreshKnowledgeMap?.();
   if (name === "training") refreshToday();
+  if (name === "calendar") window.refreshCalendar?.();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1507,9 +1509,15 @@ function updateTrainingCounters(session) {
     : "Nenhum bloco extra adicionado ainda.";
 }
 
-async function refreshToday() {
+function refreshToday() {
+  todayRequest = loadToday();
+  return todayRequest;
+}
+
+async function loadToday() {
   const courseId = $("#training-course").value;
   if (!courseId) return;
+  window.refreshCalendarStrip?.(courseId);
   try {
     const [session, progress] = await Promise.all([
       api(`/api/study/today?courseId=${encodeURIComponent(courseId)}`),
@@ -1576,7 +1584,10 @@ function renderToday(workspace = $("#today-workspace")) {
   const answered = items.filter(item => item.answered).length;
   const progress = Math.round(answered / items.length * 100);
   const top = `<div class="workspace-top"><div><p class="eyebrow">${currentStudy.training ? "Treinamento contínuo" : `Sessão de ${escapeHtml(formatDay(session.date))}`}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${session.correct} acertos até agora</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
-  const item = currentStudy.lastAnswer ? items.find(entry => entry.id === currentStudy.lastAnswer.itemId) : items.find(entry => !entry.answered);
+  // Bloco aberto pelo calendário vem antes das pendências da tarefa diária.
+  const pending = entry => !entry.answered;
+  const item = currentStudy.lastAnswer ? items.find(entry => entry.id === currentStudy.lastAnswer.itemId)
+    : items.find(entry => pending(entry) && currentStudy.focusIds?.has(entry.id)) || items.find(pending);
   if (!item) {
     const list = items.map(entry => `<tr><td><span class="today-reason ${entry.reason}">${STUDY_REASONS[entry.reason]}</span></td><td>${escapeHtml(entry.contentPath)}</td><td>${entry.selectedAnswer ? escapeHtml(entry.selectedAnswer) : "Branco"} / ${escapeHtml(entry.correctAnswer)}</td><td>${entry.correct ? "✓" : "✗"}</td></tr>`).join("");
     workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>Bloco concluído: ${session.correct} acertos</strong><p>As revisões foram atualizadas. Ajuste matérias e quantidade acima para adicionar mais questões quando quiser.</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
@@ -1683,6 +1694,45 @@ async function appendTrainingBlock() {
     toast(error.message, true);
   } finally {
     if (button) { button.disabled = false; button.textContent = "Adicionar ao treino"; }
+  }
+}
+
+// Bloco vindo do calendário: abre o Treinamento e enfileira questões da matéria/conteúdos do dia.
+async function trainCalendarBlock({ courseId, subject, contentIds = [], count }) {
+  if (courseId && courses.some(course => course.id === courseId) && $("#training-course").value !== courseId) {
+    $("#training-course").value = courseId;
+    try { localStorage.setItem("studai-today-course", courseId); } catch {}
+    renderTrainingSubjects();
+  }
+  showView("training");
+  await todayRequest;
+  if (!currentStudy?.session) return toast("Não foi possível abrir a sessão de treino de hoje.", true);
+  // Questões da matéria já na fila (de um clique anterior) contam para a meta do bloco.
+  const queued = currentStudy.session.items.filter(item => !item.answered && item.subject === subject);
+  if (queued.length >= count) {
+    currentStudy.focusIds = new Set(queued.map(item => item.id));
+    Object.assign(currentStudy, { lastAnswer: null, selected: null, pendingReason: null });
+    renderToday();
+    $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  count -= queued.length;
+  try {
+    const previous = new Set(currentStudy.session.items.map(item => item.id));
+    const session = await api("/api/study/training/next", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: currentStudy.session.id, subjects: [subject], contentIds,
+        count: Math.max(1, Math.min(100, count || 1)) }),
+    });
+    const focusIds = new Set([...queued.map(item => item.id),
+      ...session.items.filter(item => !previous.has(item.id)).map(item => item.id)]);
+    Object.assign(currentStudy, { session, focusIds, lastAnswer: null, selected: null, pendingReason: null });
+    updateTrainingCounters(session);
+    renderToday();
+    toast(`Bloco do calendário: ${focusIds.size} ${focusIds.size === 1 ? "questão" : "questões"} de ${subject}. Elas vêm primeiro; a tarefa diária continua depois.`);
+    $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    toast(error.message, true);
   }
 }
 

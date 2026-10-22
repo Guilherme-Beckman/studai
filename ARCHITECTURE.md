@@ -18,7 +18,8 @@ src/studai/
 │   │                        rag.py (exemplos revisados), topic_embeddings.py, legacy_mapping.py
 │   ├── answer_keys/         service.py: associação, leitura e importação de gabaritos
 │   ├── diagnostics/         service.py, mastery.py (Beta por nó), depth.py, courses.py, report.py, cli.py
-│   ├── study/               scheduler.py (FSRS) e service.py ("O que estudar hoje")
+│   ├── study/               scheduler.py (FSRS), service.py ("O que estudar hoje" e treino) e
+│   │                        calendar.py (datas de prova, prontidão e plano dia a dia até a prova)
 │   └── reports/             service.py, knowledge_map.py; contrato em CONTRACT.md
 ├── integrations/
 │   ├── llm.py               provedores (Ollama, Gemini, OpenAI-compatíveis, pool, demo) e http_post
@@ -82,6 +83,7 @@ Inicie a aplicação local com `python api.py`; ela serve a interface e a API na
 - `POST /api/diagnostics/{id}/answers` registra `{ "ordinal": 1, "answer": "A", "reason": "calc_error" }`; motivo é exigido para resposta incorreta.
 - `POST /api/diagnostics/{id}/finalize` calcula métricas e plano de estudo em background.
 - Revisão de recortes: `POST /api/exams/{id}/questions/{n}/reprocess` (prévia em job) e `.../reprocess/{previewId}/confirm` reextraem uma questão mantendo a revisão (`questions/reprocess.py`); `GET /api/exams/{id}/source/pages[/{p}.png]` e `POST /api/exams/{id}/questions/{n}/manual-crop` fazem o recorte manual por região (`questions/manual_crop.py`); `POST /api/exams/{id}/source` associa o PDF original.
+- Calendário: `GET /api/calendar?courseId=` (provas, prontidão, carga diária, dias, semanas e meses até a próxima prova), `GET /api/calendar/today?courseId=` (só o dia de hoje), `POST /api/calendar/exams` com `{ "courseId", "name", "date": "AAAA-MM-DD", "phase": "fase1|fase2|outra" }` e `DELETE /api/calendar/exams/{id}`. `POST /api/study/training/next` aceita `contentIds` para o bloco vindo do calendário.
 - `GET /api/knowledge-map?courseId=` e `GET /api/knowledge-map/nodes/{id}?courseId=` alimentam a tela "Mapa" (grafo da taxonomia com domínio e profundidade).
 
 As rotas são locais e não têm autenticação nesta fase. Tarefas longas ficam em memória; dados de provas, respostas e diagnósticos continuam nos diretórios persistentes existentes.
