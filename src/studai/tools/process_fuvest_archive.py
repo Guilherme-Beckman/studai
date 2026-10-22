@@ -1,4 +1,4 @@
-"""Extrai a amostra FUVEST 2017–2026 (1ª fase, uma versão por ano) para revisão local."""
+"""Extrai a 1ª fase do acervo FUVEST (1997–2026, uma versão por prova) para revisão local."""
 from __future__ import annotations
 
 import argparse
@@ -8,12 +8,19 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from studai.features.answer_keys.service import import_answer_key, parse_answer_key_pdf
+import pymupdf
+
+from studai.features.answer_keys.service import (
+    answer_key_pages, answer_key_versions, detect_exam_variant, import_answer_key, parse_answer_key_pdf,
+)
 from studai.features.diagnostics.service import connect_db
+from studai.features.questions import ocr as ocr_mod
 from studai.features.questions.extractor import extract_pdf
 from studai.settings import DEFAULT_DIAGNOSTICS_DB, SERVICE_ROOT
 
-FIRST_YEAR, LAST_YEAR = 2017, 2026
+FIRST_YEAR, LAST_YEAR = 1997, 2026
+DAY_RE = re.compile(r"dia[_ -]?(\d)", re.I)          # fuvest_1999_prova_primeira_fase_dia_2.pdf
+KEY_DAY_RE = re.compile(r"gab[_ -]?(\d)$", re.I)     # fuvest_1999_1fase_gab_2.pdf
 
 
 def _manifest_items(root: Path, year: int) -> list[dict]:
@@ -27,7 +34,12 @@ def _manifest_items(root: Path, year: int) -> list[dict]:
     return [item for item in items if item.get("status") in {"baixado", "ja_existia"}]
 
 
-def select_exam_and_key(root: Path, year: int) -> tuple[Path, Path, str]:
+def select_exams_and_keys(root: Path, year: int, ocr=None) -> list[tuple[Path, Path | None, str]]:
+    """
+    Provas da 1ª fase do ano com o gabarito e a versão de cada uma. Até 2002 há
+    duas provas (1º e 2º exame, arquivos ``dia_1``/``dia_2``), pareadas com
+    ``gab_1``/``gab_2``. Gabarito None: a prova traz o gabarito impresso no fim.
+    """
     items = _manifest_items(root, year)
     exams = [item for item in items if item.get("fase") == "1a_fase"
              and item.get("tipo") == "provas" and item.get("arquivo")
@@ -36,18 +48,14 @@ def select_exam_and_key(root: Path, year: int) -> tuple[Path, Path, str]:
         raise ValueError(f"nenhuma prova da 1ª fase no manifesto de {year}")
     chosen = [item for item in exams if re.search(r"\b(?:V1|V)\b", item.get("texto", ""), re.I)]
     if len(chosen) == 1:
-        exam_item = chosen[0]
-    elif len(exams) == 1:
-        exam_item = exams[0]
-    else:
+        exams = chosen
+    elif len(exams) > 1 and not all(DAY_RE.search(Path(item["arquivo"]).stem) for item in exams):
         raise ValueError(f"não foi possível escolher uma versão V única em {year}: "
                          + ", ".join(item.get("texto", "?") for item in exams))
     keys = [item for item in items if item.get("fase") == "1a_fase"
             and item.get("tipo") == "gabaritos" and item.get("arquivo")
             and "correspond" not in item.get("texto", "").casefold()]
-    if not keys:
-        raise ValueError(f"gabarito oficial da 1ª fase ausente em {year}")
-    key_item = keys[0]
+
     def source_path(relative: str) -> Path:
         value = Path(relative)
         # O scraper grava caminhos a partir da raiz do projeto (fuvest_acervo/...),
@@ -55,13 +63,32 @@ def select_exam_and_key(root: Path, year: int) -> tuple[Path, Path, str]:
         if value.parts and value.parts[0] == root.name:
             return root.parent / value
         return root / value
-    exam, key = source_path(exam_item["arquivo"]), source_path(key_item["arquivo"])
-    if not exam.is_file() or not key.is_file():
-        raise FileNotFoundError(f"arquivo do manifesto não existe: {exam if not exam.is_file() else key}")
-    is_v1 = (re.search(r"\bV1\b", exam_item.get("texto", ""), re.I)
-             or re.search(r"(?:^|[^A-Za-z0-9])V1(?:$|[^A-Za-z0-9])", exam.stem, re.I))
-    version = "V1" if is_v1 else "V"
-    return exam, key, version
+
+    out = []
+    for exam_item in exams:
+        exam = source_path(exam_item["arquivo"])
+        day = DAY_RE.search(exam.stem)
+        candidates = [source_path(k["arquivo"]) for k in keys]
+        if day:
+            candidates = [k for k in candidates if (m := KEY_DAY_RE.search(k.stem)) and m.group(1) == day.group(1)]
+        key = candidates[0] if candidates else None
+        if not exam.is_file() or (key is not None and not key.is_file()):
+            raise FileNotFoundError(f"arquivo do manifesto não existe: {exam if not exam.is_file() else key}")
+        version = detect_exam_variant(exam, ocr=ocr)
+        if key is None:
+            with pymupdf.open(exam) as doc:
+                pages = answer_key_pages(doc)
+            if not pages:
+                raise ValueError(f"gabarito oficial da 1ª fase ausente em {year}: {exam.name}")
+            # Gabarito impresso de uma só versão vale para a prova em que está (2001, 2º exame:
+            # a capa cita o grupo V, o gabarito é o da prova T).
+            versions = answer_key_versions(exam, pages)
+            if len(versions) == 1:
+                version = versions[0]
+        if not version:
+            raise ValueError(f"versão da prova não identificada: {exam.name}")
+        out.append((exam, key, version))
+    return out
 
 
 def _review_row(question: dict, *, year: int, version: str, exam_id: str,
@@ -82,60 +109,76 @@ def _review_row(question: dict, *, year: int, version: str, exam_id: str,
 
 def process_archive(*, root: Path, output: Path, report_path: Path,
                     dataset_path: Path, db_path: Path, review_csv_path: Path | None = None,
-                    dpi: int = 160) -> dict:
+                    dpi: int = 160, first_year: int = FIRST_YEAR, last_year: int = LAST_YEAR,
+                    ocr="auto") -> dict:
     """Processa manifestos e escreve extrações/revisão apenas no diretório de saída."""
     root, output = root.resolve(), output.resolve()
-    report = {"range": [FIRST_YEAR, LAST_YEAR], "phase": "1a_fase", "created_at": datetime.now(timezone.utc).isoformat(),
+    engine = ocr_mod.default_engine() if ocr == "auto" else ocr
+    report = {"range": [first_year, last_year], "phase": "1a_fase", "created_at": datetime.now(timezone.utc).isoformat(),
               "selected_exams": [], "totals": {"exams": 0, "questions": 0, "annulled": 0, "pending_review": 0},
               "rag": {"indexed_examples": 0, "status": "aguardando_revisao_humana"},
               "errors": [], "limitations": [
-                  "2017 e 2018: o extrator não detecta os marcadores de todas as questões; importação recusada.",
-                  "2021: o extrator não encontrou a questão 90; importação recusada.",
-                  "Gabaritos de correspondência de 2017–2018 não substituem o gabarito direto da versão V.",
+                  "Provas com OCR (1997, 2002 2º exame, 2021) podem perder algumas questões; o gabarito "
+                  "é importado só para os números extraídos (missing_questions no relatório).",
+                  "1996 não tem manifesto nem gabarito separado; fica fora deste fluxo.",
               ]}
     review_rows = []
     db_path.parent.mkdir(parents=True, exist_ok=True)
     db = connect_db(db_path)
     try:
-        for year in range(FIRST_YEAR, LAST_YEAR + 1):
+        for year in range(first_year, last_year + 1):
             try:
-                exam, key, version = select_exam_and_key(root, year)
-                exam_id = f"fuvest-{year}-1a-{version}"
-                destination = output / str(year) / exam.stem
-                questions_path = extract_pdf(exam, destination, dpi=dpi, full_crops=False)
-                data = json.loads(questions_path.read_text(encoding="utf-8"))
-                if int(data.get("total_questoes", 0)) != 90:
-                    raise ValueError(f"extração incompleta: {data.get('total_questoes', 0)}/90 questões; "
-                                     "gabarito não associado para evitar desalinhamento")
-                data.update({"prova": exam_id, "ano": year, "fase": "1a_fase", "versao": version,
-                             "arquivo_origem": str(exam.relative_to(root)),
-                             "gabarito_origem": str(key.relative_to(root))})
-                questions_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-                answers = parse_answer_key_pdf(key, version)
-                imported = import_answer_key(db, key, questions_path, replace=True, variant=version,
-                                             association_method="manifest_fuvest")
-                for question in data.get("questoes", []):
-                    number = int(question["numero"])
-                    answer = answers.get(number)
-                    question["resposta"] = answer
-                    question["gabarito_anulado"] = answer == "*"
-                    shared = data.get("textos_compartilhados", {}).get(question.get("texto_id"), {})
-                    question["texto_compartilhado"] = shared.get("texto", "")
-                    review_rows.append(_review_row(question, year=year, version=version, exam_id=exam_id,
-                                                   source_pdf=str(exam.relative_to(root)), answer=answer))
-                questions_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-                annulled = sum(value == "*" for value in answers.values())
-                exam_result = {"year": year, "version": version, "exam_pdf": str(exam.relative_to(root)),
-                               "answer_key_pdf": str(key.relative_to(root)), "questions_json": str(questions_path),
-                               "extracted_questions": data.get("total_questoes", 0), "answers_imported": imported["imported"],
-                               "unkeyed_questions": imported["unkeyed_questions"], "annulled_items": annulled,
-                               "questions_flagged_for_review": sum(bool(q.get("revisar")) for q in data.get("questoes", []))}
-                report["selected_exams"].append(exam_result)
-                report["totals"]["exams"] += 1
-                report["totals"]["questions"] += int(data.get("total_questoes", 0))
-                report["totals"]["annulled"] += annulled
+                selected = select_exams_and_keys(root, year, ocr=engine)
             except Exception as exc:
                 report["errors"].append({"year": year, "error": f"{type(exc).__name__}: {exc}"})
+                continue
+            for exam, key, version in selected:
+                try:
+                    day = DAY_RE.search(exam.stem)
+                    exam_id = f"fuvest-{year}-1a-{version}" + (f"-exame{day.group(1)}" if day else "")
+                    destination = output / str(year) / exam.stem
+                    key_source = key or exam
+                    with pymupdf.open(key_source) as doc:
+                        pages = None if key else answer_key_pages(doc)
+                    answers = parse_answer_key_pdf(key_source, version, pages=pages)
+                    questions_path = extract_pdf(exam, destination, dpi=dpi, full_crops=False, ocr=engine)
+                    data = json.loads(questions_path.read_text(encoding="utf-8"))
+                    numbers = {int(q["numero"]) for q in data.get("questoes", [])}
+                    if not numbers or not numbers <= set(answers):
+                        raise ValueError(f"extração com {len(numbers)} questões não bate com o gabarito de "
+                                         f"{len(answers)}; gabarito não associado para evitar desalinhamento")
+                    data.update({"prova": exam_id, "ano": year, "fase": "1a_fase", "versao": version,
+                                 "arquivo_origem": str(exam.relative_to(root)),
+                                 "gabarito_origem": str(key_source.relative_to(root))})
+                    questions_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                    imported = import_answer_key(db, key_source, questions_path, replace=True, variant=version,
+                                                 association_method="manifest_fuvest" if key else "embedded",
+                                                 pages=pages, allow_missing_questions=True)
+                    for question in data.get("questoes", []):
+                        number = int(question["numero"])
+                        answer = answers.get(number)
+                        question["resposta"] = answer
+                        question["gabarito_anulado"] = answer == "*"
+                        shared = data.get("textos_compartilhados", {}).get(question.get("texto_id"), {})
+                        question["texto_compartilhado"] = shared.get("texto", "")
+                        review_rows.append(_review_row(question, year=year, version=version, exam_id=exam_id,
+                                                       source_pdf=str(exam.relative_to(root)), answer=answer))
+                    questions_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                    annulled = sum(answers.get(n) == "*" for n in numbers)
+                    exam_result = {"year": year, "version": version, "exam_pdf": str(exam.relative_to(root)),
+                                   "answer_key_pdf": str(key_source.relative_to(root)),
+                                   "answer_key_embedded": key is None, "questions_json": str(questions_path),
+                                   "extracted_questions": len(numbers), "answer_key_size": len(answers),
+                                   "answers_imported": imported["imported"],
+                                   "missing_questions": imported["missing_questions"],
+                                   "unkeyed_questions": imported["unkeyed_questions"], "annulled_items": annulled,
+                                   "questions_flagged_for_review": sum(bool(q.get("revisar")) for q in data.get("questoes", []))}
+                    report["selected_exams"].append(exam_result)
+                    report["totals"]["exams"] += 1
+                    report["totals"]["questions"] += len(numbers)
+                    report["totals"]["annulled"] += annulled
+                except Exception as exc:
+                    report["errors"].append({"year": year, "exam": exam.name, "error": f"{type(exc).__name__}: {exc}"})
     finally:
         db.close()
     report["totals"]["pending_review"] = len(review_rows)
@@ -156,10 +199,12 @@ def process_archive(*, root: Path, output: Path, report_path: Path,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, default=SERVICE_ROOT / "fuvest_acervo")
-    parser.add_argument("--output", type=Path, default=SERVICE_ROOT / "simulados/processados/fuvest-2017-2026")
-    parser.add_argument("--report", type=Path, default=SERVICE_ROOT / "simulados/cache/fuvest-2017-2026-report.json")
-    parser.add_argument("--dataset", type=Path, default=SERVICE_ROOT / "simulados/cache/fuvest-2017-2026-review.jsonl")
-    parser.add_argument("--review-csv", type=Path, default=SERVICE_ROOT / "simulados/cache/fuvest-2017-2026-review.csv")
+    parser.add_argument("--output", type=Path, default=SERVICE_ROOT / "simulados/processados/fuvest-1a-fase")
+    parser.add_argument("--report", type=Path, default=SERVICE_ROOT / "simulados/cache/fuvest-1a-fase-report.json")
+    parser.add_argument("--dataset", type=Path, default=SERVICE_ROOT / "simulados/cache/fuvest-1a-fase-review.jsonl")
+    parser.add_argument("--review-csv", type=Path, default=SERVICE_ROOT / "simulados/cache/fuvest-1a-fase-review.csv")
+    parser.add_argument("--first-year", type=int, default=FIRST_YEAR)
+    parser.add_argument("--last-year", type=int, default=LAST_YEAR)
     parser.add_argument("--diagnostics-db", type=Path, default=DEFAULT_DIAGNOSTICS_DB)
     parser.add_argument("--dpi", type=int, default=160)
     args = parser.parse_args()
@@ -167,7 +212,8 @@ def main() -> int:
         parser.error("--dpi deve estar entre 72 e 600")
     result = process_archive(root=args.archive, output=args.output, report_path=args.report,
                              dataset_path=args.dataset, db_path=args.diagnostics_db,
-                             review_csv_path=args.review_csv, dpi=args.dpi)
+                             review_csv_path=args.review_csv, dpi=args.dpi,
+                             first_year=args.first_year, last_year=args.last_year)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 1 if result["errors"] else 0
 

@@ -1,0 +1,646 @@
+[
+ {
+  "year": 1996,
+  "exam": "fuvest_1996_prova_primeira_fase_dia_1.pdf",
+  "version": null,
+  "questions": 6,
+  "expected": 8,
+  "missing": [
+   1,
+   3
+  ],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 3,
+   "alternativa_vazia": 0,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "ausente",
+  "answers": 0,
+  "keyed_questions": 0,
+  "seconds": 18.7
+ },
+ {
+  "year": 1996,
+  "exam": "fuvest_1996_prova_primeira_fase_dia_2.pdf",
+  "version": null,
+  "questions": 4,
+  "expected": 5,
+  "missing": [
+   1
+  ],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 1,
+   "alternativa_vazia": 0,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "ausente",
+  "answers": 0,
+  "keyed_questions": 0,
+  "seconds": 13.2
+ },
+ {
+  "year": 1997,
+  "exam": "fuvest_1997_prova_primeira_fase_dia_1.pdf",
+  "version": "K",
+  "questions": 78,
+  "expected": 80,
+  "missing": [
+   52,
+   59
+  ],
+  "flags": {
+   "enunciado_vazio": 2,
+   "alternativas_incompletas": 24,
+   "alternativa_vazia": 0,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 78,
+  "seconds": 21.2
+ },
+ {
+  "year": 1997,
+  "exam": "fuvest_1997_prova_primeira_fase_dia_2.pdf",
+  "version": "M",
+  "questions": 77,
+  "expected": 80,
+  "missing": [
+   54,
+   55,
+   57
+  ],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 28,
+   "alternativa_vazia": 1,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 77,
+  "seconds": 18.5
+ },
+ {
+  "year": 1998,
+  "exam": "fuvest_1998_prova_primeira_fase_dia_1.pdf",
+  "version": "V",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 7,
+   "alternativa_vazia": 0,
+   "formula_matematica": 11,
+   "glifo_estranho": 2
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 1.0
+ },
+ {
+  "year": 1998,
+  "exam": "fuvest_1998_prova_primeira_fase_dia_2.pdf",
+  "version": "T",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 2,
+   "alternativa_vazia": 0,
+   "formula_matematica": 10,
+   "glifo_estranho": 2
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 0.9
+ },
+ {
+  "year": 1999,
+  "exam": "fuvest_1999_prova_primeira_fase_dia_1.pdf",
+  "version": "V",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 2,
+   "alternativa_vazia": 0,
+   "formula_matematica": 9,
+   "glifo_estranho": 3
+  },
+  "answer_key": "fuvest_1999_1fase_gab_1.pdf",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 1.0
+ },
+ {
+  "year": 1999,
+  "exam": "fuvest_1999_prova_primeira_fase_dia_2.pdf",
+  "version": "T",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 1,
+   "alternativa_vazia": 0,
+   "formula_matematica": 14,
+   "glifo_estranho": 1
+  },
+  "answer_key": "fuvest_1999_1fase_gab_2.pdf",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 2.4
+ },
+ {
+  "year": 2000,
+  "exam": "fuvest_2000_prova_primeira_fase_dia_1.pdf",
+  "version": "V",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 2,
+   "alternativa_vazia": 0,
+   "formula_matematica": 12,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2000_1fase_gab_1.pdf",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 0.9
+ },
+ {
+  "year": 2000,
+  "exam": "fuvest_2000_prova_primeira_fase_dia_2.pdf",
+  "version": "T",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 2,
+   "alternativa_vazia": 0,
+   "formula_matematica": 16,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2000_1fase_gab_2.pdf",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 1.5
+ },
+ {
+  "year": 2001,
+  "exam": "fuvest_2001_prova_primeira_fase_dia_1.pdf",
+  "version": "V",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 2,
+   "alternativa_vazia": 0,
+   "formula_matematica": 9,
+   "glifo_estranho": 0
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 1.0
+ },
+ {
+  "year": 2001,
+  "exam": "fuvest_2001_prova_primeira_fase_dia_2.pdf",
+  "version": "T",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 3,
+   "alternativa_vazia": 0,
+   "formula_matematica": 13,
+   "glifo_estranho": 3
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 1.2
+ },
+ {
+  "year": 2002,
+  "exam": "fuvest_2002_prova_primeira_fase_dia_1.pdf",
+  "version": "V",
+  "questions": 80,
+  "expected": 80,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 5,
+   "alternativa_vazia": 0,
+   "formula_matematica": 9,
+   "glifo_estranho": 0
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 80,
+  "seconds": 1.3
+ },
+ {
+  "year": 2002,
+  "exam": "fuvest_2002_prova_primeira_fase_dia_2.pdf",
+  "version": "T",
+  "questions": 76,
+  "expected": 80,
+  "missing": [
+   8,
+   38,
+   39,
+   79
+  ],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 13,
+   "alternativa_vazia": 1,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 80,
+  "keyed_questions": 76,
+  "seconds": 26.3
+ },
+ {
+  "year": 2003,
+  "exam": "fuvest_2003_prova_primeira_fase.pdf",
+  "version": "V",
+  "questions": 100,
+  "expected": 100,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 4,
+   "alternativa_vazia": 0,
+   "formula_matematica": 12,
+   "glifo_estranho": 3
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 100,
+  "keyed_questions": 100,
+  "seconds": 1.6
+ },
+ {
+  "year": 2004,
+  "exam": "fuvest_2004_prova_primeira_fase.pdf",
+  "version": "V",
+  "questions": 100,
+  "expected": 100,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 2,
+   "alternativa_vazia": 0,
+   "formula_matematica": 10,
+   "glifo_estranho": 1
+  },
+  "answer_key": "impresso no fim da prova",
+  "answers": 100,
+  "keyed_questions": 100,
+  "seconds": 2.7
+ },
+ {
+  "year": 2005,
+  "exam": "fuvest_2005_prova_primeira_fase.pdf",
+  "version": "V",
+  "questions": 100,
+  "expected": 100,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 1,
+   "alternativa_vazia": 0,
+   "formula_matematica": 12,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2005_1fase_gab_1.pdf",
+  "answers": 100,
+  "keyed_questions": 100,
+  "seconds": 1.4
+ },
+ {
+  "year": 2006,
+  "exam": "fuvest_2006_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 100,
+  "expected": 100,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 4,
+   "alternativa_vazia": 0,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2006_1fase_prova_gab.pdf",
+  "answers": 100,
+  "keyed_questions": 100,
+  "seconds": 1.7
+ },
+ {
+  "year": 2007,
+  "exam": "fuvest_2007_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 5,
+   "alternativa_vazia": 0,
+   "formula_matematica": 12,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2007_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.5
+ },
+ {
+  "year": 2008,
+  "exam": "fuvest_2008_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 5,
+   "alternativa_vazia": 0,
+   "formula_matematica": 11,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2008_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.5
+ },
+ {
+  "year": 2009,
+  "exam": "fuvest_2009_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 4,
+   "alternativa_vazia": 0,
+   "formula_matematica": 10,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2009_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.9
+ },
+ {
+  "year": 2010,
+  "exam": "fuvest_2010_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 3,
+   "alternativa_vazia": 3,
+   "formula_matematica": 16,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2010_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.3
+ },
+ {
+  "year": 2011,
+  "exam": "fuvest_2011_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 0,
+   "alternativa_vazia": 3,
+   "formula_matematica": 18,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2011_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.3
+ },
+ {
+  "year": 2012,
+  "exam": "fuvest_2012_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 1,
+   "alternativa_vazia": 0,
+   "formula_matematica": 18,
+   "glifo_estranho": 6
+  },
+  "answer_key": "fuvest_2012_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.3
+ },
+ {
+  "year": 2013,
+  "exam": "fuvest_2013_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 4,
+   "alternativa_vazia": 1,
+   "formula_matematica": 10,
+   "glifo_estranho": 4
+  },
+  "answer_key": "fuvest_2013_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 2.0
+ },
+ {
+  "year": 2014,
+  "exam": "fuvest_2014_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 2,
+   "alternativa_vazia": 0,
+   "formula_matematica": 15,
+   "glifo_estranho": 4
+  },
+  "answer_key": "fuvest_2014_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.9
+ },
+ {
+  "year": 2015,
+  "exam": "fuvest_2015_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 3,
+   "alternativa_vazia": 0,
+   "formula_matematica": 22,
+   "glifo_estranho": 4
+  },
+  "answer_key": "fuvest_2015_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.8
+ },
+ {
+  "year": 2016,
+  "exam": "fuvest_2016_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 5,
+   "alternativa_vazia": 14,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2016_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 1.5
+ },
+ {
+  "year": 2017,
+  "exam": "fuvest_2017_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 4,
+   "alternativa_vazia": 10,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2017_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 2.7
+ },
+ {
+  "year": 2018,
+  "exam": "fuv2018_1fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 3,
+   "alternativa_vazia": 4,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuv2018_1fase_prova_gab.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 4.2
+ },
+ {
+  "year": 2019,
+  "exam": "fuvest_2019_primeira_fase.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 0,
+   "alternativa_vazia": 0,
+   "formula_matematica": 13,
+   "glifo_estranho": 3
+  },
+  "answer_key": "fuv2019.gabarito.oficial.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 3.3
+ },
+ {
+  "year": 2020,
+  "exam": "fuvest_2020_primeira_fase_prova_V.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 0,
+   "alternativas_incompletas": 0,
+   "alternativa_vazia": 0,
+   "formula_matematica": 12,
+   "glifo_estranho": 3
+  },
+  "answer_key": "fuvest_2020_primeira_fase_gabaritos.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 5.1
+ },
+ {
+  "year": 2021,
+  "exam": "fuvest_2021_primeira_fase.pdf",
+  "version": "V",
+  "questions": 90,
+  "expected": 90,
+  "missing": [],
+  "flags": {
+   "enunciado_vazio": 1,
+   "alternativas_incompletas": 19,
+   "alternativa_vazia": 0,
+   "formula_matematica": 0,
+   "glifo_estranho": 0
+  },
+  "answer_key": "fuvest_2021_primeira_fase_gabarito_v2.pdf",
+  "answers": 90,
+  "keyed_questions": 90,
+  "seconds": 53.7
+ }
+]

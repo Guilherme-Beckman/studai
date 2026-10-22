@@ -201,6 +201,16 @@ def expandir_link(sessao: requests.Session, url: str) -> list[str]:
     return achados
 
 
+def arquivo_do_ano(url: str, ano: int) -> bool:
+    """
+    Arquivo achado dentro de uma página intermediária só vale se o nome citar o ano
+    (ou o anterior, data da prova): a página de 1996 leva a uma lista de provas de
+    pós-graduação e do Provão 2026, que não são do vestibular.
+    """
+    nome = unquote(Path(urlparse(url).path).name)
+    return str(ano) in nome or str(ano - 1) in nome
+
+
 def nome_arquivo(url: str, texto: str) -> str:
     nome = unquote(Path(urlparse(url).path).name)
     if not nome or "." not in nome:
@@ -267,6 +277,9 @@ def processar_ano(sessao, ano: int, url: str, args) -> None:
     for item, (fase, sub) in selecionados:
         print(f"  [{fase}/{sub}] {item['texto']}")
         for link in expandir_link(sessao, item["url"]):
+            if link != item["url"] and not arquivo_do_ano(link, ano):
+                print(f"      ignorado (não cita {ano}): {link}")
+                continue
             nome = nome_arquivo(link, item["texto"])
             destino = pasta_ano / fase / sub / nome
 

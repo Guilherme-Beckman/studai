@@ -89,7 +89,7 @@ def main() -> int:
                 print(f"Não foi possível iniciar LLM para associação: {exc}")
         if selected_key:
             try:
-                variant = diag.exam_variant(pdf) or diag.exam_variant(selected_key)
+                variant = diag.detect_exam_variant(pdf) or diag.exam_variant(selected_key)
                 summary = diag.import_answer_key(db, selected_key, questions_json, replace=True,
                                                  variant=variant, association_method=method)
                 # Imported count includes anuladas; report separately from persisted records.
@@ -101,7 +101,17 @@ def main() -> int:
             except Exception as exc:
                 print(f"Gabarito encontrado ({selected_key.name}), mas não foi importado: {exc}")
         else:
-            print("Gabarito não associado com segurança; questões deste simulado não serão pontuáveis até revisão.")
+            # Provas de 1996–2004 trazem o gabarito impresso no próprio PDF.
+            try:
+                embedded = diag.import_embedded_answer_key(db, pdf, questions_json)
+            except ValueError as exc:
+                embedded = None
+                print(f"Gabarito impresso na prova não importado: {exc}")
+            if embedded:
+                print(f"Gabarito impresso na prova ({embedded['association_method']}): "
+                      f"{embedded['imported']} respostas.")
+            else:
+                print("Gabarito não associado com segurança; questões deste simulado não serão pontuáveis até revisão.")
 
         classify_cmd = [sys.executable, str(classifier_script), str(destination / "questoes.json"),
                         "--provider", args.provider, "--imagens", args.imagens]

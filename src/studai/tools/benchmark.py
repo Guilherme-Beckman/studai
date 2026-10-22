@@ -223,6 +223,11 @@ def main(argv: list[str] | None = None):
         from studai.tools.benchmark_ai_calls import main as ai_calls_main
         ai_calls_main(argv[1:])
         return
+    if argv[:1] == ["legacy-exams"]:
+        # Extração e gabarito das provas antigas do acervo: ver studai.tools.benchmark_legacy_exams.
+        from studai.tools.benchmark_legacy_exams import main as legacy_main
+        legacy_main(argv[1:])
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1", help="padrão seguro: apenas localhost")
     parser.add_argument("--port", type=int, default=8765)

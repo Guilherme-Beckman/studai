@@ -22,7 +22,8 @@ import urllib.error
 import urllib.request
 
 from studai.features.answer_keys.service import (
-    exam_variant, import_key_file, seed_corpus_answer_keys, set_reviewed_answer,
+    detect_exam_variant, exam_variant, import_embedded_answer_key, import_key_file,
+    seed_corpus_answer_keys, set_reviewed_answer,
 )
 from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
@@ -33,6 +34,7 @@ from studai.features.reports import service as reports
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import manual_crop, source_pdf
+from studai.features.questions import ocr as question_ocr
 from studai.features.questions import reprocess as question_reprocess
 from studai.features.questions import review as question_review
 from studai.integrations.llm import (
@@ -599,6 +601,30 @@ def _source_pdf(exam_id: str, exam_json: Path) -> Path:
     return source_pdf.resolve_source_pdf(exam_json, exam_id, UPLOADS_ROOT, SOURCE_PDF_SEARCH_ROOTS)
 
 
+def _exam_version(exam_id: str, exam_json: Path, name: str) -> str | None:
+    """Versão (V, K, T, V1…) pelo nome e, se faltar, pelo texto do PDF original."""
+    named = exam_variant(Path(name))
+    if named:
+        return named
+    try:
+        source = _source_pdf(exam_id, exam_json)
+    except (OSError, ValueError):
+        return None
+    return detect_exam_variant(source, ocr=question_ocr.default_engine())
+
+
+def _import_embedded_key(source: Path, questions_path: Path) -> dict | None:
+    """Gabarito impresso na própria prova (1996–2004); falha aqui não impede o processamento."""
+    db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        return import_embedded_answer_key(db, source, questions_path, ocr=question_ocr.default_engine())
+    except (OSError, ValueError) as exc:
+        warnings.warn(f"gabarito impresso na prova não importado: {exc}", RuntimeWarning)
+        return None
+    finally:
+        db.close()
+
+
 def _classification_label(subject: str, content_id: str | None, topic: str = "") -> dict:
     """Matéria e conteúdo validados contra a taxonomia, no formato gravado na revisão."""
     if subject not in DEFAULT_TAXONOMY:
@@ -1005,6 +1031,7 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         extracted_data["arquivo_sha256"] = pdf_hash
         extracted_path.write_text(json.dumps(extracted_data, ensure_ascii=False, indent=2), encoding="utf-8")
     question_review.preserve_reviews(PROCESSED_ROOT, stable_exam_id, extracted_path)
+    _import_embedded_key(source, extracted_path)
     classified_path = output_dir / "questoes.classificado.json"
     cache_meta_path = output_dir / "processamento.cache.json"
     try:
@@ -1571,13 +1598,16 @@ class Handler(BaseHTTPRequestHandler):
             key_match = re.fullmatch(r"/api/exams/([^/]+)/answer-key", path)
             if key_match:
                 exam_id = key_match.group(1)
-                filename = (parse_qs(parsed.query).get("filename") or ["gabarito.pdf"])[0]
+                query = parse_qs(parsed.query)
+                filename = (query.get("filename") or ["gabarito.pdf"])[0]
                 length = int(self.headers.get("Content-Length", "0"))
                 content = self.rfile.read(length)
                 if not Path(filename).name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
                     raise ValueError("envie um PDF de gabarito válido")
                 summary, questions_path = _find_exam(exam_id)
-                variant = exam_variant(Path(summary["name"]))
+                # ?variant=K escolhe a coluna do gabarito quando a prova não diz a versão.
+                variant = ((query.get("variant") or [""])[0].strip().upper()
+                           or _exam_version(exam_id, questions_path, summary["name"]))
                 ANSWER_IMPORTS_ROOT.mkdir(parents=True, exist_ok=True)
                 answer_file = ANSWER_IMPORTS_ROOT / f"{uuid.uuid4().hex}.pdf"
                 answer_file.write_bytes(content)
