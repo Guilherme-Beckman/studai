@@ -616,7 +616,7 @@
 
   // ---------------------------------------------------------------- page render
   function emptyHtml(overview) {
-    return `${weightsNote(overview?.course)}<div class="panel rp-panel"><div class="empty-state rp-empty"><div class="empty-icon">↗</div><strong>Ainda não há respostas para este curso</strong><p>O relatório acompanha seu domínio por conteúdo a partir das suas respostas. Faça um diagnóstico ou responda a uma prova do acervo: cada sessão vira um ponto na linha do tempo.</p><div class="rp-empty-actions"><button type="button" class="button button-primary" data-rp-go="diagnostics">Fazer um diagnóstico <span>→</span></button><button type="button" class="button button-secondary" data-rp-go="exams">Responder uma prova</button></div></div></div>`;
+    return `${weightsNote(overview?.course)}<div class="panel rp-panel"><div class="empty-state rp-empty"><div class="empty-icon">↗</div><strong>Ainda não há respostas para este curso</strong><p>O relatório acompanha seu domínio por conteúdo a partir das suas respostas. Faça um diagnóstico ou responda a uma prova do acervo: cada sessão vira um ponto na linha do tempo.</p><div class="rp-empty-actions"><button type="button" class="button button-primary" data-rp-go="diagnostics">Fazer um diagnóstico</button><button type="button" class="button button-secondary" data-rp-go="exams">Responder uma prova</button></div></div></div>`;
   }
 
   function renderPage() {

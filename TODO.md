@@ -185,6 +185,10 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 
 - [x] Mostrar etapas do processamento com progresso granular por página no OCR, por questão nos recortes e na classificação; incluir estado atual e tarefas ativas
 
+## Interface
+
+- [x] Redesenho visual "cartão-resposta" (`frontend/styles.css`, `index.html`): tokens de cor com tema claro/escuro por variáveis (as 281 cores fixas e os overrides do tema escuro saíram), Schibsted Grotesk na interface e Literata nos enunciados, alternativas como bolinhas de gabarito preenchidas ao marcar, cartão-resposta animado na visão geral, rótulos em caixa normal e sem setas nos botões; tema inicial segue o sistema
+
 ## Expansão do acervo/RAG (depois das fases 1–3)
 
 - [ ] Processar mais provas de `fuvest_acervo/` usando o fluxo novo de revisão
@@ -233,3 +237,4 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Limpeza: trabalho do Codex (treinamento contínuo, reset, progresso do processamento) commitado e juntado; modo foco adaptado ao botão "Responder" dos Diagnósticos; branches antigas removidas | — |
 | 2026-10-22 | Claude / `feature/answer_keys/legacy-formats` | Fase 3: formatos das provas 1996–2021 documentados; leitor de gabarito para todos os formatos do acervo (correspondência, grade sem sigla, impresso na prova); versão pelo texto/OCR; acervo 1997–2026 com gabarito; PDFs alheios removidos de 1996 | — |
 | 2026-10-22 | Claude / `feature/questions/legacy-ocr` | Fase 3: OCR por coluna, `por+eng`, alternativas lado a lado e 2ª passada `--psm 11`; 2021 com 4 questões incompletas (eram 19) | — |
+| 2026-10-22 | Claude / `claude/frontend-ai-improvement-0dd116` | Interface redesenhada com a skill frontend-design: estilo "cartão-resposta", CSS legível e tokenizado, tema escuro só por tokens | — |

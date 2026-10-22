@@ -416,7 +416,7 @@ function renderExamReview() {
   reviewSelection = new Set([...reviewSelection].filter(number => known.has(number)));
   const cards = questions.map(question => renderReviewQuestion(exam.id, question, sharedTexts)).join("");
   const counter = (key, label, cls = "") => `<span class="review-count ${cls}"><strong>${reviewProgress[key] ?? 0}</strong>${label}</span>`;
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA E GABARITO</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
     <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="review-counts">${counter("approved", "aprovadas", "is-approved")}${counter("pending", "pendentes", "is-pending")}${counter("unusable", "inutilizáveis")}${counter("badCrop", "recorte ruim", "is-bad-crop")}</div><div class="workspace-meta">${escapeHtml(ragLabel)} · só questões aprovadas entram no RAG</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
     ${questions.length ? reviewFilterBar(questions) : ""}
     <div class="exam-review-list">${cards || `<div class="loading-card">Esta prova não contém questões extraídas.</div>`}</div>`;
@@ -928,8 +928,8 @@ function renderExamQuiz() {
       return totals;
     }, { graded: 0, correct: 0, annulled: 0 });
     if (quiz.session && !quiz.session.finished && !quiz.session.offline) finishExamSession(quiz);
-    const savedNote = quiz.session?.finished ? `<p>Respostas salvas no histórico. <button class="text-button" data-go-reports>Ver relatórios →</button></p>` : (!quiz.session || quiz.session.offline ? "<p>As respostas desta sessão não foram salvas no histórico.</p>" : "<p>Salvando respostas no histórico…</p>");
-    workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">PROVA CONCLUÍDA</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões respondidas nesta sessão · ${examSessionStatus(quiz)}</div></div><button class="blank-button" data-exam-close>Fechar</button></div><div class="exam-final-summary"><strong>${scored.graded ? `${scored.correct} de ${scored.graded} acertos` : "Respostas registradas"}</strong><p>${scored.annulled ? `${scored.annulled} questão(ões) anulada(s). ` : ""}${scored.graded < questions.length - scored.annulled ? "Algumas questões ainda não têm gabarito importado." : ""}</p>${savedNote}</div><button class="button button-primary" data-exam-restart>Responder novamente</button>`;
+    const savedNote = quiz.session?.finished ? `<p>Respostas salvas no histórico. <button class="text-button" data-go-reports>Ver relatórios</button></p>` : (!quiz.session || quiz.session.offline ? "<p>As respostas desta sessão não foram salvas no histórico.</p>" : "<p>Salvando respostas no histórico…</p>");
+    workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova concluída</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões respondidas nesta sessão · ${examSessionStatus(quiz)}</div></div><button class="blank-button" data-exam-close>Fechar</button></div><div class="exam-final-summary"><strong>${scored.graded ? `${scored.correct} de ${scored.graded} acertos` : "Respostas registradas"}</strong><p>${scored.annulled ? `${scored.annulled} questão(ões) anulada(s). ` : ""}${scored.graded < questions.length - scored.annulled ? "Algumas questões ainda não têm gabarito importado." : ""}</p>${savedNote}</div><button class="button button-primary" data-exam-restart>Responder novamente</button>`;
     window.studaiFocus?.attach(workspace, { key: "summary", label: "Prova concluída" });
     bindExamQuizActions();
     return;
@@ -954,7 +954,7 @@ function renderExamQuiz() {
     <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
     ${questionContentMarkup(exam.id, question, sharedText, sharedImages)}
     <div class="exam-options">${optionsMarkup(exam.id, question, { selected, submitted: submitted || awaitingReason, correctAnswer: key && !key.annulled ? key.answer : null, saved, attr: "data-exam-option" })}</div>
-    ${outcome}${reasonPrompt}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 || awaitingReason ? "disabled" : ""}>← Anterior</button><div>${awaitingReason ? `<span class="muted">Escolha o motivo para continuar.</span>` : submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"} →</button>` : `<button type="button" class="blank-button ${selected === "" ? "selected" : ""}" data-exam-blank aria-pressed="${selected === ""}">Deixar em branco</button><button class="button button-primary" data-exam-submit ${selected == null ? "disabled" : ""}>Responder</button>`}</div></div>`;
+    ${outcome}${reasonPrompt}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 || awaitingReason ? "disabled" : ""}>← Anterior</button><div>${awaitingReason ? `<span class="muted">Escolha o motivo para continuar.</span>` : submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"}</button>` : `<button type="button" class="blank-button ${selected === "" ? "selected" : ""}" data-exam-blank aria-pressed="${selected === ""}">Deixar em branco</button><button class="button button-primary" data-exam-submit ${selected == null ? "disabled" : ""}>Responder</button>`}</div></div>`;
   window.studaiFocus?.attach(workspace, { current: index + 1, total: questions.length, key: number });
   bindExamQuizActions();
 }
@@ -1189,7 +1189,7 @@ async function processPdf(event) {
     currentProcessJob = null;
     processUploadController = null;
     button.disabled = false;
-    button.innerHTML = "Extrair e classificar <span>→</span>";
+    button.textContent = "Processar prova";
   }
 }
 
@@ -1260,7 +1260,7 @@ async function recoverActiveProcess() {
   } finally {
     currentProcessJob = null;
     button.disabled = false;
-    button.innerHTML = "Extrair e classificar <span>→</span>";
+    button.textContent = "Processar prova";
   }
 }
 
@@ -1398,10 +1398,10 @@ function renderDiagnostic(workspace, data) {
     body = `<div class="question-top"><span class="question-subject">${escapeHtml(item.subject)} · ${escapeHtml(item.topic)}</span><span>${position}</span></div>${question._texto_compartilhado ? `<div class="question-body"><b>Texto-base</b><br>${escapeHtml(question._texto_compartilhado)}${examImageMarkup(item.source_id, sharedImages, "passage-image")}</div>` : ""}<div class="question-body">${display.showStem ? stemMarkup(question, paths => examImageMarkup(item.source_id, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(item.source_id, question.figuras_enunciado || [])}${renderSourceQuestionImage(item.source_id, display.sourceImages, { collapsible: true })}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(item.source_id, fullPageImages)}</details>` : ""}</div><div class="options-list">${alternatives}</div><div class="question-actions"><button class="blank-button ${selectedAnswer === null ? "selected" : ""}" id="answer-blank" aria-pressed="${selectedAnswer === null}" ${reasonPending ? "disabled" : ""}>Deixar em branco</button><span class="muted">Escolha uma alternativa e clique em Responder.</span></div><div class="exam-quiz-actions"><span></span><button class="button button-primary" id="diagnostic-submit" ${selectedAnswer === undefined || reasonPending ? "disabled" : ""}>Responder</button></div><div id="reason-panel" class="reason-row ${reasonPending ? "" : "hidden"}"><label>Qual foi o principal motivo do erro?<select id="answer-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="confirm-reason">Registrar resposta</button></div><div id="answer-feedback"></div>`;
   } else {
     const stop = adaptive ? `O diagnóstico adaptativo terminou após ${answered} questões${data.stopReason || diagnosticDone.get(data.id) ? `: ${escapeHtml(data.stopReason || diagnosticDone.get(data.id))}` : ""}. ` : "Todas as respostas foram registradas. ";
-    body = `<div class="inline-result">${stop}Gere a análise para ver suas métricas e prioridades.</div><button class="button button-primary" id="finalize-diagnostic">Concluir e analisar <span>→</span></button>`;
+    body = `<div class="inline-result">${stop}Gere a análise para ver suas métricas e prioridades.</div><button class="button button-primary" id="finalize-diagnostic">Concluir e analisar</button>`;
   }
   const meta = adaptive ? `${answered} respondida(s) · adaptativo${data.requested ? ` · até ${data.requested}` : ""}` : `${answered} de ${data.total} respondidas`;
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">TENTATIVA ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${meta} · ${escapeHtml(data.status)}</div></div><button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Tentativa ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${meta} · ${escapeHtml(data.status)}</div></div><button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
   window.studaiFocus?.attach(workspace, pending && !data.metrics && !(adaptive && finished)
     ? { current: answered + 1, total: adaptive ? data.requested : data.total, key: pending.ordinal }
     : { key: data.metrics ? "metrics" : "finished", label: "Diagnóstico concluído" });
@@ -1484,14 +1484,14 @@ async function finalizeDiagnostic(id) {
     await refreshDiagnostics();
   } catch (error) {
     button.disabled = false;
-    button.textContent = "Concluir e analisar →";
+    button.textContent = "Concluir e analisar";
     toast(error.message, true);
   }
 }
 
 const STUDY_REASONS = {
-  overdue_question: "QUESTÃO ERRADA", due_content: "REVISÃO VENCIDA",
-  new_gap: "LACUNA DO DIAGNÓSTICO", new_content: "CONTEÚDO NOVO", practice: "PRÁTICA",
+  overdue_question: "Questão errada", due_content: "Revisão vencida",
+  new_gap: "Lacuna do diagnóstico", new_content: "Conteúdo novo", practice: "Prática",
 };
 
 function formatDay(isoDate) {
@@ -1545,7 +1545,7 @@ function renderTrainingSubjects() {
 function renderTodaySummary(session, progress) {
   const c = session.counts;
   const forecast = Object.entries(progress.forecast || {}).slice(1).map(([day, count]) => `<div class="forecast-day">${escapeHtml(formatDay(day))}<strong>${count}</strong></div>`).join("");
-  $("#today-summary").innerHTML = `<div class="result-grid"><div class="metric-card"><span>Questões erradas para refazer</span><strong>${c.overdue_question}</strong></div><div class="metric-card"><span>Revisões vencidas</span><strong>${c.due_content}</strong></div><div class="metric-card"><span>Lacunas do diagnóstico</span><strong>${c.new_gap}</strong></div><div class="metric-card"><span>Conteúdos novos</span><strong>${c.new_content}</strong></div></div>${forecast ? `<p class="eyebrow" style="margin-top:14px">REVISÕES NOS PRÓXIMOS DIAS</p><div class="forecast-row">${forecast}</div>` : ""}`;
+  $("#today-summary").innerHTML = `<div class="result-grid"><div class="metric-card"><span>Questões erradas para refazer</span><strong>${c.overdue_question}</strong></div><div class="metric-card"><span>Revisões vencidas</span><strong>${c.due_content}</strong></div><div class="metric-card"><span>Lacunas do diagnóstico</span><strong>${c.new_gap}</strong></div><div class="metric-card"><span>Conteúdos novos</span><strong>${c.new_content}</strong></div></div>${forecast ? `<p class="eyebrow" style="margin-top:14px">Revisões nos próximos dias</p><div class="forecast-row">${forecast}</div>` : ""}`;
 }
 
 function renderTodayProgress(progress) {
@@ -1575,7 +1575,7 @@ function renderToday(workspace = $("#today-workspace")) {
   }
   const answered = items.filter(item => item.answered).length;
   const progress = Math.round(answered / items.length * 100);
-  const top = `<div class="workspace-top"><div><p class="eyebrow">${currentStudy.training ? "TREINAMENTO CONTÍNUO" : `SESSÃO DE ${escapeHtml(formatDay(session.date)).toUpperCase()}`}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${session.correct} acertos até agora</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
+  const top = `<div class="workspace-top"><div><p class="eyebrow">${currentStudy.training ? "Treinamento contínuo" : `Sessão de ${escapeHtml(formatDay(session.date))}`}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${session.correct} acertos até agora</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
   const item = currentStudy.lastAnswer ? items.find(entry => entry.id === currentStudy.lastAnswer.itemId) : items.find(entry => !entry.answered);
   if (!item) {
     const list = items.map(entry => `<tr><td><span class="today-reason ${entry.reason}">${STUDY_REASONS[entry.reason]}</span></td><td>${escapeHtml(entry.contentPath)}</td><td>${entry.selectedAnswer ? escapeHtml(entry.selectedAnswer) : "Branco"} / ${escapeHtml(entry.correctAnswer)}</td><td>${entry.correct ? "✓" : "✗"}</td></tr>`).join("");
@@ -1591,7 +1591,7 @@ function renderToday(workspace = $("#today-workspace")) {
     : "";
   const reasonPanel = currentStudy.pendingReason ? `<div class="reason-row"><label>Qual foi o motivo principal?<select id="today-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="today-confirm-reason">Registrar resposta</button></div>` : "";
   const actions = submitted
-    ? `<div class="exam-quiz-actions"><span></span><button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"} →</button></div>`
+    ? `<div class="exam-quiz-actions"><span></span><button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
     : `<div class="exam-quiz-actions"><button class="blank-button ${selected === "" ? "selected" : ""}" id="today-blank" aria-pressed="${selected === ""}">Deixar em branco</button><button class="button button-primary" id="today-submit" ${selected == null ? "disabled" : ""}>Responder</button></div>`;
   workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span><span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}</span></div>
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
@@ -1682,7 +1682,7 @@ async function appendTrainingBlock() {
   } catch (error) {
     toast(error.message, true);
   } finally {
-    if (button) { button.disabled = false; button.textContent = "Adicionar ao treino →"; }
+    if (button) { button.disabled = false; button.textContent = "Adicionar ao treino"; }
   }
 }
 
@@ -1763,7 +1763,7 @@ function bindEvents() {
   });
 }
 
-applyTheme(localStorage.getItem("studai-theme") || "light");
+applyTheme(localStorage.getItem("studai-theme") || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 bindEvents();
 setupProviders();
 setupAIOptions();

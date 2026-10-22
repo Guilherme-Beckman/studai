@@ -300,7 +300,7 @@
       if (!emphasized && k < LABEL_ZOOM[body.tier]) continue;
       if ((near && !near.has(body.id) && !(matched && matched.has(body.id))) && body.tier > 0) continue;
       const size = (body.tier === 0 ? 13 : body.tier === 1 ? 11.5 : 10.5) / k;
-      ctx.font = `${body.tier < 2 ? "700" : "400"} ${size}px Arial, Helvetica, sans-serif`;
+      ctx.font = `${body.tier < 2 ? "700" : "400"} ${size}px "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif`;
       ctx.globalAlpha = near && !near.has(body.id) ? 0.4 : 1;
       ctx.lineWidth = 3 / k; ctx.strokeStyle = colors.paper; ctx.lineJoin = "round";
       const label = body.node.name.length > 34 && body.id !== focus ? `${body.node.name.slice(0, 32)}…` : body.node.name;
@@ -514,7 +514,7 @@
     const data = state.data;
     const subjects = roots().slice().sort((a, b) => (data.course.weights[b.subject] || 0) - (data.course.weights[a.subject] || 0));
     const items = subjects.map(node => `<li>${nodeButton(node, `<span class="km-node-meta">${pct(node.depth)}</span>${depthBar(node.depth)}`)}</li>`).join("");
-    return `<div class="km-panel-head"><p class="eyebrow">COMO LER</p><h2>Seu mapa</h2><p class="muted">Cada ponto é um nó da taxonomia. A <strong>cor</strong> mostra o status do domínio; o <strong>tamanho e o brilho</strong>, a profundidade: quanto do setor você já cobriu e com que domínio. Clique num nó para ver detalhes; dê dois cliques num conteúdo para abrir os subconteúdos.</p></div>
+    return `<div class="km-panel-head"><p class="eyebrow">Como ler</p><h2>Seu mapa</h2><p class="muted">Cada ponto é um nó da taxonomia. A <strong>cor</strong> mostra o status do domínio; o <strong>tamanho e o brilho</strong>, a profundidade: quanto do setor você já cobriu e com que domínio. Clique num nó para ver detalhes; dê dois cliques num conteúdo para abrir os subconteúdos.</p></div>
       <h3>Profundidade por matéria</h3><ul class="km-list">${items}</ul>`;
   }
 

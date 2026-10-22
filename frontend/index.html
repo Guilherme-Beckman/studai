@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>StudAI · espaço de teste</title>
+  <title>StudAI</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -13,7 +13,6 @@
   </header>
   <main class="layout">
     <aside class="sidebar">
-      <p class="eyebrow">WORKSPACE</p>
       <button class="nav-item" data-view="training"><span>✦</span> Treinamento</button>
       <button class="nav-item active" data-view="overview"><span>⌂</span> Visão geral</button>
       <button class="nav-item" data-view="process"><span>↥</span> Processar prova</button>
@@ -22,33 +21,32 @@
       <button class="nav-item" data-view="reports"><span>↗</span> Relatórios</button>
       <button class="nav-item" data-view="map"><span>✺</span> Mapa</button>
       <div class="sidebar-note"><span class="note-icon">✳</span><div><strong>Modo de teste</strong><p>Use a demonstração offline para experimentar os fluxos sem configurar um modelo.</p></div></div>
-      <div class="sidebar-foot">STUDAI <span>·</span> LOCAL</div>
     </aside>
 
     <section class="content">
       <section class="view active" id="view-overview">
-        <div class="page-heading"><div><p class="eyebrow">PAINEL DE CONTROLE</p><h1>Visão geral</h1><p class="muted">Explore as principais etapas do StudAI em um só lugar.</p></div><span class="date-chip">Ambiente de desenvolvimento</span></div>
-        <div class="hero-card"><div class="hero-copy"><span class="pill pill-light">SEU ESPAÇO DE TESTE</span><h2>Da prova ao plano de estudo.</h2><p>Envie uma prova, organize o gabarito e experimente um diagnóstico personalizado com as questões do seu acervo.</p><button class="button button-white" data-go="process">Começar a testar <span>→</span></button></div><div class="hero-art"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="hero-sheet"><div class="sheet-head"></div><i></i><i></i><i></i><div class="sheet-answer">A&nbsp;&nbsp; B&nbsp;&nbsp; C&nbsp;&nbsp; D&nbsp;&nbsp; E</div><div class="sheet-check">✓</div></div><div class="floating-star">✳</div></div></div>
-        <div class="section-heading"><div><p class="eyebrow">FLUXO PRINCIPAL</p><h2>O que você quer testar?</h2></div></div>
+        <div class="page-heading"><div><h1>Visão geral</h1><p class="muted">Explore as principais etapas do StudAI em um só lugar.</p></div></div>
+        <div class="hero-card"><div class="hero-copy"><h2>Da prova ao plano de estudo.</h2><p>Envie provas antigas da FUVEST, confira o gabarito e pratique todo dia com as questões que mais vão fazer diferença no seu resultado.</p><div class="hero-actions"><button class="button button-primary" data-go="training">Fazer a tarefa de hoje</button><button class="button button-secondary" data-go="process">Processar uma prova</button></div></div><div class="answer-card" aria-hidden="true"><div class="answer-card-head"><span></span><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span></div><div class="answer-card-row" style="--row:0"><span>01</span><i></i><i></i><i class="on"></i><i></i><i></i></div><div class="answer-card-row" style="--row:1"><span>02</span><i class="on"></i><i></i><i></i><i></i><i></i></div><div class="answer-card-row" style="--row:2"><span>03</span><i></i><i></i><i></i><i class="on"></i><i></i></div><div class="answer-card-row" style="--row:3"><span>04</span><i></i><i class="on"></i><i></i><i></i><i></i></div><div class="answer-card-row" style="--row:4"><span>05</span><i></i><i></i><i></i><i></i><i class="on"></i></div><div class="answer-card-row" style="--row:5"><span>06</span><i></i><i></i><i class="on"></i><i></i><i></i></div></div></div>
+        <div class="section-heading"><div><h2>Por onde começar</h2></div></div>
         <div class="feature-grid">
-          <button class="feature-card" data-go="training"><span class="feature-icon icon-green">☀</span><span class="feature-title">Tarefa diária e treinamento</span><span class="feature-desc">Siga a recomendação de hoje ou escolha matérias e quantas questões quer praticar.</span><span class="feature-link">Abrir treinamento <b>→</b></span></button>
-          <button class="feature-card" data-go="process"><span class="feature-icon icon-blue">↥</span><span class="feature-title">Processar prova</span><span class="feature-desc">Extraia questões de um PDF e classifique os assuntos.</span><span class="feature-link">Abrir fluxo <b>→</b></span></button>
-          <button class="feature-card" data-go="exams"><span class="feature-icon icon-green">▤</span><span class="feature-title">Provas e gabaritos</span><span class="feature-desc">Veja seu acervo e importe respostas para uma prova.</span><span class="feature-link">Ver acervo <b>→</b></span></button>
-          <button class="feature-card" data-go="diagnostics"><span class="feature-icon icon-violet">◉</span><span class="feature-title">Diagnóstico</span><span class="feature-desc">Responda questões reais e receba métricas e prioridades de estudo.</span><span class="feature-link">Abrir diagnóstico <b>→</b></span></button>
+          <button class="feature-card" data-go="training"><span class="feature-icon icon-green">☀</span><span class="feature-title">Tarefa diária e treinamento</span><span class="feature-desc">Siga a recomendação de hoje ou escolha matérias e quantas questões quer praticar.</span></button>
+          <button class="feature-card" data-go="process"><span class="feature-icon icon-blue">↥</span><span class="feature-title">Processar prova</span><span class="feature-desc">Extraia questões de um PDF e classifique os assuntos.</span></button>
+          <button class="feature-card" data-go="exams"><span class="feature-icon icon-green">▤</span><span class="feature-title">Provas e gabaritos</span><span class="feature-desc">Veja seu acervo e importe respostas para uma prova.</span></button>
+          <button class="feature-card" data-go="diagnostics"><span class="feature-icon icon-violet">◉</span><span class="feature-title">Diagnóstico</span><span class="feature-desc">Responda questões reais e receba métricas e prioridades de estudo.</span></button>
         </div>
-        <div class="section-heading list-heading"><div><p class="eyebrow">ACERVO ATUAL</p><h2>Provas disponíveis</h2></div><button class="text-button" data-go="exams">Ver acervo →</button></div>
+        <div class="section-heading list-heading"><div><h2>Provas no seu acervo</h2></div><button class="text-button" data-go="exams">Ver todas</button></div>
         <div id="overview-exams" class="exam-strip"><div class="loading-card">Carregando acervo…</div></div>
       </section>
 
       <section class="view" id="view-training">
-        <div class="page-heading"><div><p class="eyebrow">PRÁTICA E EVOLUÇÃO</p><h1>Treinamento</h1><p class="muted">Faça sua tarefa diária ou monte blocos de prática por matéria e quantidade.</p></div><span class="date-chip" id="today-date">Hoje</span></div>
+        <div class="page-heading"><div><h1>Treinamento</h1><p class="muted">Faça sua tarefa diária ou monte blocos de prática por matéria e quantidade.</p></div><span class="date-chip" id="today-date">Hoje</span></div>
         <div class="panel today-controls"><label>Curso<select id="training-course"></select></label></div>
-        <div class="training-section-heading"><div><span class="daily-task-icon">☀</span><div><p class="eyebrow">TAREFA DIÁRIA</p><h2 id="daily-task-status">Preparando sua tarefa diária…</h2><p class="muted">O algoritmo escolhe revisões vencidas, erros e conteúdos que podem fortalecer seu domínio.</p></div></div><span class="training-count" id="training-count">0 questões respondidas hoje</span></div>
+        <div class="training-section-heading"><div><span class="daily-task-icon">☀</span><div><p class="eyebrow">Tarefa diária</p><h2 id="daily-task-status">Preparando sua tarefa diária…</h2><p class="muted">O algoritmo escolhe revisões vencidas, erros e conteúdos que podem fortalecer seu domínio.</p></div></div><span class="training-count" id="training-count">0 questões respondidas hoje</span></div>
         <div id="today-summary" class="today-summary"></div>
         <div class="panel training-builder">
           <div class="panel-heading"><span class="step-number step-violet">✦</span><div><h2>Treino livre</h2><p>Escolha as matérias e a quantidade. Você pode adicionar outro bloco a qualquer momento.</p></div></div>
           <div id="training-subject-list" class="training-subject-list"><div class="loading-card">Carregando matérias…</div></div>
-          <div class="training-builder-actions"><label>Questões neste bloco<input id="training-question-count" type="number" min="1" max="100" value="10"></label><button class="button button-primary" id="add-training-block" type="button">Adicionar ao treino →</button></div>
+          <div class="training-builder-actions"><label>Questões neste bloco<input id="training-question-count" type="number" min="1" max="100" value="10"></label><button class="button button-primary" id="add-training-block" type="button">Adicionar ao treino</button></div>
           <p class="help-copy">As questões selecionadas entram depois das questões pendentes da tarefa diária. Você pode adicionar novos blocos sem limite.</p>
           <p class="training-block-status" id="training-block-status" role="status">Nenhum bloco extra adicionado ainda.</p>
         </div>
@@ -58,12 +56,12 @@
       </section>
 
       <section class="view" id="view-process">
-        <div class="page-heading"><div><p class="eyebrow">INGESTÃO</p><h1>Processar uma prova</h1><p class="muted">Envie a prova e o gabarito para extrair, classificar e revisar as questões.</p></div></div>
+        <div class="page-heading"><div><h1>Processar uma prova</h1><p class="muted">Envie a prova e o gabarito para extrair, classificar e revisar as questões.</p></div></div>
         <div class="two-column">
           <form id="process-form" class="panel form-panel">
             <div class="panel-heading"><span class="step-number">01</span><div><h2>Arquivo da prova</h2><p>PDF com texto selecionável funciona melhor.</p></div></div>
             <label class="drop-zone" id="drop-zone"><input id="pdf-file" type="file" accept="application/pdf,.pdf" required><span class="upload-icon">↑</span><strong id="file-label">Escolher PDF</strong><span>ou arraste o arquivo até aqui</span><small>PDF</small></label>
-            <div class="panel-heading" style="margin:16px 0 8px"><span class="step-number step-green">02</span><span><strong>Gabarito da prova</strong><p class="help-copy">Obrigatório · selecione o gabarito correspondente a esta prova.</p></span></div>
+            <div class="panel-heading" style="margin:16px 0 8px"><span class="step-number step-green">02</span><span><strong>Gabarito da prova</strong><p class="help-copy">Obrigatório. Selecione o gabarito correspondente a esta prova.</p></span></div>
             <label class="drop-zone key-drop-zone" id="key-drop-zone"><input id="key-pdf-file" type="file" accept="application/pdf,.pdf" required><span class="upload-icon">↑</span><strong id="key-file-label">Escolher PDF do gabarito</strong><span>ou arraste o arquivo até aqui</span><small>PDF</small></label>
             <div class="panel-heading" style="margin:18px 0 6px"><span class="step-number step-violet">03</span><div><h2>Modelos de IA</h2><p>Questões diferentes são processadas em paralelo entre as faixas: Ollama, cada chave Gemini e as faixas grátis Groq e OpenRouter. Gemini, Groq e OpenRouter alternam entre os modelos a cada chamada e, se um modelo atingir a cota, tentam o próximo.</p></div></div>
             <div class="ai-options-status" id="ai-options-status" role="status">Verificando modelos disponíveis…</div>
@@ -75,7 +73,7 @@
             <fieldset class="cloud-lanes"><legend>Faixas grátis de nuvem <span class="optional">uma faixa por chave, modelos alternados</span></legend><div id="process-cloud-lanes" class="cloud-lane-list"><p class="field-help">Verificando faixas…</p></div></fieldset>
             <details class="advanced-settings"><summary>Ajustes avançados</summary><label>Threads de CPU por modelo Ollama<input id="process-ollama-threads" type="number" min="0" max="64" value="12"></label><p class="help-copy">As questões são distribuídas em paralelo, uma por faixa de IA disponível. Em caso de falha, a questão tenta outra faixa.</p></details>
             <label class="check-row"><input id="process-images" type="checkbox"><span>Enviar imagens das questões quando disponíveis</span></label>
-            <button class="button button-primary full-width" type="submit">Processar prova <span>→</span></button>
+            <button class="button button-primary full-width" type="submit">Processar prova</button>
             <p class="help-copy">Configure as chaves (<code>GEMINI_API_KEYS</code>, <code>GROQ_API_KEY</code>, <code>OPENROUTER_API_KEY</code>) no arquivo local <code>.env</code>; elas nunca são exibidas nesta tela.</p>
           </form>
           <div class="panel result-panel process-progress-panel"><div class="panel-heading"><span class="step-number step-muted">04</span><div><h2>Acompanhamento</h2><p id="process-progress-subtitle">O status e as etapas aparecem aqui em tempo real.</p></div></div><div id="process-status" class="empty-state"><div class="empty-icon">▧</div><strong>Nenhuma prova em processamento</strong><p>Envie a prova para acompanhar extração, classificação e importação do gabarito.</p></div><div id="process-progress-detail" class="process-progress-detail hidden"></div><button id="process-cancel" class="button button-danger full-width hidden" type="button">Cancelar processamento</button></div>
@@ -83,26 +81,26 @@
       </section>
 
       <section class="view" id="view-exams">
-        <div class="page-heading"><div><p class="eyebrow">BIBLIOTECA</p><h1>Provas e gabaritos</h1><p class="muted">Acompanhe classificações, revise questões e responda às provas.</p></div><button class="button button-primary" data-go="process">Adicionar prova <span>＋</span></button></div>
-        <div class="two-column exam-layout"><div><div class="section-heading compact"><div><p class="eyebrow">SEU ACERVO</p><h2>Provas processadas</h2></div><button class="icon-button" id="refresh-exams" title="Atualizar">↻</button></div><div id="exam-list" class="stack-list"><div class="loading-card">Carregando acervo…</div></div></div></div>
+        <div class="page-heading"><div><h1>Provas e gabaritos</h1><p class="muted">Acompanhe classificações, revise questões e responda às provas.</p></div><button class="button button-primary" data-go="process">Adicionar prova</button></div>
+        <div class="two-column exam-layout"><div><div class="section-heading compact"><div><h2>Provas processadas</h2></div><button class="icon-button" id="refresh-exams" title="Atualizar">↻</button></div><div id="exam-list" class="stack-list"><div class="loading-card">Carregando acervo…</div></div></div></div>
         <div id="exam-question-workspace" class="panel exam-question-workspace hidden"></div>
         <div id="exam-quiz-workspace" class="panel exam-question-workspace hidden"></div>
       </section>
 
       <section class="view" id="view-diagnostics">
-        <div class="page-heading"><div><p class="eyebrow">APRENDIZAGEM</p><h1>Diagnósticos</h1><p class="muted">Crie um simulado com seu acervo e descubra onde concentrar seus estudos.</p></div></div>
-        <div class="two-column diagnostic-layout"><div class="panel form-panel"><div class="panel-heading"><span class="step-number step-violet">01</span><div><h2>Novo diagnóstico</h2><p>Questões elegíveis precisam de classificação e gabarito.</p></div></div><form id="diagnostic-form"><label>Curso<select id="course-select" required></select></label><label>Modo<select id="diagnostic-mode"><option value="adaptive" selected>Adaptativo · para quando o domínio estiver claro</option><option value="static">Estático (51 questões)</option></select></label><p class="help-copy" id="diagnostic-mode-help">O adaptativo escolhe a próxima questão pelas suas respostas e respeita o peso de cada matéria no curso.</p><div class="form-row"><label><span id="diagnostic-total-label">Máximo de questões</span><input id="diagnostic-total" type="number" min="1" max="51" value="30"></label><label>Semente <span class="optional">opcional</span><input id="diagnostic-seed" type="number" placeholder="Aleatória"></label></div><label>Provedor de análise<select id="diagnostic-provider" class="provider-select"></select></label><p class="help-copy">A IA é usada na análise final. Gemini, Groq, OpenRouter e Hugging Face precisam de chave configurada no <code>.env</code>; Ollama usa um modelo local.</p><div class="provider-extra hidden" id="diagnostic-provider-extra"><label id="diagnostic-model-field">Modelo<input id="diagnostic-model" placeholder="qwen3.5:4b"></label><label id="diagnostic-base-url-field">URL base<input id="diagnostic-base-url" placeholder="http://localhost:11434"></label></div><button class="button button-primary full-width" type="submit">Criar diagnóstico <span>→</span></button></form><div id="diagnostic-create-status" class="inline-result hidden"></div></div>
+        <div class="page-heading"><div><h1>Diagnósticos</h1><p class="muted">Crie um simulado com seu acervo e descubra onde concentrar seus estudos.</p></div></div>
+        <div class="two-column diagnostic-layout"><div class="panel form-panel"><div class="panel-heading"><span class="step-number step-violet">01</span><div><h2>Novo diagnóstico</h2><p>Questões elegíveis precisam de classificação e gabarito.</p></div></div><form id="diagnostic-form"><label>Curso<select id="course-select" required></select></label><label>Modo<select id="diagnostic-mode"><option value="adaptive" selected>Adaptativo · para quando o domínio estiver claro</option><option value="static">Estático (51 questões)</option></select></label><p class="help-copy" id="diagnostic-mode-help">O adaptativo escolhe a próxima questão pelas suas respostas e respeita o peso de cada matéria no curso.</p><div class="form-row"><label><span id="diagnostic-total-label">Máximo de questões</span><input id="diagnostic-total" type="number" min="1" max="51" value="30"></label><label>Semente <span class="optional">opcional</span><input id="diagnostic-seed" type="number" placeholder="Aleatória"></label></div><label>Provedor de análise<select id="diagnostic-provider" class="provider-select"></select></label><p class="help-copy">A IA é usada na análise final. Gemini, Groq, OpenRouter e Hugging Face precisam de chave configurada no <code>.env</code>; Ollama usa um modelo local.</p><div class="provider-extra hidden" id="diagnostic-provider-extra"><label id="diagnostic-model-field">Modelo<input id="diagnostic-model" placeholder="qwen3.5:4b"></label><label id="diagnostic-base-url-field">URL base<input id="diagnostic-base-url" placeholder="http://localhost:11434"></label></div><button class="button button-primary full-width" type="submit">Criar diagnóstico</button></form><div id="diagnostic-create-status" class="inline-result hidden"></div></div>
           <div class="panel history-panel"><div class="panel-heading"><span class="step-number step-muted">02</span><div><h2>Histórico</h2><p>Retome uma tentativa ou veja um resultado anterior.</p></div><button class="icon-button" id="refresh-diagnostics" title="Atualizar">↻</button></div><div id="diagnostic-list" class="stack-list"><div class="loading-card">Carregando histórico…</div></div></div></div>
         <div id="diagnostic-workspace" class="panel diagnostic-workspace hidden"></div>
       </section>
 
       <section class="view" id="view-reports">
-        <div class="page-heading reports-heading"><div><p class="eyebrow">EVOLUÇÃO</p><h1>Relatórios</h1><p class="muted" id="reports-course-name">Seu domínio estimado por conteúdo, ponderado pelo peso de cada matéria no curso.</p></div><label class="reports-course-picker">Curso<select id="reports-course" aria-label="Curso do relatório"><option value="">Carregando cursos…</option></select></label></div>
+        <div class="page-heading reports-heading"><div><h1>Relatórios</h1><p class="muted" id="reports-course-name">Seu domínio estimado por conteúdo, ponderado pelo peso de cada matéria no curso.</p></div><label class="reports-course-picker">Curso<select id="reports-course" aria-label="Curso do relatório"><option value="">Carregando cursos…</option></select></label></div>
         <div id="reports-root" class="reports-root"><div class="loading-card">Carregando relatórios…</div></div>
       </section>
 
       <section class="view" id="view-map">
-        <div class="page-heading reports-heading"><div><p class="eyebrow">MAPA DO CONHECIMENTO</p><h1>Mapa</h1><p class="muted">A taxonomia como um grafo: veja onde você já aprofundou e o que ainda falta cobrir. Conta diagnósticos, provas e o estudo de hoje.</p></div><label class="reports-course-picker">Curso<select id="km-course" aria-label="Curso do mapa"><option value="">Carregando cursos…</option></select></label></div>
+        <div class="page-heading reports-heading"><div><h1>Mapa</h1><p class="muted">A taxonomia como um grafo: veja onde você já aprofundou e o que ainda falta cobrir. Conta diagnósticos, provas e o estudo de hoje.</p></div><label class="reports-course-picker">Curso<select id="km-course" aria-label="Curso do mapa"><option value="">Carregando cursos…</option></select></label></div>
         <div id="km-root" class="reports-root"><div class="loading-card">Carregando o mapa…</div></div>
       </section>
     </section>
