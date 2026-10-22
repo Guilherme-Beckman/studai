@@ -15,6 +15,7 @@
     <aside class="sidebar">
       <p class="eyebrow">WORKSPACE</p>
       <button class="nav-item" data-view="training"><span>✦</span> Treinamento</button>
+      <button class="nav-item" data-view="calendar"><span>◷</span> Calendário</button>
       <button class="nav-item active" data-view="overview"><span>⌂</span> Visão geral</button>
       <button class="nav-item" data-view="process"><span>↥</span> Processar prova</button>
       <button class="nav-item" data-view="exams"><span>▤</span> Provas e gabaritos</button>
@@ -32,6 +33,7 @@
         <div class="section-heading"><div><p class="eyebrow">FLUXO PRINCIPAL</p><h2>O que você quer testar?</h2></div></div>
         <div class="feature-grid">
           <button class="feature-card" data-go="training"><span class="feature-icon icon-green">☀</span><span class="feature-title">Tarefa diária e treinamento</span><span class="feature-desc">Siga a recomendação de hoje ou escolha matérias e quantas questões quer praticar.</span><span class="feature-link">Abrir treinamento <b>→</b></span></button>
+          <button class="feature-card" data-go="calendar"><span class="feature-icon icon-violet">◷</span><span class="feature-title">Calendário da prova</span><span class="feature-desc">Cadastre a data da prova, veja o quão preparado está e o que treinar em cada dia.</span><span class="feature-link">Abrir calendário <b>→</b></span></button>
           <button class="feature-card" data-go="process"><span class="feature-icon icon-blue">↥</span><span class="feature-title">Processar prova</span><span class="feature-desc">Extraia questões de um PDF e classifique os assuntos.</span><span class="feature-link">Abrir fluxo <b>→</b></span></button>
           <button class="feature-card" data-go="exams"><span class="feature-icon icon-green">▤</span><span class="feature-title">Provas e gabaritos</span><span class="feature-desc">Veja seu acervo e importe respostas para uma prova.</span><span class="feature-link">Ver acervo <b>→</b></span></button>
           <button class="feature-card" data-go="diagnostics"><span class="feature-icon icon-violet">◉</span><span class="feature-title">Diagnóstico</span><span class="feature-desc">Responda questões reais e receba métricas e prioridades de estudo.</span><span class="feature-link">Abrir diagnóstico <b>→</b></span></button>
@@ -43,6 +45,7 @@
       <section class="view" id="view-training">
         <div class="page-heading"><div><p class="eyebrow">PRÁTICA E EVOLUÇÃO</p><h1>Treinamento</h1><p class="muted">Faça sua tarefa diária ou monte blocos de prática por matéria e quantidade.</p></div><span class="date-chip" id="today-date">Hoje</span></div>
         <div class="panel today-controls"><label>Curso<select id="training-course"></select></label></div>
+        <div id="calendar-today-strip"></div>
         <div class="training-section-heading"><div><span class="daily-task-icon">☀</span><div><p class="eyebrow">TAREFA DIÁRIA</p><h2 id="daily-task-status">Preparando sua tarefa diária…</h2><p class="muted">O algoritmo escolhe revisões vencidas, erros e conteúdos que podem fortalecer seu domínio.</p></div></div><span class="training-count" id="training-count">0 questões respondidas hoje</span></div>
         <div id="today-summary" class="today-summary"></div>
         <div class="panel training-builder">
@@ -55,6 +58,11 @@
         <div id="today-workspace" class="panel diagnostic-workspace"><div class="loading-card">Carregando sua tarefa diária…</div></div>
         <div class="panel today-progress"><div class="panel-heading"><span class="step-number step-green">◷</span><div><h2>Domínio por conteúdo</h2><p>Veja o que já consolidou e quais conteúdos precisam de reforço.</p></div><button class="icon-button" id="refresh-today" title="Atualizar">↻</button></div><div id="today-progress"></div></div>
         <div class="learning-reset-panel"><div><strong>Resetar contexto de aprendizado</strong><p>Apaga progresso, respostas e diagnósticos. Mantém provas, questões, gabaritos e configurações.</p></div><button class="button button-danger" id="reset-learning-context" type="button">Resetar meu contexto</button></div>
+      </section>
+
+      <section class="view" id="view-calendar">
+        <div class="page-heading reports-heading"><div><p class="eyebrow">CAMINHO ATÉ A PROVA</p><h1>Calendário</h1><p class="muted">A data da prova, o quão preparado você está e o que treinar em cada dia, semana e mês.</p></div><label class="reports-course-picker">Curso<select id="cal-course" aria-label="Curso do calendário"><option value="">Carregando cursos…</option></select></label></div>
+        <div id="cal-root" class="cal-root"><div class="loading-card">Carregando o calendário…</div></div>
       </section>
 
       <section class="view" id="view-process">
@@ -111,6 +119,7 @@
   <script src="/focus-mode.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/reports.js" defer></script>
+  <script src="/calendar.js" defer></script>
   <script src="/knowledge-map.js" defer></script>
   <script src="/crop-editor.js" defer></script>
 </body>
