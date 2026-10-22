@@ -92,8 +92,10 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
   - ordem de leitura: faixa de página inteira entre colunas (2015, 2017), blocos reordenados pelo número (2005 Q45), linhas largas picadas no PDF; números desenhados como imagens de dígitos (2018)
   - 2021: o texto inteiro é fonte Type3 em bitmap sem Unicode; saem as 90 questões sem texto (o lixo é descartado) e caem em `enunciado_vazio`, com o recorte da página para revisão
 - [x] OCR para as provas sem camada de texto legível: Tesseract (`por`) via subprocess, automático nas páginas sem texto ou com lixo, `STUDAI_OCR=0` desliga (`questions/ocr.py`). Questões com texto: 2021 0 → 89/90, 1997 dia 1 0 → 76/80, dia 2 0 → 77/80, 2002 dia 2 0 → 76/80; sem regressão nas outras 44 provas (commits 776e424, 0e7182b, 2b75759, 2026-10-20)
-  - [ ] Alternativas ainda incompletas nas provas com OCR (19 em 2021, 24/28 em 1997, 13 em 2002 dia 2): matemática, alternativas dentro de figuras e lado a lado; testar uma 2ª passada com `--psm 11`
-  - [ ] 2 a 4 questões por prova antiga somem quando o OCR perde o número; 1996 não foi medida
+  - [x] OCR por coluna (calha achada no render, `--psm 4` por coluna), `por+eng` (`STUDAI_OCR_LANG`), alternativas lado a lado e linhas duplicadas separadas, 2ª passada `--psm 11` nas questões sem alguma letra. Alternativas incompletas: 2021 19 → 4, 2002 dia 2 13 → 9, 1997 24/28 → 17/16; 1998–2020 com `questoes.json` idêntico; 300 dpi mantido (400 perde o número da 2021 Q9) — [`docs/benchmarks/legacy-ocr.md`](docs/benchmarks/legacy-ocr.md) (2026-10-22)
+  - [ ] 2021: Q11, Q46 e Q83 (letra colada a fórmula ou fração, linha perdida) e Q90 (alternativas desenhadas) seguem incompletas
+  - 1996 fica fora do escopo (modelo muito diferente: uma imagem por questão com "Resposta Correta X"); o foco é 2010 em diante
+  - [ ] 1997 e 2002 dia 2 ainda perdem 1 número de questão cada (79/80): passada `--psm 6` entre as questões vizinhas, se essas provas voltarem ao escopo
 
 ## Fase 4 — Reorganização e otimização (código + leituras/análises de IA)
 
@@ -226,3 +228,4 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-20 | Claude (swarm) / `feature/classification/phase4-subject-rules` | Fase 4: regras Inglês × Português × Literatura (prompt v12), `qwen3:4b` e Vulkan medidos sem ganho, classificador leve de matéria desligado por padrão | 7c74794 |
 | 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Merge com o `main`: ficou o OCR do swarm (1997 e 2002 dia 2 saem com 76–78 questões; o do `peaceful-robinson` achava 0 e 5); o gabarito embutido no acervo foi mantido | — |
 | 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Limpeza: trabalho do Codex (treinamento contínuo, reset, progresso do processamento) commitado e juntado; modo foco adaptado ao botão "Responder" dos Diagnósticos; branches antigas removidas | — |
+| 2026-10-22 | Claude / `feature/questions/legacy-ocr` | Fase 3: OCR por coluna, `por+eng`, alternativas lado a lado e 2ª passada `--psm 11`; 2021 com 4 questões incompletas (eram 19) | — |

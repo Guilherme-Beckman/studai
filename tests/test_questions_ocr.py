@@ -43,6 +43,19 @@ class FakeEngine:
         return self.pages.get(page.number, [])
 
 
+class RetryEngine(FakeEngine):
+    """Motor falso com a segunda passada (``read``) devolvendo outras linhas para o trecho."""
+
+    def __init__(self, pages, retry: dict[int, list[ocr.OcrLine]]):
+        super().__init__(pages)
+        self.retry = retry
+        self.reads: list[tuple[int, int]] = []
+
+    def read(self, page, dpi, rect, psm):
+        self.reads.append((page.number, psm))
+        return [ln for ln in self.retry.get(page.number, []) if ln.bbox.intersects(rect)]
+
+
 def _garbled_doc() -> pymupdf.Document:
     doc = pymupdf.open()
     page = doc.new_page()
@@ -59,6 +72,17 @@ def _scan_doc() -> pymupdf.Document:
     doc = pymupdf.open()
     page = doc.new_page()
     page.insert_image(pymupdf.Rect(30, 60, 530, 760), pixmap=pix)
+    return doc
+
+
+def _two_column_doc() -> pymupdf.Document:
+    """Título de largura total e duas colunas de texto até o pé da página."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.draw_rect(pymupdf.Rect(40, 40, 555, 56), color=None, fill=(0, 0, 0))   # faixa do título
+    for k in range(45):
+        page.insert_text((40, 100 + 16 * k), "Uma esfera de massa m descansa", fontsize=10)
+        page.insert_text((310, 100 + 16 * k), "As astronomers gaze into space", fontsize=10)
     return doc
 
 
@@ -104,20 +128,66 @@ class TesseractTests(unittest.TestCase):
         self.assertAlmostEqual(lines[1].bbox.y1, 81.6, places=3)
         self.assertAlmostEqual(lines[1].conf, 90.75)
 
-    def test_engine_renders_page_and_calls_binary(self):
-        calls = []
-
+    @staticmethod
+    def _runner(calls, tsv, langs="eng\nosd\npor\n"):
         def runner(cmd, **kw):
             calls.append((cmd, kw))
-            return subprocess.CompletedProcess(cmd, 0, stdout=self.TSV.encode())
+            out = f"List of available languages (3):\n{langs}" if "--list-langs" in cmd else tsv
+            return subprocess.CompletedProcess(cmd, 0, stdout=out.encode())
+        return runner
 
-        engine = ocr.TesseractOcr(binary="/fake/tesseract", runner=runner)
+    def test_engine_renders_page_and_calls_binary(self):
+        calls = []
+        with mock.patch.dict(os.environ, {"STUDAI_OCR_LANG": ""}):
+            engine = ocr.TesseractOcr(binary="/fake/tesseract", runner=self._runner(calls, self.TSV))
         lines = engine(pymupdf.open().new_page(), 300)
-        cmd, kw = calls[0]
+        cmd, kw = calls[-1]
         self.assertEqual(cmd[0], "/fake/tesseract")
-        self.assertIn("por", cmd)
+        self.assertEqual(cmd[cmd.index("-l") + 1], "por+eng")
+        self.assertEqual(cmd[cmd.index("--psm") + 1], "3")      # página em branco: sem calha
         self.assertTrue(kw["input"].startswith(b"\x89PNG"))
         self.assertEqual(lines[0].text, "11")
+
+    def test_language_falls_back_to_portuguese_and_can_be_set(self):
+        calls = []
+        with mock.patch.dict(os.environ, {"STUDAI_OCR_LANG": ""}):
+            self.assertEqual(ocr.default_lang("/fake", self._runner(calls, "", langs="por\n")), "por")
+        with mock.patch.dict(os.environ, {"STUDAI_OCR_LANG": "por"}):
+            self.assertEqual(ocr.TesseractOcr(binary="/fake", runner=self._runner(calls, "")).lang, "por")
+
+    def test_two_columns_are_read_separately(self):
+        # 2021 p. 17: com a página inteira o Tesseract intercalava a coluna da direita (texto
+        # em inglês) com a Q54. Cada coluna vai sozinha com --psm 4; o título, com --psm 3.
+        doc = _two_column_doc()
+        calls = []
+        tsv = self.TSV.splitlines()[0] + "\n5\t1\t1\t1\t1\t1\t0\t0\t30\t30\t95.0\tx\n"
+        engine = ocr.TesseractOcr(lang="por", binary="/fake/tesseract", runner=self._runner(calls, tsv))
+        lines = engine(doc[0], 144)
+        psms = [c[c.index("--psm") + 1] for c, _ in calls]
+        self.assertEqual(psms, ["3", "4", "4"])
+        # cada palavra volta na posição da sua região: título no alto, colunas lado a lado
+        x0s = [round(ln.bbox.x0) for ln in lines]
+        self.assertEqual(x0s[0], 0)
+        self.assertEqual(x0s[1], 0)
+        self.assertGreater(x0s[2], 280)
+        self.assertGreater(lines[1].bbox.y0, 55)
+
+    def test_find_gutter(self):
+        g = ocr.find_gutter(_two_column_doc()[0])
+        self.assertIsNotNone(g)
+        self.assertTrue(200 < g.x0 < g.x1 < 315, g)
+        self.assertTrue(55 < g.y0 < 100, g)              # a faixa de largura total fica acima
+        self.assertEqual(g.y1, 842)                      # coluna até o fim: sem faixa de baixo
+        # um fio vertical no meio da calha (2021, 2002) não a desfaz
+        doc = _two_column_doc()
+        doc[0].draw_line((298, 90), (298, 800), width=0.8)
+        self.assertIsNotNone(ocr.find_gutter(doc[0]))
+        # texto de página inteira: sem calha
+        doc = pymupdf.open()
+        page = doc.new_page()
+        for k in range(40):
+            page.insert_text((40, 60 + 18 * k), "palavra " * 13)
+        self.assertIsNone(ocr.find_gutter(page))
 
     def test_default_engine_can_be_disabled(self):
         with mock.patch.dict(os.environ, {"STUDAI_OCR": "0"}):
@@ -131,7 +201,46 @@ class TesseractTests(unittest.TestCase):
         self.assertEqual(ocr.ocr_dpi(doc[0], ocr.GARBAGE), 300)
 
 
+class SideBySideTests(unittest.TestCase):
+    def test_alternatives_on_one_line_are_split_at_the_middle_letter(self):
+        line = ocr.OcrLine(_line("(A) 0,10", 40, 100).words + _line("(D) 0,97", 160, 100).words)
+        out = ocr.split_side_by_side([line])
+        self.assertEqual([ln.text for ln in out], ["(A) 0,10", "(D) 0,97"])
+
+    def test_wide_gap_splits_alternative_from_note_box(self):
+        # 2021 Q55: "(A) 10³¹kg.      Note e adote:" sai do Tesseract numa linha só.
+        line = ocr.OcrLine(_line("(A) 10kg.", 40, 100).words + _line("Note e adote:", 140, 100).words)
+        self.assertEqual([ln.text for ln in ocr.split_side_by_side([line])], ["(A) 10kg.", "Note e adote:"])
+
+    def test_duplicated_table_line_is_dropped(self):
+        # 2021 Q28: a mesma linha da tabela duas vezes, uma truncada.
+        full = _line("B) Ligado ao X recessivo", 40, 100)
+        cut = ocr.OcrLine([ocr.OcrWord("(B)", pymupdf.Rect(39, 100, 51, 110), 90),
+                           ocr.OcrWord("Lig", pymupdf.Rect(54, 100, 70, 110), 90)])
+        other = _line("(C) Ligado ao Y", 40, 114)
+        self.assertEqual([ln.text for ln in ocr.drop_duplicates([cut, full, other])],
+                         ["B) Ligado ao X recessivo", "(C) Ligado ao Y"])
+
+    def test_ordinary_line_is_kept(self):
+        line = _line("(A) uma frase comum com (B) no meio", 40, 100)
+        self.assertEqual(ocr.split_side_by_side([line]), [line])
+
+
 class OcrParseTests(unittest.TestCase):
+    def test_side_by_side_alternatives_keep_their_letters(self):
+        # "(A) … (D) …" / "(B) … (E) …" / "(C) …": a leitura por altura dava A, D, B, E, C
+        # e o OCR renomeava D para B.
+        lines = [_line("01", 40, 100), _line("Qual a densidade do gelo?", 40, 114)]
+        for k, (left, right) in enumerate((("(A) 0,10", "(D) 0,97"), ("(B) 0,90", "(E) 1,00"), ("(C) 0,93", None))):
+            words = _line(left, 40, 130 + 13 * k).words
+            if right:
+                words += _line(right, 160, 130 + 13 * k).words
+            lines.append(ocr.OcrLine(words))
+        lines += [_line("02", 40, 200), _line("Outra pergunta?", 40, 214)]
+        questions, _ = parse(_garbled_doc(), ocr=FakeEngine({0: lines}))
+        alts = {k: " ".join(v["texto"]) for k, v in questions[1]["alternativas"].items()}
+        self.assertEqual(alts, {"A": "0,10", "B": "0,90", "C": "0,93", "D": "0,97", "E": "1,00"})
+
     def test_garbage_page_uses_ocr_lines(self):
         doc = _garbled_doc()
         engine = FakeEngine({0: [_line("Concurso Vestibular FUVEST — 2021", 300, 20)]
@@ -158,6 +267,28 @@ class OcrParseTests(unittest.TestCase):
         self.assertEqual(sorted(questions), [1, 2])
         self.assertEqual(questions[2]["enunciado"], ["Considere as afirmações abaixo.", "Há 12 frascos de detergente."])
         self.assertEqual(sorted(questions[2]["alternativas"]), list("ABCDE"))
+
+    def test_second_pass_recovers_a_lost_letter(self):
+        # 2021 Q47: em coluna o OCR leu a letra da D como "|" e ela se juntava à C; com
+        # --psm 11 no trecho da questão a letra aparece e entra no lugar.
+        lines = [_line("01", 40, 100), _line("Qual o comprimento da corda?", 40, 114)]
+        for k, label in enumerate(("(A) 5 cm", "(B) 10 cm", "(C) 50 cm", "|) 100 cm", "(E) 150 cm")):
+            lines.append(_line(label, 40, 130 + 13 * k))
+        retry = [_line("(D) 100 cm", 40, 169)]
+        engine = RetryEngine({0: lines}, {0: retry})
+        questions, _ = parse(_garbled_doc(), ocr=engine)
+        alts = {k: " ".join(v["texto"]) for k, v in questions[1]["alternativas"].items()}
+        self.assertEqual(alts, {"A": "5 cm", "B": "10 cm", "C": "50 cm", "D": "100 cm", "E": "150 cm"})
+        self.assertEqual(engine.reads, [(0, 11)])       # só a questão incompleta, uma vez
+
+    def test_second_pass_keeps_letters_already_read(self):
+        # A letra que o OCR já leu não é trocada por outra da segunda passada.
+        lines = [_line("01", 40, 100), _line("Qual?", 40, 114)]
+        for k, label in enumerate(("(A) um", "(B) dois", "(C) três", "(E) cinco")):
+            lines.append(_line(label, 40, 130 + 13 * k))
+        retry = [_line("(D) um", 40, 130)]
+        questions, _ = parse(_garbled_doc(), ocr=RetryEngine({0: lines}, {0: retry}))
+        self.assertEqual(sorted(questions[1]["alternativas"]), list("ABCE"))
 
     def test_without_engine_the_page_is_skipped(self):
         questions, _ = parse(_garbled_doc(), ocr=None)
