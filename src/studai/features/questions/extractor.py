@@ -708,8 +708,8 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
             side_by_side = all(r.bbox.x0 >= b.x1 - 1 or b.x0 >= r.bbox.x1 - 1 for b, _ in prev.parts)
             # Alternativas em grade ("(A) img  (D) img") e suas legendas ("Figura A  Figura D")
             # ficam na mesma altura, mas cada uma é uma linha própria.
-            label = ALT_RE.match(r.text) or ALT_CAPTION_RE.match(r.text)
-            if label and any(ALT_RE.match(t) or ALT_CAPTION_RE.match(t) for _, t in prev.parts):
+            label = _alt_label(r.text, r.fonts)
+            if label and any(_alt_label(t, prev.fonts) for _, t in prev.parts):
                 continue
             if note_boxes and note_box(prev.bbox) != note_box(r.bbox):
                 continue
@@ -733,6 +733,12 @@ def _build_rows(page: pymupdf.Page, parts: list[pymupdf.Rect] | None = None,
             r.parts = [(pymupdf.Rect(r.bbox), r.text)]
             rows.append(r)
     return rows, ends
+
+
+def _alt_label(text: str, fonts: set[str]) -> bool:
+    """Letra de alternativa ou legenda "Figura A"; no OCR vale a letra borrada ("D)", "(D")."""
+    return bool(ALT_RE.match(text) or ALT_CAPTION_RE.match(text)
+                or fonts == {"OCR"} and ocr_mod.SIDE_ALT_RE.match(text.split(" ", 1)[0]))
 
 
 def _merge_rects(rects: list[pymupdf.Rect]) -> list[pymupdf.Rect]:
@@ -1048,7 +1054,8 @@ def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
             continue
         if id(r) in captions:
             continue
-        if ALT_RE.match(r.text) and not any(nr.contains(center) for nr in note_rects):
+        if _alt_label(r.text, r.fonts) and not ALT_CAPTION_RE.match(r.text) and not any(
+                nr.contains(center) for nr in note_rects):
             # linha de alternativa nunca é "texto da figura" (cobre tabelas de alternativas)
             items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
             continue
@@ -1065,7 +1072,56 @@ def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
         items.append(Item("end", pno, col, y + 0.5))
 
     items.sort(key=_reading_order(items, pw))
-    return items
+    return _order_alt_grid(items)
+
+
+def _order_alt_grid(items: list[Item]) -> list[Item]:
+    """
+    Alternativas do OCR em duas subcolunas ("(A) … (D) …" / "(B) … (E) …" / "(C) …"):
+    a leitura por altura dá A, D, B, E, C e o OCR, que confia na ordem para corrigir
+    letra borrada, renomearia D para B. No trecho da grade, a subcoluna esquerda vem
+    inteira antes da direita.
+    """
+    def is_alt(it: Item) -> bool:
+        return it.kind == "text" and it.row.fonts == {"OCR"} and _alt_label(it.row.text, it.row.fonts)
+
+    def box(it: Item) -> pymupdf.Rect:
+        return it.row.bbox if it.row else it.fig.bbox
+
+    out = list(items)
+    for col in {it.col for it in items}:
+        idx = [k for k, it in enumerate(out) if it.col == col and it.kind in ("text", "fig")]
+        alts = sorted((k for k in idx if is_alt(out[k])), key=lambda k: out[k].row.bbox.y0)
+        pairs = [(a, b) for a in alts for b in alts
+                 if out[b].row.bbox.x0 > out[a].row.bbox.x1 + 2
+                 and _overlap_ratio(out[a].row.bbox, out[b].row.bbox) >= 0.5]
+        # Uma grade por questão: pares separados por mais de 3 linhas são grades diferentes.
+        grids: list[list[tuple[int, int]]] = []
+        for a, b in sorted(pairs, key=lambda ab: out[ab[0]].row.bbox.y0):
+            ra = out[a].row.bbox
+            if grids and ra.y0 - out[grids[-1][-1][0]].row.bbox.y1 <= 3 * ra.height:
+                grids[-1].append((a, b))
+            else:
+                grids.append([(a, b)])
+        for grid in grids:
+            lefts = [a for a, _ in grid]
+            split = min(out[b].row.bbox.x0 for _, b in grid) - 1
+            x_left = min(out[a].row.bbox.x0 for a in lefts)
+            height = max(4.0, min(out[a].row.bbox.height for a in lefts))
+            # Dos pares para baixo, enquanto a próxima letra da subcoluna esquerda vem
+            # logo abaixo ("(C)" sozinha na última linha).
+            top = min(out[a].row.bbox.y0 for a in lefts) - 1
+            bottom = max(out[a].row.bbox.y1 for a in lefts)
+            for k in alts:
+                b = out[k].row.bbox
+                if b.y0 > bottom and b.y0 - bottom <= 2.5 * height and abs(b.x0 - x_left) <= 2 * height:
+                    bottom = b.y1
+            inside = [k for k in idx if top <= box(out[k]).y0 <= bottom]
+            if not inside or inside != list(range(inside[0], inside[-1] + 1)):
+                continue                              # outra coisa no meio: deixa como está
+            ordered = sorted(inside, key=lambda k: (box(out[k]).x0 >= split, box(out[k]).y0))
+            out[inside[0]:inside[-1] + 1] = [out[k] for k in ordered]
+    return out
 
 
 def _ocr_prose(ln: dict) -> bool:
@@ -1249,15 +1305,90 @@ def _ocr_pages(doc: pymupdf.Document, engine, progress=None) -> dict[int, dict]:
             progress({"stage": "extracting", "message": f"OCR da página {pno + 1} ({k}/{len(todo)})",
                       "page": pno + 1, "completed": k - 1, "total": len(todo), "unit": "páginas"})
         page = doc[pno]
+        dpi = ocr_mod.ocr_dpi(page, status)
         try:
-            lines = engine(page, ocr_mod.ocr_dpi(page, status))
+            lines = engine(page, dpi)
         except (OSError, subprocess.SubprocessError) as exc:
             log.warning("OCR indisponível (%s); páginas sem texto ficam para revisão", exc)
             return out
-        raw = ocr_mod.as_raw_lines(lines)
-        out[pno] = {"status": status, "lines": raw,
-                    "text": "\n".join("".join(ch["c"] for ch in ln["chars"]) for ln in raw)}
+        out[pno] = {"status": status, "dpi": dpi, "ocr_lines": lines}
+        _ocr_refresh(out[pno])
     return out
+
+
+def _ocr_refresh(page_ocr: dict) -> None:
+    raw = ocr_mod.as_raw_lines(page_ocr["ocr_lines"])
+    page_ocr["lines"] = raw
+    page_ocr["text"] = "\n".join("".join(ch["c"] for ch in ln["chars"]) for ln in raw)
+
+
+OCR_RETRY_PSM = 11       # texto esparso: acha a letra de alternativa ao lado de fração (2021 Q46)
+
+
+def _alt_letter(word: str) -> str | None:
+    """Letra de "(D)", "D)", "(d" etc.; None se a palavra não é letra de alternativa."""
+    if not ocr_mod.SIDE_ALT_RE.match(word):
+        return None
+    return (word[1] if word[0] in "([{" else word[0]).upper()
+
+
+def _recover_alternatives(doc: pymupdf.Document, engine, ocr_pages: dict[int, dict],
+                          questions: dict[int, dict]) -> bool:
+    """
+    Segunda passada nas questões do OCR que ficaram sem alguma alternativa. Lida em
+    coluna (--psm 4), a letra ao lado de uma fração empilhada some ou vira outra coisa
+    ("5)" no lugar de "(C)", 2021 Q47, e a D virava C); com --psm 11 no trecho da
+    questão ela aparece. Cada letra que falta, lida assim, entra no lugar das palavras
+    que cobre, a não ser que ali já houvesse uma letra; sem nada embaixo, vira uma
+    linha nova com as palavras que o OCR ainda não tinha. Devolve True se mudou algo.
+    """
+    read = getattr(engine, "read", None)
+    if read is None:
+        return False
+    changed = False
+    for q in questions.values():
+        missing = set("ABCDE") - set(q["alternativas"])
+        if "OCR" not in q["_fonts"] or not missing:
+            continue
+        for (pno, _col), (y0, y1, x0, x1) in sorted(q["_segs"].items()):
+            page_ocr = ocr_pages.get(pno)
+            if not page_ocr:
+                continue
+            try:
+                # Embaixo, uma linha a mais: a última letra pode ter ficado fora do trecho (2021 Q46 E).
+                found = read(doc[pno], page_ocr["dpi"], pymupdf.Rect(x0 - 4, y0 - 4, x1 + 4, y1 + 14), OCR_RETRY_PSM)
+            except (OSError, subprocess.SubprocessError) as exc:
+                log.warning("Segunda passada do OCR falhou (%s)", exc)
+                return changed
+            lines = page_ocr["ocr_lines"]
+            for ln in found:
+                letter = _alt_letter(ln.words[0].text) if ln.words else None
+                if not letter:
+                    continue
+                marker = ln.words[0]
+
+                def covered(w: ocr_mod.OcrWord) -> bool:
+                    return (w.bbox & marker.bbox).get_area() >= 0.3 * max(1e-6, w.bbox.get_area())
+
+                hits = [(h, w) for h in lines for w in h.words if covered(w)]
+                if hits:
+                    # Uma letra já lida ali fica (mesmo outra: trocá-la apagaria uma alternativa).
+                    host, old = max(hits, key=lambda hw: (hw[1].bbox & marker.bbox).get_area())
+                    if _alt_letter(old.text) or letter not in missing:
+                        continue
+                    host.words = sorted([w for w in host.words if not covered(w)] + [marker], key=lambda w: w.bbox.x0)
+                    host.bbox = pymupdf.Rect()
+                    host.__post_init__()
+                elif letter in missing:
+                    known = [w.bbox for h in lines for w in h.words]
+                    extra = [w for w in ln.words[1:] if not any(w.bbox.intersects(b) for b in known)]
+                    lines.append(ocr_mod.OcrLine([marker, *extra]))
+                else:
+                    continue
+                missing.discard(letter)
+                changed = True
+            _ocr_refresh(page_ocr)
+    return changed
 
 
 def parse(doc: pymupdf.Document, ocr="auto", progress=None):
@@ -1265,6 +1396,16 @@ def parse(doc: pymupdf.Document, ocr="auto", progress=None):
     Questões e textos compartilhados da prova. ``ocr``: motor de OCR
     (``ocr.OcrEngine``), "auto" para o Tesseract instalado, ou None para não usar.
     """
+    engine = ocr_mod.default_engine() if ocr == "auto" else ocr
+    ocr_pages = _ocr_pages(doc, engine, progress)
+    questions, shared = _parse_pages(doc, ocr_pages, progress)
+    if ocr_pages and _recover_alternatives(doc, engine, ocr_pages, questions):
+        questions, shared = _parse_pages(doc, ocr_pages)
+    return questions, shared
+
+
+def _parse_pages(doc: pymupdf.Document, ocr_pages: dict[int, dict], progress=None):
+    """Máquina de estados sobre as páginas (com as linhas do OCR já lidas)."""
     questions: dict[int, dict] = {}
     shared: dict[str, dict] = {}
     cur: dict | None = None
@@ -1272,8 +1413,6 @@ def parse(doc: pymupdf.Document, ocr="auto", progress=None):
     mode = "none"                      # none | stem | alts | shared
     active_shared: str | None = None
     expected = 1
-    engine = ocr_mod.default_engine() if ocr == "auto" else ocr
-    ocr_pages = _ocr_pages(doc, engine, progress)
     texts = {pno: o["text"] for pno, o in ocr_pages.items()}
     alt_style = _alt_style(doc, texts)
     pages = []
