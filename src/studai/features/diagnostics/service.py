@@ -17,7 +17,8 @@ from studai.features.classification import service as clf
 from studai.integrations.ai_cache import cached_ai_result
 from studai.integrations.sqlite import connect as connect_sqlite
 from studai.features.answer_keys.service import (
-    associate_answer_key, exam_key, exam_variant, import_answer_key,
+    associate_answer_key, detect_exam_variant, exam_key, exam_variant, import_answer_key,
+    import_embedded_answer_key,
     parse_answer_key_pdf, seed_corpus_answer_keys, source_id_for,
 )
 from studai.features.diagnostics import courses, mastery

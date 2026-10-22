@@ -112,26 +112,27 @@ python processar_simulados.py simulados/ \
 
 O classificador distribui os pedidos entre os hosts e exibe o host usado em cada questão. Para controlar os threads de CPU de cada inferência, use `--ollama-threads 8` e ajuste conforme o processador.
 
-## Acervo Fuvest 2017–2026
+## Acervo Fuvest 1997–2026
 
-O processador dedicado consulta os manifestos em `fuvest_acervo/`, seleciona a prova V (ou V1) da 1ª fase, extrai questões e imagens, importa o gabarito correspondente e gera uma planilha para rótulos humanos. Ele não chama a IA nem marca rótulos como revisados:
+O processador dedicado consulta os manifestos em `fuvest_acervo/`, seleciona a prova V (ou V1) da 1ª fase — e, até 2002, as provas dos dois exames —, extrai questões e imagens, importa o gabarito correspondente e gera uma planilha para rótulos humanos. Ele não chama a IA nem marca rótulos como revisados:
 
 ```sh
-PYTHONPATH=src python -m studai.tools.process_fuvest_archive
+PYTHONPATH=src python -m studai.tools.process_fuvest_archive            # 1997–2026
+PYTHONPATH=src python -m studai.tools.process_fuvest_archive --first-year 2017
 ```
 
-As saídas ficam em `simulados/processados/fuvest-2017-2026/` e `simulados/cache/fuvest-2017-2026-review.csv`, com relatório JSON. Preencha `subject` e `topic` na planilha e importe para um conjunto revisado:
+As saídas ficam em `simulados/processados/fuvest-1a-fase/` e `simulados/cache/fuvest-1a-fase-review.csv`, com relatório JSON. Preencha `subject` e `topic` na planilha e importe para um conjunto revisado:
 
 ```sh
 PYTHONPATH=src python -m studai.tools.review_edubench import \
-  simulados/cache/fuvest-2017-2026-review.csv \
-  simulados/cache/fuvest-2017-2026-reviewed.jsonl
+  simulados/cache/fuvest-1a-fase-review.csv \
+  simulados/cache/fuvest-1a-fase-reviewed.jsonl
 PYTHONPATH=src python -m studai.tools.index_classification_examples \
-  simulados/cache/fuvest-2017-2026-reviewed.jsonl \
+  simulados/cache/fuvest-1a-fase-reviewed.jsonl \
   --base-url http://localhost:11434
 ```
 
-Só os rótulos revisados entram no RAG. O relatório recusa associar gabaritos quando a extração está incompleta. Neste acervo, o extrator não detecta todas as questões de 2017 e 2018 e não encontrou a questão 90 de 2021; confira o relatório antes de usar esses dados. A 2ª fase discursiva não faz parte deste fluxo.
+Só os rótulos revisados entram no RAG. O leitor de gabarito entende todos os formatos do acervo (grade por versão, tabela de correspondência entre grupos e o gabarito impresso no fim das provas de 1997–2004); ver [`docs/fuvest-formatos-1996-2021.md`](docs/fuvest-formatos-1996-2021.md). O relatório recusa associar o gabarito quando a extração tem números que não existem nele. Nas provas com OCR (1997, 2002 2º exame), as questões que o OCR perdeu ficam fora e aparecem em `missing_questions`. Para medir extração e gabarito das provas antigas: `python benchmark.py legacy-exams`. A 2ª fase discursiva não faz parte deste fluxo.
 
 ## Interface de benchmark
 

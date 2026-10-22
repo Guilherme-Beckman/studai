@@ -27,7 +27,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 |---|---|---|---|
 | 1 | Taxonomia | em andamento | 6/7 |
 | 2 | Revisão de questões → fonte de verdade | concluída | 8/8 |
-| 3 | Questões mal recortadas | concluída | 7/7 |
+| 3 | Questões mal recortadas | concluída | 9/9 |
 | 4 | Reorganização e otimização (código + IA) | concluída | 13/13 |
 | 5 | Diagnóstico inicial | concluída | 6/6 |
 | 6 | Revisão espaçada / "O que estudar hoje" | concluída | 6/6 |
@@ -94,6 +94,10 @@ Base: `src/studai/features/questions/extractor.py`, `batch.py`.
 - [x] OCR para as provas sem camada de texto legível: Tesseract (`por`) via subprocess, automático nas páginas sem texto ou com lixo, `STUDAI_OCR=0` desliga (`questions/ocr.py`). Questões com texto: 2021 0 → 89/90, 1997 dia 1 0 → 76/80, dia 2 0 → 77/80, 2002 dia 2 0 → 76/80; sem regressão nas outras 44 provas (commits 776e424, 0e7182b, 2b75759, 2026-10-20)
   - [ ] Alternativas ainda incompletas nas provas com OCR (19 em 2021, 24/28 em 1997, 13 em 2002 dia 2): matemática, alternativas dentro de figuras e lado a lado; testar uma 2ª passada com `--psm 11`
   - [ ] 2 a 4 questões por prova antiga somem quando o OCR perde o número; 1996 não foi medida
+  - [ ] OCR por coluna (a página inteira com `--psm 3` mistura as colunas em 2021: Q2, Q47, Q55), `por+eng`, alternativas lado a lado e 1996 (páginas escaneadas com pouco texto não vão ao OCR; "Resposta Correta X" → `gabarito_impresso`) — proposto como sessão separada
+- [x] Levantar os formatos das provas de 2021 para trás: o modelo atual (90 questões, `(A)`, número em destaque) vale de 2018 a 2026; 2007–2017 só muda para `a)`; 2003–2006 têm 100 questões; 1998–2002, dois exames de 80 (V e T); 1997 escaneada (K/M); 1996 é coletânea com a resposta impressa — [`docs/fuvest-formatos-1996-2021.md`](docs/fuvest-formatos-1996-2021.md); medição por prova em [`docs/benchmarks/legacy-exams.md`](docs/benchmarks/legacy-exams.md) (`python benchmark.py legacy-exams`) (2026-10-22)
+- [x] Gabarito das provas antigas: o leitor entende a tabela de correspondência entre grupos (1999–2018, 2022, 2025), a grade sem sigla, `ANULADA`, várias páginas e o gabarito impresso no fim das provas de 1997–2004; a versão sai do texto da prova (`V.01 –`, `GRUPO V`, rodapé `PAG 05/28 V` via OCR em 2021). `process_fuvest_archive` cobre 1997–2026: 31 provas de 1997–2021, 2.701 questões, todas com gabarito, nenhum erro; antes nenhuma prova abaixo de 2017 tinha gabarito. O app e o lote importam o gabarito impresso automaticamente e a rota de gabarito aceita `?variant=` (2026-10-22)
+  - [x] Removidos 56 PDFs que não eram da FUVEST 1996 (pós-graduação em Direito e listas do Provão Paulista); o scraper agora ignora arquivos achados em páginas intermediárias que não citam o ano (2026-10-22)
 
 ## Fase 4 — Reorganização e otimização (código + leituras/análises de IA)
 
@@ -226,3 +230,4 @@ Base: `frontend/index.html` (`#today-workspace`, `#diagnostic-workspace`), `fron
 | 2026-10-20 | Claude (swarm) / `feature/classification/phase4-subject-rules` | Fase 4: regras Inglês × Português × Literatura (prompt v12), `qwen3:4b` e Vulkan medidos sem ganho, classificador leve de matéria desligado por padrão | 7c74794 |
 | 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Merge com o `main`: ficou o OCR do swarm (1997 e 2002 dia 2 saem com 76–78 questões; o do `peaceful-robinson` achava 0 e 5); o gabarito embutido no acervo foi mantido | — |
 | 2026-10-22 | Claude / `claude/studai-fuvest-roadmap-57aab2` | Limpeza: trabalho do Codex (treinamento contínuo, reset, progresso do processamento) commitado e juntado; modo foco adaptado ao botão "Responder" dos Diagnósticos; branches antigas removidas | — |
+| 2026-10-22 | Claude / `feature/answer_keys/legacy-formats` | Fase 3: formatos das provas 1996–2021 documentados; leitor de gabarito para todos os formatos do acervo (correspondência, grade sem sigla, impresso na prova); versão pelo texto/OCR; acervo 1997–2026 com gabarito; PDFs alheios removidos de 1996 | — |

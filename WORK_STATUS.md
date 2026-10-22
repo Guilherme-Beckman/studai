@@ -48,6 +48,14 @@
 - **Próximo:** revisão humana das dúvidas listadas; reconstruir o índice de embeddings de tópicos; medir o classificador em duas etapas depois da revisão.
 - **Última atualização:** 2026-10-15
 
+## Claude — provas antigas e gabaritos
+
+- **Branch:** `feature/answer_keys/legacy-formats`
+- **Domínios:** `answer_keys` (leitor), com ajustes pequenos em `api/server.py` (versão da prova e gabarito impresso), `questions/batch.py`, `tools/process_fuvest_archive.py`, `tools/fuvest_scraper.py` e o novo `tools/benchmark_legacy_exams.py`
+- **Feito:** formatos 1996–2021 em `docs/fuvest-formatos-1996-2021.md`; gabarito lido em todas as 31 provas de 1997–2021.
+- **Pendente (outra sessão, proposta):** OCR por coluna e 1996 em `questions/ocr.py` e `questions/extractor.py`. O campo `gabarito_impresso` da questão já é lido por `printed_answer_key`.
+- **Última atualização:** 2026-10-22
+
 ## Decisões cross-agent pendentes
 
 | Decisão | Levantada por | Impacto |
