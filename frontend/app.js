@@ -414,7 +414,7 @@ function renderExamReview() {
 }
 
 function reviewReasonLabel(reason) {
-  return ({ classificacao_baixa_confianca: "Baixa confiança", topico_revisar: "Tópico sem correspondência", erro_classificacao: "Erro de classificação", classificacao_ausente: "Sem classificação", subconteudo_pendente: "Subconteúdo pendente", formula_matematica: "Fórmula pode ter sido extraída incorretamente", glifo_estranho: "Símbolo incomum na extração", alternativas_incompletas: "Alternativas incompletas", enunciado_vazio: "Enunciado vazio", alternativa_vazia: "Alternativa vazia" })[reason] || reason.replaceAll("_", " ");
+  return ({ classificacao_baixa_confianca: "Baixa confiança", topico_revisar: "Tópico sem correspondência", erro_classificacao: "Erro de classificação", classificacao_ausente: "Sem classificação", subconteudo_pendente: "Subconteúdo pendente", formula_matematica: "Fórmula pode ter sido extraída incorretamente", glifo_estranho: "Símbolo incomum na extração", alternativas_incompletas: "Alternativas incompletas", enunciado_vazio: "Enunciado vazio", alternativa_vazia: "Alternativa vazia", texto_ocr: "Texto lido por OCR" })[reason] || reason.replaceAll("_", " ");
 }
 
 function figureEditorItems(examId, paths) {

@@ -246,6 +246,45 @@ def set_reviewed_answer(db: sqlite3.Connection, source_id: str, number: int, ans
                     int(answer == "*"), None, "review"))
 
 
+CORPUS_KEY_FILENAME = "gabarito.json"
+
+
+def seed_corpus_answer_keys(db: sqlite3.Connection, root: Path) -> dict[str, int]:
+    """Importa o ``gabarito.json`` distribuído junto a cada prova do acervo.
+
+    O banco de histórico não é versionado; sem isto, um clone novo tem as
+    questões revisadas, mas nenhum gabarito. Só preenche provas sem nenhuma
+    resposta no banco, para não sobrescrever correções locais. Retorna
+    ``{source_id: respostas importadas}``.
+    """
+    seeded: dict[str, int] = {}
+    for key_path in sorted(Path(root).rglob(CORPUS_KEY_FILENAME)):
+        questions_path = key_path.with_name("questoes.classificado.json")
+        if not questions_path.exists():
+            continue
+        try:
+            data = json.loads(questions_path.read_text(encoding="utf-8"))
+            raw = json.loads(key_path.read_text(encoding="utf-8"))
+            answers = parse_answer_key(key_path)
+        except (OSError, ValueError):
+            continue
+        source_id = source_id_for(data, questions_path)
+        if db.execute("SELECT 1 FROM answer_keys WHERE source_id=? LIMIT 1", (source_id,)).fetchone():
+            continue
+        numbers = {int(q["numero"]) for q in data.get("questoes", []) if "numero" in q}
+        answers = {n: a for n, a in answers.items() if n in numbers}
+        variant = raw.get("variante") if isinstance(raw, dict) else None
+        now = datetime.now(timezone.utc).isoformat()
+        with db:
+            db.executemany(
+                "INSERT OR IGNORE INTO answer_keys(source_id,question_number,answer,source_pdf,imported_at,"
+                "is_annulled,variant,association_method) VALUES(?,?,?,?,?,?,?,?)",
+                [(source_id, n, a, CORPUS_KEY_FILENAME, now, int(a == "*"), variant, "corpus")
+                 for n, a in sorted(answers.items())])
+        seeded[source_id] = len(answers)
+    return seeded
+
+
 def parse_answer_key(path: Path, variant: str | None = None) -> dict[int, str]:
     """Lê gabarito PDF ou JSON no formato {número: alternativa}."""
     if path.suffix.lower() == ".pdf":

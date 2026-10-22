@@ -18,7 +18,7 @@ from studai.integrations.ai_cache import cached_ai_result
 from studai.integrations.sqlite import connect as connect_sqlite
 from studai.features.answer_keys.service import (
     associate_answer_key, exam_key, exam_variant, import_answer_key,
-    parse_answer_key_pdf, source_id_for,
+    parse_answer_key_pdf, seed_corpus_answer_keys, source_id_for,
 )
 from studai.features.diagnostics import courses, mastery
 from studai.features.diagnostics.report import build_report
@@ -135,8 +135,10 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
     Usa o mesmo critério de ``questions.review.diagnostic_ready`` (o dos
     exemplos revisados). Exclusões são contadas por motivo (``pending_review``,
     ``invalid_content``, ``missing_subject``, ``unusable``, ``bad_crop``,
-    ``unclassified``, ``no_valid_answer_key``, ...).
+    ``unclassified``, ``no_valid_answer_key``, ...). Provas do acervo sem
+    gabarito no banco recebem antes o ``gabarito.json`` distribuído com elas.
     """
+    seed_corpus_answer_keys(db, root)
     pool: list[dict] = []
     excluded = Counter()
     seen_questions: set[tuple[str, int]] = set()
@@ -202,6 +204,33 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
                          "subject": subject, "topic": topic, "question": question_copy,
                          "correct_answer": answer})
     return pool, dict(excluded)
+
+
+EXCLUSION_LABELS = {
+    "no_valid_answer_key": "sem gabarito importado",
+    "pending_review": "sem revisão humana",
+    "invalid_content": "com conteúdo revisado inválido",
+    "missing_subject": "sem matéria revisada",
+    "unclassified": "de matérias fora do curso",
+    "unusable": "marcadas como inutilizáveis",
+    "bad_crop": "com recorte ruim",
+    "duplicate_question": "duplicadas",
+    "invalid_number": "sem número válido",
+    "json_invalid": "arquivos de prova ilegíveis",
+}
+
+
+def empty_pool_message(excluded: dict) -> str:
+    """Explica por que nenhuma questão entrou no sorteio, maior motivo primeiro."""
+    message = "não há questões classificadas com gabarito para este curso"
+    if not excluded:
+        return message + " (nenhuma prova processada encontrada)"
+    parts = [f"{count} {EXCLUSION_LABELS.get(reason, reason)}"
+             for reason, count in sorted(excluded.items(), key=lambda item: (-item[1], item[0]))]
+    hint = ""
+    if "no_valid_answer_key" in excluded:
+        hint = "; importe o gabarito de cada prova na tela de provas"
+    return f"{message} ({', '.join(parts)}{hint})"
 
 
 def allocate_counts(available: dict[str, int], weights: dict[str, float], total: int) -> dict[str, int]:

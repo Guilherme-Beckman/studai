@@ -21,7 +21,9 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import urllib.error
 import urllib.request
 
-from studai.features.answer_keys.service import exam_variant, import_key_file, set_reviewed_answer
+from studai.features.answer_keys.service import (
+    exam_variant, import_key_file, seed_corpus_answer_keys, set_reviewed_answer,
+)
 from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
@@ -1580,7 +1582,7 @@ class Handler(BaseHTTPRequestHandler):
                         pool, excluded = diagnostics.load_question_pool(DEFAULT_QUESTIONS_DIR, db,
                                                                          list(profile["pesos"]))
                         if not pool:
-                            raise ValueError("não há questões classificadas com gabarito para este curso")
+                            raise ValueError(diagnostics.empty_pool_message(excluded))
                         result = diagnostics.create_attempt(
                             db, config, course_id, pool, total=total, seed=seed,
                             provider=_provider(body), excluded=excluded, mode=mode)
@@ -1669,6 +1671,13 @@ def main(argv=None):
     configure_paths(diagnostics_db=args.diagnostics_db, questions_dir=args.questions_dir,
                     course_config=args.course_config)
     load_dotenv(SERVICE_ROOT / ".env")
+    db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        seeded = seed_corpus_answer_keys(db, DEFAULT_QUESTIONS_DIR)
+    finally:
+        db.close()
+    if seeded:
+        print(f"Gabaritos do acervo importados: {sum(seeded.values())} respostas em {len(seeded)} provas")
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"StudAI: http://{args.host}:{args.port}")
     try:
