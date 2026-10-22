@@ -75,3 +75,10 @@ O Antigravity deve limitar suas alterações à árvore editorial. O ChatGPT alt
 - **Atualização:** botão para resetar contexto de aprendizagem com confirmação; remove progresso/revisões e histórico diagnóstico, zera respostas/métricas de tentativas de prova e preserva arquivos de prova, questões, gabaritos e configurações.
 - **Atualização:** painel de processamento agora acompanha OCR por página, geração de recortes por questão, classificação e importação do gabarito, com barra geral, etapas visuais, contagens e questões ativas. A suíte passou com 274 testes.
 - **Última atualização:** 2026-10-20
+
+## Claude — calendário de preparação
+
+- **Branch:** `feature/study/exam-calendar`
+- **Domínios:** `study` (novo `calendar.py`; tabelas `exam_dates` e `calendar_days`, `STUDY_SCHEMA_VERSION` 2; filtro `content_ids` em `append_training_item`), com ajustes em `api/server.py` (rotas `/api/calendar*`), `frontend/` (aba Calendário, faixa "Plano de hoje" no Treinamento) e `tests/test_study_calendar.py`
+- **Feito:** datas de prova por curso, prontidão por profundidade, carga diária automática, plano dia/semana/mês com simulados e reta final, dia de hoje congelado, "Treinar agora" com bloco filtrado.
+- **Última atualização:** 2026-10-22

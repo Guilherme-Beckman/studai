@@ -31,6 +31,7 @@ from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_
 from studai.features.diagnostics import service as diagnostics
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
+from studai.features.study import calendar as study_calendar
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import manual_crop, source_pdf
@@ -952,8 +953,37 @@ def _study_training_next(body: dict) -> dict:
             count = int(body.get("count", 1))
         except (TypeError, ValueError) as exc:
             raise ValueError("a quantidade de questões precisa ser um número inteiro") from exc
+        content_ids = body.get("contentIds")
+        if content_ids is not None and (not isinstance(content_ids, list)
+                                        or any(not isinstance(value, str) for value in content_ids)):
+            raise ValueError("conteúdos deve ser uma lista")
         return study.append_training_item(db, session_id, pool, config, datetime.now(timezone.utc),
-                                          subjects=subjects, count=count)
+                                          subjects=subjects, count=count, content_ids=content_ids)
+    finally:
+        db.close()
+
+
+def _calendar(course_id: str, *, today_only: bool = False) -> dict:
+    config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        study.sync_diagnostic_answers(db)
+        pool = _reports_pool(db, config, course_id)
+        use_case = study_calendar.today_plan if today_only else study_calendar.calendar_overview
+        return use_case(db, pool, config, course_id, datetime.now(timezone.utc))
+    finally:
+        db.close()
+
+
+def _calendar_add_exam(body: dict) -> dict:
+    config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+    course_id = _report_course_id({}, body)
+    if course_id not in config["cursos"]:
+        raise reports.NotFound(f"curso não configurado: {course_id}")
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        return study_calendar.add_exam(db, course_id, body.get("name"), body.get("date"),
+                                       str(body.get("phase") or "fase1"), datetime.now(timezone.utc))
     finally:
         db.close()
 
@@ -1199,7 +1229,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 return self._static("index.html")
-            if path in ("/app.js", "/focus-mode.js", "/reports.js", "/knowledge-map.js", "/crop-editor.js",
+            if path in ("/app.js", "/focus-mode.js", "/reports.js", "/calendar.js", "/knowledge-map.js", "/crop-editor.js",
                         "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
@@ -1271,6 +1301,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/study/today":
                 course_id = (parse_qs(parsed.query).get("courseId") or ["eng-comp-sao-carlos"])[0]
                 return self._json(200, _study_today(course_id))
+            if path in ("/api/calendar", "/api/calendar/today"):
+                return self._json(200, _calendar(_report_course_id(parse_qs(parsed.query)),
+                                                 today_only=path.endswith("/today")))
             if path == "/api/study/progress":
                 db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
@@ -1374,6 +1407,13 @@ class Handler(BaseHTTPRequestHandler):
                 db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
                     return self._json(200, study.reset_learning_context(db))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/calendar/exams/([a-f0-9]+)", path)
+            if match:
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_calendar.delete_exam(db, match.group(1)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/diagnostics/([^/]+)", path)
@@ -1668,6 +1708,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202, {"jobId": job_id})
             if path == "/api/study/today/answers":
                 return self._json(200, _study_answer(self._read_json()))
+            if path == "/api/calendar/exams":
+                return self._json(201, _calendar_add_exam(self._read_json()))
             if path == "/api/study/training/next":
                 return self._json(200, _study_training_next(self._read_json()))
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/answers", path)

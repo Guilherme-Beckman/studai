@@ -16,7 +16,7 @@ from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
 from studai.features.study import scheduler
 
-STUDY_SCHEMA_VERSION = 1
+STUDY_SCHEMA_VERSION = 2
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 GAP_ACCURACY = 0.7
 HALF_LIFE_DAYS = 30
@@ -55,6 +55,16 @@ def connect_db(path: Path) -> sqlite3.Connection:
             correct_answer TEXT NOT NULL, is_correct INTEGER NOT NULL, error_reason TEXT,
             answered_at TEXT NOT NULL,
             PRIMARY KEY(session_id, item_id)
+        );
+        CREATE TABLE IF NOT EXISTS exam_dates (
+            id TEXT PRIMARY KEY, course_id TEXT NOT NULL, name TEXT NOT NULL,
+            exam_date TEXT NOT NULL, phase TEXT NOT NULL CHECK(phase IN ('fase1','fase2','outra')),
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS calendar_days (
+            local_date TEXT NOT NULL, course_id TEXT NOT NULL, exam_id TEXT NOT NULL,
+            plan_json TEXT NOT NULL, created_at TEXT NOT NULL,
+            PRIMARY KEY(local_date, course_id)
         );
     """)
     old = db.execute("SELECT value FROM metadata WHERE key='study_schema_version'").fetchone()
@@ -358,8 +368,13 @@ def plan_today(db: sqlite3.Connection, pool: list[dict], config: dict, course_id
 
 
 def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dict], config: dict,
-                        now: datetime, *, subjects: list[str] | None = None, count: int = 1) -> dict:
-    """Acrescenta um bloco de questões recomendadas à sessão diária."""
+                        now: datetime, *, subjects: list[str] | None = None, count: int = 1,
+                        content_ids: list[str] | None = None) -> dict:
+    """Acrescenta um bloco de questões recomendadas à sessão diária.
+
+    ``content_ids`` (do calendário) restringe o bloco às questões desses nós da
+    taxonomia; sem questões neles, o bloco usa só o filtro por matéria.
+    """
     if not 1 <= count <= 100:
         raise ValueError("a quantidade deve ficar entre 1 e 100 questões")
     row, existing = _session(db, session_id, pool)
@@ -369,6 +384,11 @@ def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dic
     if not selected or not selected <= allowed:
         raise ValueError("selecione ao menos uma matéria válida para este curso")
     filtered_pool = [entry for entry in pool if entry["subject"] in selected]
+    if content_ids:
+        targets = {live_id(content_id) for content_id in content_ids}
+        focused = [entry for entry in filtered_pool
+                   if targets & set(CONTENT_INDEX.get(content_id_of(entry["question"]) or "", {}).get("path_ids", []))]
+        filtered_pool = focused or filtered_pool
     # Primeiro usa a fila priorizada pelo mesmo algoritmo da tarefa diária, sem limite diário.
     ranked = build_plan(db, filtered_pool, profile, row["course_id"], now,
                         size=max(1, len(filtered_pool)), new_per_day=max(1, len(filtered_pool)))
@@ -515,6 +535,8 @@ def reset_learning_context(db: sqlite3.Connection) -> dict:
     with db:
         db.execute("DELETE FROM study_sessions")
         db.execute("DELETE FROM review_cards")
+        # O dia congelado do calendário reflete o progresso apagado; as datas das provas ficam.
+        db.execute("DELETE FROM calendar_days")
         db.execute("DELETE FROM attempts WHERE mode!='exam'")
         # Mantém a tentativa e as questões da prova, removendo apenas respostas e métricas pessoais.
         db.execute("""UPDATE attempt_questions SET selected_answer=NULL,error_reason=NULL,
