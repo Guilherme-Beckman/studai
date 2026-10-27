@@ -267,15 +267,20 @@ def main(argv=None) -> int:
                         print("Resposta registrada.")
                     else:
                         print("Resposta registrada. Qual foi o motivo principal do erro?")
-                        choices = {"1": "unknown_content", "2": "calc_error", "3": "misread"}
-                        print("  1) unknown_content — não sabia o conteúdo")
-                        print("  2) calc_error — sabia, mas errou a conta")
-                        print("  3) misread — sabia, mas não interpretou corretamente")
+                        options = [("unknown_content", "não sabia o conteúdo"),
+                                   ("concept_confusion", "sabia, mas confundiu ou esqueceu um detalhe"),
+                                   ("calc_error", "sabia, mas errou a conta"),
+                                   ("misread", "interpretou errado o enunciado ou o texto"),
+                                   ("trap", "caiu numa pegadinha (alternativa parecida)"),
+                                   ("time_pressure", "faltou tempo ou foi rápido demais")]
+                        choices = {str(index): code for index, (code, _) in enumerate(options, 1)}
+                        for index, (code, label) in enumerate(options, 1):
+                            print(f"  {index}) {code} — {label}")
                         while True:
-                            reason = input("Motivo [1-3]: ").strip()
+                            reason = input(f"Motivo [1-{len(options)}]: ").strip()
                             if reason in choices:
                                 break
-                            print("Informe 1, 2 ou 3.")
+                            print(f"Informe um número de 1 a {len(options)}.")
                         progress = core.record_response(db, args.id, row["ordinal"], raw, choices[reason])
                     if progress.get("done") and progress.get("stop_reason") == "converged":
                         print("\nDiagnóstico adaptativo concluído: as áreas de maior peso já têm evidência suficiente.")

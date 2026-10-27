@@ -20,6 +20,83 @@
     return `<div class="explain-slot" data-explain-slot data-source="${esc(sourceId)}" data-number="${esc(number)}" data-mode="${mode}" data-open="${open ? "1" : ""}" data-context="${esc(JSON.stringify(context))}"></div>`;
   }
 
+  // Mini-resumo do subconteúdo (depois de "Não sabia o conteúdo").
+  const summaries = new Map(); // contentId -> { data, loading, error, editing }
+
+  function summarySlot(contentId) {
+    return `<div class="explain-slot" data-summary-slot data-content="${esc(contentId)}"></div>`;
+  }
+
+  async function fetchSummary(contentId) {
+    const path = `/api/contents/${encodeURIComponent(contentId)}/summary`;
+    let data = await api(path);
+    if (data.status === "generating") {
+      await waitJob(data.jobId);
+      data = await api(path);
+    }
+    return data;
+  }
+
+  function renderSummary(el) {
+    const contentId = el.dataset.content;
+    if (!summaries.has(contentId)) summaries.set(contentId, { data: null, loading: false, error: null, editing: false });
+    const state = summaries.get(contentId);
+    let body = "";
+    if (state.loading) body = `<p class="explain-loading">Preparando o mini-resumo…</p>`;
+    else if (state.error) body = `<div class="explain-error">${esc(state.error)} <button type="button" class="text-button" data-summary-retry>Tentar de novo</button></div>`;
+    else if (state.data) {
+      const data = state.data;
+      const points = data.key_points.map(point => `<li>${esc(point)}</li>`).join("");
+      const mistakes = (data.common_mistakes || []).map(item => `<li>${esc(item)}</li>`).join("");
+      const review = data.status === "approved"
+        ? `<span class="explain-approved">✓ Você aprovou este resumo</span>`
+        : state.editing
+          ? `<label class="explain-feedback">O que está errado?<textarea data-summary-feedback rows="2" maxlength="1000"></textarea></label><div class="explain-review"><button type="button" class="button button-primary" data-summary-reject>Gerar outro resumo</button><button type="button" class="text-button" data-summary-cancel>Cancelar</button></div>`
+          : `<div class="explain-review"><span>O resumo está certo?</span><button type="button" class="button button-secondary" data-summary-approve>Está certo ✓</button><button type="button" class="text-button" data-summary-edit>Tem erro</button></div>`;
+      body = `<p class="explain-path">${esc(data.path)}</p><p>${esc(data.summary)}</p><h4>Para lembrar</h4><ul class="explain-steps">${points}</ul>${mistakes ? `<h4>Confusões comuns</h4><ul class="explain-distractors explain-mistakes">${mistakes}</ul>` : ""}${review}`;
+    }
+    el.innerHTML = `<details class="explain-panel explain-summary" open><summary>Mini-resumo do assunto</summary><div class="explain-body">${body}</div></details>`;
+    if (!state.data && !state.loading && !state.error) loadSummary(el);
+  }
+
+  async function loadSummary(el) {
+    const state = summaries.get(el.dataset.content);
+    state.loading = true; state.error = null;
+    renderSummary(el);
+    try {
+      state.data = await fetchSummary(el.dataset.content);
+    } catch (error) {
+      state.error = `Não foi possível carregar o resumo: ${error.message}`;
+    } finally {
+      state.loading = false;
+      if (el.isConnected) renderSummary(el);
+    }
+  }
+
+  async function reviewSummary(el, approved) {
+    const state = summaries.get(el.dataset.content);
+    const feedback = el.querySelector("[data-summary-feedback]")?.value.trim() || "";
+    if (!approved && !feedback) return toast("Descreva o erro do resumo.", true);
+    try {
+      const result = await api(`/api/contents/${encodeURIComponent(el.dataset.content)}/summary/review`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approved, feedback }),
+      });
+      state.editing = false;
+      if (result.status === "generating") {
+        state.data = null; state.loading = true;
+        renderSummary(el);
+        await waitJob(result.jobId);
+        state.loading = false;
+        return loadSummary(el);
+      }
+      state.data = { ...state.data, status: result.status };
+    } catch (error) {
+      state.loading = false;
+      toast(error.message, true);
+    }
+    if (el.isConnected) renderSummary(el);
+  }
+
   function hintsUsed(sourceId, number) {
     return cache.get(keyOf(sourceId, number))?.hints.length || 0;
   }
@@ -139,6 +216,21 @@
   }
 
   function mount(root) {
+    root.querySelectorAll("[data-summary-slot]").forEach(el => {
+      renderSummary(el);
+      if (el.dataset.bound) return;
+      el.dataset.bound = "1";
+      el.addEventListener("click", event => {
+        const target = event.target.closest("button");
+        if (!target) return;
+        const state = summaries.get(el.dataset.content);
+        if (target.matches("[data-summary-retry]")) { state.error = null; loadSummary(el); }
+        else if (target.matches("[data-summary-approve]")) reviewSummary(el, true);
+        else if (target.matches("[data-summary-edit]")) { state.editing = true; renderSummary(el); el.querySelector("textarea")?.focus(); }
+        else if (target.matches("[data-summary-cancel]")) { state.editing = false; renderSummary(el); }
+        else if (target.matches("[data-summary-reject]")) reviewSummary(el, false);
+      });
+    });
     root.querySelectorAll("[data-explain-slot]").forEach(el => {
       render(el);
       if (el.dataset.bound) return;
@@ -171,5 +263,5 @@
     }).catch(() => { /* sem provedor configurado: as resoluções são geradas quando pedidas */ });
   }
 
-  window.studaiExplain = { slot, mount, hintsUsed, prefetch };
+  window.studaiExplain = { slot, summarySlot, mount, hintsUsed, prefetch };
 })();

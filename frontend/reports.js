@@ -20,7 +20,7 @@
   };
   const LEVEL_LABEL = { subject: "matéria", area: "área", content: "conteúdo", leaf: "subtópico" };
   const KIND_LABEL = { diagnostic: "Diagnóstico", exam: "Prova completa" };
-  const REASONS = { unknown_content: "Não sabia o conteúdo", calc_error: "Erro de cálculo", misread: "Interpretação", blank: "Em branco" };
+  const REASONS = { unknown_content: "Não sabia o conteúdo", concept_confusion: "Confundiu um detalhe", calc_error: "Erro de cálculo", misread: "Interpretação", trap: "Pegadinha", time_pressure: "Faltou tempo", blank: "Em branco" };
   const STATUS_FILTERS = [["all", "Todos"], ["gap", "Lacunas"], ["uncertain", "Incertos"], ["strong", "Fortes"], ["untested", "Não testados"]];
   const SORTS = [["priority", "Prioridade"], ["mastery", "Domínio (menor primeiro)"], ["weight", "Peso no curso"]];
 

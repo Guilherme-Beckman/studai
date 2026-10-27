@@ -30,9 +30,11 @@ from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
 from studai.features.explanations import service as explanations
+from studai.features.explanations import summaries as content_summaries
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
 from studai.features.study import calendar as study_calendar
+from studai.features.study import error_notebook
 from studai.features.study import proficiency as study_proficiency
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
@@ -966,8 +968,15 @@ def _study_training_next(body: dict) -> dict:
         if content_ids is not None and (not isinstance(content_ids, list)
                                         or any(not isinstance(value, str) for value in content_ids)):
             raise ValueError("conteúdos deve ser uma lista")
+        refs = body.get("questionRefs")
+        if refs is not None:
+            try:
+                refs = [(str(ref["sourceId"]), int(ref["number"])) for ref in refs]
+            except (KeyError, TypeError, ValueError):
+                raise ValueError("questionRefs deve ser uma lista de {sourceId, number}") from None
         return study.append_training_item(db, session_id, pool, config, datetime.now(timezone.utc),
-                                          subjects=subjects, count=count, content_ids=content_ids)
+                                          subjects=subjects, count=count, content_ids=content_ids,
+                                          question_refs=refs)
     finally:
         db.close()
 
@@ -1182,7 +1191,7 @@ def _reports_pool(db, config: dict, course_id: str) -> list[dict]:
 
 
 # ---- Resoluções comentadas: geradas em segundo plano, uma tarefa por questão.
-EXPLANATION_JOBS: dict[tuple[str, int], str] = {}
+EXPLANATION_JOBS: dict[tuple, str] = {}
 EXPLANATION_PROVIDERS: dict[str, tuple[float, object]] = {}
 EXPLANATION_LOCK = threading.Lock()
 EXPLANATION_MAX_TOKENS = 8000  # o gpt-oss gasta parte disso raciocinando antes do JSON
@@ -1213,7 +1222,7 @@ def _question_entry(db, config: dict, course_id: str, source_id: str, number: in
     return entry
 
 
-def _explanation_job_running(key: tuple[str, int]) -> str | None:
+def _explanation_job_running(key: tuple) -> str | None:
     job_id = EXPLANATION_JOBS.get(key)
     with JOBS_LOCK:
         job = JOBS.get(job_id or "")
@@ -1302,6 +1311,49 @@ def _prefetch_explanations(body: dict) -> dict:
         db.close()
     jobs = [_start_explanation_job(course_id, source_id, number) for source_id, number in missing]
     return {"queued": len(jobs), "jobIds": jobs}
+
+
+def _start_summary_job(content_id: str) -> str:
+    key = ("summary", content_id)
+    with EXPLANATION_LOCK:
+        running = _explanation_job_running(key)
+        if running:
+            return running
+
+        def task(cancelled, job_id):
+            db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+            try:
+                _set_job(job_id, stage="generating", message="Gerando o mini-resumo")
+                content_summaries.generate_summary(db, content_id, _explanations_provider())
+                return {"contentId": content_id}
+            finally:
+                db.close()
+
+        job_id = _submit_job(f"Mini-resumo {content_id}", task)
+        EXPLANATION_JOBS[key] = job_id
+        return job_id
+
+
+def _summary_get(content_id: str) -> tuple[int, dict]:
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        record = content_summaries.get_summary(db, content_id)
+        if content_summaries.needs_generation(record):
+            return 202, {"status": "generating", "jobId": _start_summary_job(content_id)}
+        return 200, content_summaries.public_payload(record)
+    finally:
+        db.close()
+
+
+def _summary_review(content_id: str, body: dict) -> dict:
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        record = content_summaries.review_summary(db, content_id, bool(body.get("approved")), body.get("feedback"))
+    finally:
+        db.close()
+    if record["status"] == "rejected":
+        return {"status": "generating", "jobId": _start_summary_job(content_id)}
+    return {"status": record["status"]}
 
 
 def _report_course_id(query: dict, body: dict | None = None) -> str:
@@ -1443,6 +1495,20 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     study.sync_diagnostic_answers(db)
                     return self._json(200, study.progress(db, datetime.now(timezone.utc)))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/contents/([^/]+)/summary", path)
+            if match:
+                status, payload = _summary_get(unquote(match.group(1)))
+                return self._json(status, payload)
+            if path == "/api/study/errors":
+                query = parse_qs(parsed.query)
+                value = lambda name: (query.get(name) or [None])[0] or None
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, error_notebook.list_errors(
+                        db, _report_course_id(query), subject=value("subject"), reason=value("reason"),
+                        status=value("status") or "pending"))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/explanation", path)
@@ -1862,6 +1928,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, _study_training_next(self._read_json()))
             if path == "/api/study/explanations/prefetch":
                 return self._json(202, _prefetch_explanations(self._read_json()))
+            match = re.fullmatch(r"/api/contents/([^/]+)/summary/review", path)
+            if match:
+                return self._json(200, _summary_review(unquote(match.group(1)), self._read_json()))
             match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/explanation/review", path)
             if match:
                 return self._json(200, _explanation_review(unquote(match.group(1)), int(match.group(2)),

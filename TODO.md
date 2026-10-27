@@ -35,7 +35,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
-| 11 | Experiência de estudo (1ª fase) | em andamento | 4/8 |
+| 11 | Experiência de estudo (1ª fase) | em andamento | 6/9 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -206,7 +206,9 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
   - [ ] Qualidade medida em 2 questões reais (Groq `gpt-oss-120b`): chega ao gabarito, mas uma afirmação histórica saiu errada; revisar pelo botão "Tem erro" e acompanhar
   - [ ] Imagens das questões ficam de fora por padrão (as faixas grátis só aceitam texto); `STUDAI_EXPLANATIONS_IMAGES=1` liga para provedores com visão (Gemini)
   - [ ] OpenRouter: `nemotron-3-super-120b-a12b:free` deixou de ser grátis (404) e os `gemma-4` estão com limite; atualizar `STUDAI_OPENROUTER_MODELS`
-- [ ] Motivo do erro decide o próximo passo: conteúdo → mini-resumo + questão mais fácil do mesmo subconteúdo; cálculo → questão parecida; interpretação → a mesma questão volta em poucos dias
+- [x] Seis motivos de erro (não sabia o conteúdo, confundiu um detalhe, conta, interpretação, pegadinha, faltou tempo) + anotação "o que eu devia ter percebido", iguais nos três fluxos (teclas 1–6 no modo foco); retrocompatível com os 3 motivos antigos (2026-10-27)
+- [x] O motivo decide o próximo passo no Treinamento: conteúdo → mini-resumo do subconteúdo + 2 questões do mesmo subconteúdo logo depois (as mais fáceis pela resolução); conta → 1 questão parecida 3 posições depois; confundiu/interpretação → a questão volta em 3 dias; pegadinha → em 7 dias (vale também para diagnósticos e provas na sincronização). Mini-resumo em `features/explanations/summaries.py` (`GET /api/contents/<id>/summary`), revisável como as resoluções (2026-10-27)
+- [x] Caderno de erros no Treinamento (`study/error_notebook.py`, `GET /api/study/errors`): erros e acertos no chute de todos os fluxos, com motivo, anotação, quantas vezes errou, quando volta e se já foi resolvida; filtros por situação, matéria e motivo; "Refazer selecionadas" vira um bloco de treino (`questionRefs` em `/api/study/training/next`) (2026-10-27)
 - [ ] Simulado de 90 questões cronometrado com acertos estimados contra o corte da 1ª fase (corte cadastrado junto da data da prova)
 - [ ] Leituras obrigatórias: lista de obras, progresso de leitura e questões por obra
 
@@ -271,3 +273,4 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11 adicionada (brainstorm de experiência de estudo); prioridade da 1ª fase usa só o componente F1 | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 1: confiança e tempo por questão alimentam o FSRS; painel de confiança e ritmo; estáticos com `Cache-Control: no-cache` | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 2: resolução comentada e dicas graduais por IA, revisáveis pelo aluno | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 3: seis motivos de erro com próximo passo, mini-resumo por subconteúdo e caderno de erros | — |

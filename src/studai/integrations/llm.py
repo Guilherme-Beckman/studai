@@ -753,6 +753,12 @@ class DemoProvider(MockProvider):
         return "DemoProvider:offline"
 
     def complete(self, system, user, images=None):
+        if "mini-resumo" in system:
+            payload = json.loads(user)
+            return json.dumps({"summary": f"Resumo de demonstração sobre {payload['assunto']}.",
+                               "key_points": ["Ponto 1 de demonstração.", "Ponto 2 de demonstração.",
+                                              "Ponto 3 de demonstração."],
+                               "common_mistakes": ["Confusão comum de demonstração."]}, ensure_ascii=False)
         if "resolução comentada" in system:
             payload = json.loads(user)
             correct = payload["alternativa_correta"]
@@ -773,8 +779,11 @@ class DemoProvider(MockProvider):
             metrics = payload["metrics_calculated_by_code"]["subjects"]
             actions = {
                 "unknown_content": "theory",
+                "concept_confusion": "concept_review",
                 "calc_error": "calculation_practice",
                 "misread": "interpretation_practice",
+                "trap": "distractor_practice",
+                "time_pressure": "pace_practice",
                 "blank": "review",
             }
             steps = []

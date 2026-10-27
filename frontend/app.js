@@ -315,7 +315,26 @@ function answerButtonsMarkup({ blank, ready, attr }) {
 }
 
 function answerExtrasBody(extras = {}) {
-  return { confidence: extras.confidence || null, elapsedMs: extras.elapsedMs ?? null, hintsUsed: extras.hintsUsed || 0 };
+  return { confidence: extras.confidence || null, elapsedMs: extras.elapsedMs ?? null, hintsUsed: extras.hintsUsed || 0, note: extras.note || null };
+}
+
+// ---- Motivo do erro: a mesma lista nos três fluxos; o motivo decide o próximo passo no Treinamento.
+const ERROR_REASONS = [
+  ["unknown_content", "Não sabia o conteúdo"],
+  ["concept_confusion", "Confundi ou esqueci um detalhe"],
+  ["calc_error", "Errei a conta"],
+  ["misread", "Interpretei errado"],
+  ["trap", "Caí numa pegadinha"],
+  ["time_pressure", "Faltou tempo / fui rápido demais"],
+];
+const ERROR_REASON_LABELS = Object.fromEntries([...ERROR_REASONS, ["blank", "Em branco"], ["guess", "Acertei no chute"]]);
+
+function reasonPickerMarkup(attr) {
+  return `<div class="exam-reason-prompt" role="group" aria-label="Motivo do erro"><span>Qual foi o principal motivo do erro?</span><div class="exam-reason-options">${ERROR_REASONS.map(([value, label], index) => `<button type="button" class="button button-secondary" ${attr}="${value}" data-reason-key="${index + 1}">${label} <kbd>${index + 1}</kbd></button>`).join("")}</div><label class="reason-note">O que eu devia ter percebido? <span>(opcional, vai para o caderno de erros)</span><textarea data-reason-note rows="2" maxlength="1000" placeholder="Ex.: a velocidade estava em km/h, não em m/s"></textarea></label></div>`;
+}
+
+function reasonNote(root) {
+  return root.querySelector("[data-reason-note]")?.value.trim() || null;
 }
 
 // Marcador da resolução comentada / dicas (frontend/explanations.js); vazio se o módulo não carregou.
@@ -843,7 +862,6 @@ async function retryReviewIndex(examId) {
 
 // ---- Persistência do "Responder prova" (attempts.mode = 'exam'); sessionStorage segue como fallback offline.
 const EXAM_SESSION_PREFIX = "studai-exam-session:";
-const EXAM_REASONS = [["unknown_content", "Não sabia o conteúdo"], ["calc_error", "Erro de cálculo"], ["misread", "Interpretação"]];
 
 function examSessionCourseId() {
   // Mesmo curso do formulário de diagnóstico (padrão: Eng. de Computação São Carlos).
@@ -998,8 +1016,7 @@ function renderExamQuiz() {
     ? `<div class="exam-answer-feedback annulled">Questão anulada no gabarito.</div>`
     : saved == null ? `<div class="exam-answer-feedback neutral">Resposta em branco.</div>`
       : `<div class="exam-answer-feedback ${saved === key.answer ? "correct" : "incorrect"}">${saved === key.answer ? "Resposta correta!" : `Resposta incorreta. Gabarito: ${escapeHtml(key.answer)}.`}</div>`) : (submitted ? `<div class="exam-answer-feedback neutral">Resposta registrada. Ainda não há gabarito importado para esta questão.</div>` : "");
-  const reasonPrompt = awaitingReason
-    ? `<div class="exam-reason-prompt" role="group" aria-label="Motivo do erro"><span>Qual foi o principal motivo do erro?</span><div class="exam-reason-options">${EXAM_REASONS.map(([value, label]) => `<button type="button" class="button button-secondary" data-exam-reason="${value}">${label}</button>`).join("")}</div></div>` : "";
+  const reasonPrompt = awaitingReason ? reasonPickerMarkup("data-exam-reason") : "";
   const progress = Math.round(((index + 1) / questions.length) * 100);
   if (!submitted && !awaitingReason) startQuestionClock(`exam:${quiz.examId}:${number}`);
   // Resolução e dicas só para as questões do acervo revisado (as que têm ordinal na sessão).
@@ -1055,7 +1072,7 @@ function bindExamQuizActions() {
     const reason = button.dataset.examReason;
     if (!reason) return;
     quiz.pendingReason = null;
-    commitExamAnswer(quiz, pending.number, pending.answer, reason, pending.extras);
+    commitExamAnswer(quiz, pending.number, pending.answer, reason, { ...pending.extras, note: reasonNote(workspace) });
     toast("Motivo registrado.");
     renderExamQuiz();
   }));
@@ -1460,7 +1477,7 @@ function renderDiagnostic(workspace, data) {
     }).join("");
     const reasonPending = diagnosticReasonPrompt?.id === data.id && diagnosticReasonPrompt.ordinal === item.ordinal;
     const selectedAnswer = diagnosticSelection?.id === data.id && diagnosticSelection.ordinal === item.ordinal ? diagnosticSelection.answer : undefined;
-    body = `<div class="question-top"><span class="question-subject">${escapeHtml(item.subject)} · ${escapeHtml(item.topic)}</span><span>${position}</span></div>${question._texto_compartilhado ? `<div class="question-body"><b>Texto-base</b><br>${escapeHtml(question._texto_compartilhado)}${examImageMarkup(item.source_id, sharedImages, "passage-image")}</div>` : ""}<div class="question-body">${display.showStem ? stemMarkup(question, paths => examImageMarkup(item.source_id, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(item.source_id, question.figuras_enunciado || [])}${renderSourceQuestionImage(item.source_id, display.sourceImages, { collapsible: true })}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(item.source_id, fullPageImages)}</details>` : ""}</div><div class="options-list">${alternatives}</div><div class="question-actions"><button class="blank-button ${selectedAnswer === null ? "selected" : ""}" id="answer-blank" aria-pressed="${selectedAnswer === null}" ${reasonPending ? "disabled" : ""}>Deixar em branco</button><span class="muted">Escolha uma alternativa e diga com que confiança responde.</span></div><div class="exam-quiz-actions"><span></span>${answerButtonsMarkup({ blank: selectedAnswer === null, ready: selectedAnswer !== undefined && !reasonPending, attr: "data-diagnostic-submit" })}</div><div id="reason-panel" class="reason-row ${reasonPending ? "" : "hidden"}"><label>Qual foi o principal motivo do erro?<select id="answer-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="confirm-reason">Registrar resposta</button></div><div id="answer-feedback"></div>`;
+    body = `<div class="question-top"><span class="question-subject">${escapeHtml(item.subject)} · ${escapeHtml(item.topic)}</span><span>${position}</span></div>${question._texto_compartilhado ? `<div class="question-body"><b>Texto-base</b><br>${escapeHtml(question._texto_compartilhado)}${examImageMarkup(item.source_id, sharedImages, "passage-image")}</div>` : ""}<div class="question-body">${display.showStem ? stemMarkup(question, paths => examImageMarkup(item.source_id, paths, "formula-image")) : (!display.showSource ? "Enunciado não extraído" : "")}${question.nota ? `<div class="question-note">${escapeHtml(question.nota)}</div>` : ""}${examImageMarkup(item.source_id, question.figuras_enunciado || [])}${renderSourceQuestionImage(item.source_id, display.sourceImages, { collapsible: true })}${fullPageImages.length ? `<details class="exam-full-page"><summary>Ver imagem original da questão</summary>${examImageMarkup(item.source_id, fullPageImages)}</details>` : ""}</div><div class="options-list">${alternatives}</div><div class="question-actions"><button class="blank-button ${selectedAnswer === null ? "selected" : ""}" id="answer-blank" aria-pressed="${selectedAnswer === null}" ${reasonPending ? "disabled" : ""}>Deixar em branco</button><span class="muted">Escolha uma alternativa e diga com que confiança responde.</span></div><div class="exam-quiz-actions"><span></span>${answerButtonsMarkup({ blank: selectedAnswer === null, ready: selectedAnswer !== undefined && !reasonPending, attr: "data-diagnostic-submit" })}</div><div id="reason-panel" class="${reasonPending ? "" : "hidden"}">${reasonPending ? reasonPickerMarkup("data-diagnostic-reason") : ""}</div><div id="answer-feedback"></div>`;
   } else {
     const stop = adaptive ? `O diagnóstico adaptativo terminou após ${answered} questões${data.stopReason || diagnosticDone.get(data.id) ? `: ${escapeHtml(data.stopReason || diagnosticDone.get(data.id))}` : ""}. ` : "Todas as respostas foram registradas. ";
     body = `<div class="inline-result">${stop}Gere a análise para ver suas métricas e prioridades.</div><button class="button button-primary" id="finalize-diagnostic">Concluir e analisar</button>`;
@@ -1486,11 +1503,10 @@ function renderDiagnostic(workspace, data) {
       if (answer === undefined || diagnosticReasonPrompt?.id === data.id) return;
       submitAnswer(data.id, pending, answer, null, { confidence: button.dataset.diagnosticSubmit || null, elapsedMs: questionElapsedMs(`diag:${data.id}:${pending.ordinal}`) });
     }));
-    $("#confirm-reason", workspace).addEventListener("click", () => {
-      const reason = $("#answer-reason", workspace).value;
-      if (!reason) return toast("Escolha o motivo do erro.", true);
-      submitAnswer(data.id, pending, diagnosticReasonPrompt.answer, reason, diagnosticReasonPrompt.extras);
-    });
+    $$("[data-diagnostic-reason]", workspace).forEach(button => button.addEventListener("click", () => {
+      submitAnswer(data.id, pending, diagnosticReasonPrompt.answer, button.dataset.diagnosticReason,
+        { ...diagnosticReasonPrompt.extras, note: reasonNote(workspace) });
+    }));
   }
   $("#finalize-diagnostic", workspace)?.addEventListener("click", () => finalizeDiagnostic(data.id));
 }
@@ -1557,6 +1573,7 @@ async function finalizeDiagnostic(id) {
 const STUDY_REASONS = {
   overdue_question: "Questão errada", due_content: "Revisão vencida",
   new_gap: "Lacuna do diagnóstico", new_content: "Conteúdo novo", practice: "Prática",
+  followup_practice: "Prática do erro", redo: "Caderno de erros",
 };
 
 function formatDay(isoDate) {
@@ -1574,7 +1591,101 @@ function updateTrainingCounters(session) {
 
 function refreshToday() {
   todayRequest = loadToday();
+  refreshErrorNotebook();
   return todayRequest;
+}
+
+// ---- Caderno de erros: filtros por matéria, motivo e situação; "Refazer" vira um bloco de treino.
+const errorNotebook = { subject: "", reason: "", status: "pending", selected: new Set(), data: null };
+
+async function refreshErrorNotebook() {
+  const root = $("#error-notebook");
+  const courseId = $("#training-course")?.value;
+  if (!root || !courseId) return;
+  const params = new URLSearchParams({ courseId, status: errorNotebook.status });
+  if (errorNotebook.subject) params.set("subject", errorNotebook.subject);
+  if (errorNotebook.reason) params.set("reason", errorNotebook.reason);
+  try {
+    errorNotebook.data = await api(`/api/study/errors?${params}`);
+    renderErrorNotebook();
+  } catch (error) {
+    root.innerHTML = `<div class="inline-result error">Não foi possível carregar o caderno de erros: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderErrorNotebook() {
+  const root = $("#error-notebook");
+  const data = errorNotebook.data;
+  if (!root || !data) return;
+  const keyOf = row => `${row.sourceId}|${row.number}`;
+  const visible = new Set(data.items.map(keyOf));
+  errorNotebook.selected.forEach(key => { if (!visible.has(key)) errorNotebook.selected.delete(key); });
+  const option = (value, label, current) => `<option value="${escapeHtml(value)}" ${value === current ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  const subjects = Object.keys(data.bySubject).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  if (errorNotebook.subject && !subjects.includes(errorNotebook.subject)) subjects.push(errorNotebook.subject);
+  const filters = `<div class="notebook-filters"><label>Situação<select data-notebook-filter="status">${option("pending", "Para refazer", errorNotebook.status)}${option("resolved", "Já resolvidas", errorNotebook.status)}${option("all", "Todas", errorNotebook.status)}</select></label><label>Matéria<select data-notebook-filter="subject">${option("", "Todas", errorNotebook.subject)}${subjects.map(subject => option(subject, subject, errorNotebook.subject)).join("")}</select></label><label>Motivo<select data-notebook-filter="reason">${option("", "Todos", errorNotebook.reason)}${[...ERROR_REASONS, ["blank", "Em branco"], ["guess", "Acertei no chute"]].map(([value, label]) => option(value, label, errorNotebook.reason)).join("")}</select></label></div>`;
+  if (!data.items.length) {
+    root.innerHTML = `${filters}<div class="empty-state"><div class="empty-icon">✎</div><strong>${errorNotebook.status === "resolved" ? "Nenhuma questão resolvida ainda" : "Nenhum erro por aqui"}</strong><p>Os erros e os acertos no chute do Treinamento, dos diagnósticos e das provas aparecem neste caderno.</p></div>`;
+    return;
+  }
+  const rows = data.items.map(row => {
+    const key = keyOf(row);
+    const due = row.dueAt ? new Date(row.dueAt).toLocaleDateString("pt-BR") : "—";
+    const reason = row.guessed && !row.reason ? "Acertei no chute" : (ERROR_REASON_LABELS[row.reason] || "Sem motivo");
+    return `<label class="notebook-row ${row.resolved ? "resolved" : ""}"><input type="checkbox" data-notebook-pick="${escapeHtml(key)}" ${errorNotebook.selected.has(key) ? "checked" : ""}><span class="notebook-main"><span class="notebook-meta"><b>${escapeHtml(row.subject)}</b> · ${escapeHtml(row.contentPath || "Conteúdo não classificado")}</span><span class="notebook-tags"><span class="notebook-reason">${escapeHtml(reason)}</span>${row.misses > 1 ? `<span>errou ${row.misses}×</span>` : ""}<span>volta em ${due}</span>${row.resolved ? `<span class="notebook-ok">resolvida</span>` : ""}${row.explanation === "approved" ? `<span>resolução aprovada</span>` : ""}</span>${row.note ? `<span class="notebook-note">“${escapeHtml(row.note)}”</span>` : ""}</span><span class="notebook-date">${new Date(row.missedAt).toLocaleDateString("pt-BR")}</span></label>`;
+  }).join("");
+  const count = errorNotebook.selected.size;
+  root.innerHTML = `${filters}<div class="notebook-actions"><button type="button" class="text-button" data-notebook-all>${count === data.items.length ? "Desmarcar todas" : "Marcar todas"}</button><button type="button" class="button button-primary" data-notebook-redo ${count ? "" : "disabled"}>Refazer ${count ? `${count} ${count === 1 ? "questão" : "questões"}` : "selecionadas"}</button></div><div class="notebook-list">${rows}</div>`;
+}
+
+async function redoErrorNotebook() {
+  if (!currentStudy?.session) return toast("Aguarde o carregamento da tarefa diária.", true);
+  const refs = [...errorNotebook.selected].map(key => { const [sourceId, number] = key.split("|"); return { sourceId, number: Number(number) }; });
+  if (!refs.length) return;
+  try {
+    const session = await api("/api/study/training/next", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: currentStudy.session.id, questionRefs: refs }),
+    });
+    const added = new Set(session.items.slice(-refs.length).map(item => item.id));
+    Object.assign(currentStudy, { session, lastAnswer: null, selected: null, pendingReason: null, focusIds: added });
+    updateTrainingCounters(session);
+    errorNotebook.selected.clear();
+    renderErrorNotebook();
+    renderToday();
+    $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+    toast(`${added.size} ${added.size === 1 ? "questão entrou" : "questões entraram"} no treino.`);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function bindErrorNotebook() {
+  const root = $("#error-notebook");
+  if (!root) return;
+  root.addEventListener("change", event => {
+    const filter = event.target.closest("[data-notebook-filter]");
+    if (filter) {
+      errorNotebook[filter.dataset.notebookFilter] = filter.value;
+      return refreshErrorNotebook();
+    }
+    const pick = event.target.closest("[data-notebook-pick]");
+    if (pick) {
+      if (pick.checked) errorNotebook.selected.add(pick.dataset.notebookPick);
+      else errorNotebook.selected.delete(pick.dataset.notebookPick);
+      renderErrorNotebook();
+    }
+  });
+  root.addEventListener("click", event => {
+    if (event.target.closest("[data-notebook-redo]")) redoErrorNotebook();
+    if (event.target.closest("[data-notebook-all]")) {
+      const keys = (errorNotebook.data?.items || []).map(row => `${row.sourceId}|${row.number}`);
+      if (errorNotebook.selected.size === keys.length) errorNotebook.selected.clear();
+      else keys.forEach(key => errorNotebook.selected.add(key));
+      renderErrorNotebook();
+    }
+  });
+  $("#refresh-error-notebook")?.addEventListener("click", refreshErrorNotebook);
 }
 
 async function loadToday() {
@@ -1662,18 +1773,18 @@ function renderToday(workspace = $("#today-workspace")) {
   const result = currentStudy.lastAnswer;
   const submitted = Boolean(result);
   const feedback = submitted
-    ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? (result.confidence === "guess" ? "Acertou no chute: a questão volta para revisão." : "Resposta correta!") : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}${result.rating ? ` (${RATING_LABELS[result.rating]})` : ""}.</div>`
+    ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? (result.confidence === "guess" ? "Acertou no chute: a questão volta para revisão." : "Resposta correta!") : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}${result.rating ? ` (${RATING_LABELS[result.rating]})` : ""}.${followupMessage(result)}</div>`
     : "";
   if (!submitted && !currentStudy.pendingReason) startQuestionClock(`today:${session.id}:${item.id}`);
   const explainContext = { sessionId: session.id, itemId: item.id, courseId: session.courseId };
-  const reasonPanel = currentStudy.pendingReason ? `<div class="reason-row"><label>Qual foi o motivo principal?<select id="today-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="today-confirm-reason">Registrar resposta</button></div>` : "";
+  const reasonPanel = currentStudy.pendingReason ? reasonPickerMarkup("data-today-reason") : "";
   const actions = submitted
     ? `<div class="exam-quiz-actions"><span></span><button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
     : `<div class="exam-quiz-actions"><button class="blank-button ${selected === "" ? "selected" : ""}" id="today-blank" aria-pressed="${selected === ""}">Deixar em branco</button>${answerButtonsMarkup({ blank: selected === "", ready: selected != null && !currentStudy.pendingReason, attr: "data-today-submit" })}</div>`;
   workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span><span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
     <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
-    ${reasonPanel}${feedback}${explainSlot(item.sourceId, item.number, explainContext, submitted ? { mode: "full", open: !result.correct || result.confidence === "guess" } : { mode: "hints" })}${actions}`;
+    ${reasonPanel}${feedback}${submitted && result.summaryContentId && window.studaiExplain ? window.studaiExplain.summarySlot(result.summaryContentId) : ""}${explainSlot(item.sourceId, item.number, explainContext, submitted ? { mode: "full", open: !result.correct || result.confidence === "guess" } : { mode: "hints" })}${actions}`;
   window.studaiExplain?.mount(workspace);
   window.studaiFocus?.attach(workspace, { current: items.indexOf(item) + 1, total: items.length, key: item.id });
   $$("[data-today-option]", workspace).forEach(button => button.addEventListener("click", () => {
@@ -1687,16 +1798,23 @@ function renderToday(workspace = $("#today-workspace")) {
     currentStudy.pendingReason = null;
     renderToday(workspace);
   });
-  $("#today-confirm-reason", workspace)?.addEventListener("click", () => {
-    const reason = $("#today-reason", workspace).value;
-    if (!reason) return toast("Escolha o motivo do erro.", true);
-    submitStudyAnswer(item, currentStudy.selected, reason, currentStudy.pendingExtras);
-  });
+  $$("[data-today-reason]", workspace).forEach(button => button.addEventListener("click", () => {
+    submitStudyAnswer(item, currentStudy.selected, button.dataset.todayReason, { ...currentStudy.pendingExtras, note: reasonNote(workspace) });
+  }));
   $("#today-next", workspace)?.addEventListener("click", () => {
     currentStudy.lastAnswer = null;
     currentStudy.selected = null;
     renderToday(workspace);
   });
+}
+
+function followupMessage(result) {
+  const parts = [];
+  const count = result.followups?.length || 0;
+  if (count && result.reason === "unknown_content") parts.push(`${count === 1 ? "Entrou 1 questão" : `Entraram ${count} questões`} do mesmo assunto logo em seguida.`);
+  else if (count) parts.push("Uma questão parecida entra daqui a pouco no bloco.");
+  if (result.questionReview && ["concept_confusion", "misread", "trap"].includes(result.reason)) parts.push(`Esta questão volta em ${new Date(result.questionReview).toLocaleDateString("pt-BR")}.`);
+  return parts.length ? `<br>${parts.join(" ")}` : "";
 }
 
 async function submitStudyAnswer(item, answer, reason = null, extras = {}) {
@@ -1714,6 +1832,15 @@ async function submitStudyAnswer(item, answer, reason = null, extras = {}) {
       return renderToday();
     }
     currentStudy.submitting = false;
+    if (result.followups?.length) {
+      // As questões de prática entraram na sessão no servidor: recarrega a lista de itens.
+      const refreshed = await api(`/api/study/today?courseId=${encodeURIComponent(currentStudy.session.courseId)}`);
+      if (refreshed.id === currentStudy.session.id) {
+        currentStudy.session.items = refreshed.items;
+        item = refreshed.items.find(entry => entry.id === item.id) || item;
+      }
+    }
+    if (!result.correct) refreshErrorNotebook();
     Object.assign(item, { answered: true, selectedAnswer: result.answer, correct: result.correct, correctAnswer: result.correctAnswer });
     currentStudy.session.answered++;
     if (result.correct) currentStudy.session.correct++;
@@ -1845,6 +1972,7 @@ function bindEvents() {
   $("#refresh-exams").addEventListener("click", refreshExams);
   $("#refresh-diagnostics").addEventListener("click", refreshDiagnostics);
   $("#refresh-today").addEventListener("click", refreshToday);
+  bindErrorNotebook();
   $("#training-course").addEventListener("change", () => {
     try { localStorage.setItem("studai-today-course", $("#training-course").value); } catch {}
     renderTrainingSubjects();

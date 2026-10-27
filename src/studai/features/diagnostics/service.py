@@ -40,10 +40,13 @@ STOP_MIN_AREA_ANSWERS = 2
 STOP_GAP_UPPER = 0.55
 STOP_STRONG_LOWER = 0.5
 MODES = {"static", "adaptive", "exam"}
-REASONS = {"unknown_content", "calc_error", "misread", "blank"}
-ACTIONS = {"theory", "calculation_practice", "interpretation_practice", "review"}
-ACTION_BY_REASON = {"unknown_content": "theory", "calc_error": "calculation_practice",
-                    "misread": "interpretation_practice", "blank": "review"}
+# Motivo do erro informado pelo aluno (v4 acrescentou concept_confusion, trap e time_pressure).
+REASONS = {"unknown_content", "concept_confusion", "calc_error", "misread", "trap", "time_pressure", "blank"}
+ACTIONS = {"theory", "concept_review", "calculation_practice", "interpretation_practice", "distractor_practice",
+           "pace_practice", "review"}
+ACTION_BY_REASON = {"unknown_content": "theory", "concept_confusion": "concept_review",
+                    "calc_error": "calculation_practice", "misread": "interpretation_practice",
+                    "trap": "distractor_practice", "time_pressure": "pace_practice", "blank": "review"}
 CONFIDENCES = ("sure", "doubt", "guess")
 MAX_ELAPSED_MS = 30 * 60 * 1000
 MAX_HINTS = 3
@@ -684,7 +687,7 @@ def grade_answer(answer: str | None, alternatives: dict, correct_answer: str,
     elif reason is None and not require_reason:
         pass
     elif reason not in REASONS - {"blank"}:
-        raise ValueError("resposta incorreta exige motivo: unknown_content, calc_error ou misread")
+        raise ValueError("resposta incorreta exige motivo: " + ", ".join(sorted(REASONS - {"blank"})))
     return answer, correct, reason
 
 
@@ -881,11 +884,11 @@ def analyze(provider, metrics: dict, profile: dict) -> tuple[dict | None, str | 
     system = ("Você interpreta resultados de um diagnóstico FUVEST e propõe um caminho inicial de estudo. "
               "Os números recebidos já foram calculados pelo programa: não os recalcule, altere ou infira dados. "
               "Não conclua nada sobre matérias com status insufficient_data. "
-              "Use ações apenas theory, calculation_practice, interpretation_practice ou review. "
-              "Associe unknown_content a theory, calc_error a calculation_practice, "
-              "misread a interpretation_practice e blank a review. "
+              "Use ações apenas " + ", ".join(sorted(ACTIONS)) + ". "
+              "Associe cada motivo a uma ação: "
+              + ", ".join(f"{reason} a {action}" for reason, action in sorted(ACTION_BY_REASON.items())) + ". "
               "Devolva JSON sem markdown: {\"summary\": texto, \"steps\": [{\"subject\": matéria, "
-              "\"action\": ação, \"reason_code\": unknown_content|calc_error|misread|blank, "
+              "\"action\": ação, \"reason_code\": " + "|".join(sorted(REASONS)) + ", "
               "\"rationale\": texto, \"exit_criterion\": critério mensurável com número}]}.")
     user = json.dumps({"course": profile["nome"], "configured_course_weights": profile["pesos"],
                        "course_specific_subjects": profile.get("disciplinas_especificas", []),

@@ -17,7 +17,7 @@
   };
   const TIER_LABEL = ["matéria", "área", "conteúdo", "subconteúdo"];
   const KIND_LABEL = { diagnostic: "Diagnóstico", exam: "Prova", daily: "Hoje" };
-  const REASONS = { unknown_content: "Não sabia o conteúdo", calc_error: "Erro de cálculo", misread: "Interpretação", blank: "Em branco" };
+  const REASONS = { unknown_content: "Não sabia o conteúdo", concept_confusion: "Confundiu um detalhe", calc_error: "Erro de cálculo", misread: "Interpretação", trap: "Pegadinha", time_pressure: "Faltou tempo", blank: "Em branco" };
   const BASE_RADIUS = [22, 12, 7.5, 4.5];
   const LINK_LENGTH = [0, 120, 58, 30];
   const LABEL_ZOOM = [0, 0.35, 1.1, 2.2];
