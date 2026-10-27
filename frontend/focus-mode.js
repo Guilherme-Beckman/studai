@@ -9,13 +9,13 @@
 // `current`/`total` alimentam "Questão X de N"; `key` identifica a questão exibida
 // (muda => a nova questão entra deslizando). Sem `current`, não há questão na tela.
 (() => {
-  const OPTION = "[data-exam-option], [data-today-option], [data-answer]";
-  const SUBMIT = "[data-exam-submit], #today-submit, #diagnostic-submit";
+  const OPTION = "[data-exam-option], [data-today-option], [data-answer], [data-sim-option]";
+  const SUBMIT = "[data-exam-submit], [data-today-submit], [data-diagnostic-submit]";
   const CONFIRM = "#confirm-reason, #today-confirm-reason";
-  const NEXT = "[data-exam-next], #today-next";
-  const PREV = "[data-exam-prev]";
+  const NEXT = "[data-exam-next], #today-next, [data-sim-next]";
+  const PREV = "[data-exam-prev], [data-sim-prev]";
   const FEEDBACK = ".exam-answer-feedback, .exam-reason-prompt, .reason-row:not(.hidden)";
-  const HINT = "A–E escolher · Enter confirmar · ←/→ navegar · Esc sair";
+  const HINT = "A–E escolher · 1/2/3 certeza/dúvida/chute · 1–6 motivo do erro · Enter confirmar · ←/→ navegar · Esc sair";
 
   const state = {
     workspace: null, overlay: null, stage: null, placeholder: null, observer: null,
@@ -25,7 +25,7 @@
   const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const usable = el => Boolean(el) && !el.disabled && !el.closest(".hidden");
   const find = selector => [...(state.workspace?.querySelectorAll(selector) || [])].find(usable) || null;
-  const optionLetter = button => button.dataset.examOption || button.dataset.todayOption || button.dataset.answer || "";
+  const optionLetter = button => button.dataset.examOption || button.dataset.todayOption || button.dataset.answer || button.dataset.simOption || "";
 
   function buildOverlay() {
     const overlay = document.createElement("div");
@@ -195,7 +195,8 @@
   function choose(letter) {
     const option = [...state.workspace.querySelectorAll(OPTION)].find(button => usable(button) && optionLetter(button) === letter);
     if (!option) return;
-    if (state.workspace.querySelector(SUBMIT)) { option.click(); return; } // fluxo com botão "Responder"
+    // Fluxo com botão "Responder", ou simulado (marcar já grava e pode ser trocado).
+    if (state.workspace.querySelector(SUBMIT) || option.matches("[data-sim-option]")) { option.click(); return; }
     // Diagnóstico: escolher já salva a resposta, então a letra só pré-seleciona e o Enter confirma.
     state.workspace.querySelectorAll(".focus-preselected").forEach(el => el.classList.remove("focus-preselected"));
     option.classList.add("focus-preselected");
@@ -219,6 +220,11 @@
     if (typing) return;
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       const action = find(event.key === "ArrowRight" ? NEXT : PREV);
+      if (action) { event.preventDefault(); action.click(); }
+      return;
+    }
+    if (/^[1-9]$/.test(event.key)) {
+      const action = find(`[data-confidence-key="${event.key}"]`) || find(`[data-reason-key="${event.key}"]`);
       if (action) { event.preventDefault(); action.click(); }
       return;
     }

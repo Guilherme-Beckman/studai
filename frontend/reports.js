@@ -20,7 +20,7 @@
   };
   const LEVEL_LABEL = { subject: "matéria", area: "área", content: "conteúdo", leaf: "subtópico" };
   const KIND_LABEL = { diagnostic: "Diagnóstico", exam: "Prova completa" };
-  const REASONS = { unknown_content: "Não sabia o conteúdo", calc_error: "Erro de cálculo", misread: "Interpretação", blank: "Em branco" };
+  const REASONS = { unknown_content: "Não sabia o conteúdo", concept_confusion: "Confundiu um detalhe", calc_error: "Erro de cálculo", misread: "Interpretação", trap: "Pegadinha", time_pressure: "Faltou tempo", blank: "Em branco" };
   const STATUS_FILTERS = [["all", "Todos"], ["gap", "Lacunas"], ["uncertain", "Incertos"], ["strong", "Fortes"], ["untested", "Não testados"]];
   const SORTS = [["priority", "Prioridade"], ["mastery", "Domínio (menor primeiro)"], ["weight", "Peso no curso"]];
 
@@ -425,6 +425,29 @@
     return `<section class="panel rp-panel rp-subjects" aria-labelledby="rp-subjects-title"><div class="rp-panel-head"><div><h2 id="rp-subjects-title">Domínio por matéria</h2><p>Ordenado pelo peso no curso. A barra é o domínio estimado; o traço escuro, o intervalo de 80%. Clique para abrir os conteúdos.</p></div></div><div class="rp-subject-head" aria-hidden="true"><span>Matéria</span><span>Peso</span><span>Domínio · IC 80%</span><span>Situação</span><span>Evolução</span><span>Variação</span></div><div class="rp-subject-list">${rows}</div></section>`;
   }
 
+  // Confiança declarada ao responder: certeza, dúvida, chute e erro, mais o ritmo.
+  const CONFIDENCE_BUCKETS = [["sure", "Certeza"], ["doubt", "Dúvida"], ["guess", "Chute"], ["wrong", "Erro"]];
+  function clock(seconds) {
+    const total = Math.round(seconds);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  }
+  function proficiencyPanel(data) {
+    const subjects = (data?.subjects || []).filter(item => Object.values(item.counts).some(Boolean) || item.timed);
+    if (!subjects.length) return "";
+    const pace = data.paceSeconds;
+    const rows = subjects.map(item => {
+      const total = Object.values(item.counts).reduce((sum, value) => sum + value, 0);
+      const bar = CONFIDENCE_BUCKETS.map(([key, label]) => item.counts[key]
+        ? `<i class="rp-conf-${key}" style="width:${(item.counts[key] / total) * 100}%" title="${label}: ${item.counts[key]}"></i>` : "").join("");
+      const calibration = item.calibration == null ? "—" : pct(item.calibration);
+      const time = item.avgSeconds == null ? "—"
+        : `<span class="${item.avgSeconds > pace ? "rp-over-pace" : ""}">${clock(item.avgSeconds)}</span>${item.overPace ? ` <small>${intFmt(item.overPace)} acima</small>` : ""}`;
+      return `<div class="rp-conf-row"><strong>${esc(item.subject)}</strong><span class="rp-conf-bar" role="img" aria-label="${CONFIDENCE_BUCKETS.map(([key, label]) => `${label} ${item.counts[key]}`).join(", ")}">${bar}</span><span><span class="rp-col-label">Certeza confirmada </span>${calibration}</span><span><span class="rp-col-label">Tempo médio </span>${time}</span></div>`;
+    }).join("");
+    const legend = CONFIDENCE_BUCKETS.map(([key, label]) => `<span><i class="rp-conf-${key}"></i>${label}</span>`).join("");
+    return `<section class="panel rp-panel rp-confidence" aria-labelledby="rp-confidence-title"><div class="rp-panel-head"><div><h2 id="rp-confidence-title">Confiança e ritmo por matéria</h2><p>Como você respondeu: acerto com certeza, com dúvida, no chute ou erro. "Certeza confirmada" é quanto você acerta quando diz ter certeza. O ritmo da 1ª fase é ${clock(pace)} por questão.</p></div><div class="rp-conf-legend">${legend}</div></div><div class="rp-conf-head" aria-hidden="true"><span>Matéria</span><span>Respostas</span><span>Certeza confirmada</span><span>Tempo médio</span></div>${rows}</section>`;
+  }
+
   // ---------------------------------------------------------------- tree
   function matchesStatus(id) {
     if (state.status === "all") return true;
@@ -632,9 +655,9 @@
     const nameEl = document.getElementById("reports-course-name");
     if (nameEl) nameEl.textContent = overview.course?.name ? `${overview.course.name}. Domínio estimado por conteúdo, ponderado pelo peso de cada matéria no curso.` : "Domínio estimado por conteúdo da taxonomia.";
     const timeline = Array.isArray(overview.timeline) ? overview.timeline : [];
-    if (!timeline.length) { root.innerHTML = emptyHtml(overview); return; }
+    if (!timeline.length) { root.innerHTML = emptyHtml(overview) + proficiencyPanel(state.proficiency); return; }
     const report = overview.latest_report ? `<section class="panel rp-panel rp-latest" aria-labelledby="rp-latest-title"><div class="rp-panel-head"><div><h2 id="rp-latest-title">Último relatório de diagnóstico</h2><p>Gerado ao concluir o diagnóstico mais recente.</p></div></div>${renderStudyReport(overview.latest_report, { interactive: true, title: false })}</section>` : "";
-    root.innerHTML = `${weightsNote(overview.course)}${kpiRow(overview.kpis, timeline)}<div class="rp-grid-2">${evolutionPanel(timeline)}${prioritiesPanel(overview)}</div>${subjectsPanel(overview)}<div class="rp-explorer">${treePanel()}<aside class="panel rp-panel rp-detail" id="rp-detail" aria-live="polite" aria-label="Detalhe do conteúdo"></aside></div>${report}`;
+    root.innerHTML = `${weightsNote(overview.course)}${kpiRow(overview.kpis, timeline)}<div class="rp-grid-2">${evolutionPanel(timeline)}${prioritiesPanel(overview)}</div>${subjectsPanel(overview)}${proficiencyPanel(state.proficiency)}<div class="rp-explorer">${treePanel()}<aside class="panel rp-panel rp-detail" id="rp-detail" aria-live="polite" aria-label="Detalhe do conteúdo"></aside></div>${report}`;
     drawEvolution();
     renderTree();
     renderDetail();
@@ -677,8 +700,12 @@
     state.error = null;
     const courseId = state.courseId;
     try {
-      const overview = await fetchJson(`/api/reports/overview?courseId=${encodeURIComponent(courseId)}`);
+      const [overview, proficiency] = await Promise.all([
+        fetchJson(`/api/reports/overview?courseId=${encodeURIComponent(courseId)}`),
+        fetchJson(`/api/study/proficiency?courseId=${encodeURIComponent(courseId)}`).catch(() => null),
+      ]);
       if (courseId !== state.courseId) return;
+      state.proficiency = proficiency;
       const courseChanged = state.overview?.course?.id !== overview?.course?.id;
       state.overview = overview;
       state.maxPriority = Math.max(0, ...Object.values(overview.nodes || {}).map(node => isNum(node.priority) ? node.priority : 0));

@@ -14,13 +14,18 @@ from studai.features.classification.taxonomy import CONTENT_INDEX, aggregate_con
 from studai.features.diagnostics import depth, mastery
 from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
+from studai.features.explanations import service as explanations
 from studai.features.study import scheduler
 
-STUDY_SCHEMA_VERSION = 2
+STUDY_SCHEMA_VERSION = 3
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 GAP_ACCURACY = 0.7
 HALF_LIFE_DAYS = 30
-REASONS = ("overdue_question", "due_content", "new_gap", "new_content")
+REASONS = ("overdue_question", "due_content", "new_gap", "new_content", "followup_practice")
+# O motivo do erro decide o próximo passo: em quantos dias a questão volta...
+REVIEW_DELAY_DAYS = {"concept_confusion": 3, "misread": 3, "trap": 7}
+# ...e quantas questões do mesmo subconteúdo entram na sessão, e onde (posições depois da atual).
+FOLLOWUPS = {"unknown_content": (2, 0), "calc_error": (1, 3)}
 
 
 def connect_db(path: Path) -> sqlite3.Connection:
@@ -67,6 +72,9 @@ def connect_db(path: Path) -> sqlite3.Connection:
             PRIMARY KEY(local_date, course_id)
         );
     """)
+    diagnostics.add_missing_columns(db, "study_answers", diagnostics.ANSWER_EXTRA_COLUMNS)
+    # v3: nota de corte da prova, em número de acertos.
+    diagnostics.add_missing_columns(db, "exam_dates", (("cutoff_correct", "INTEGER"),))
     old = db.execute("SELECT value FROM metadata WHERE key='study_schema_version'").fetchone()
     if old and int(old[0]) > STUDY_SCHEMA_VERSION:
         db.close()
@@ -119,13 +127,13 @@ def _card(db: sqlite3.Connection, kind: str, content_id: str, subject: str, now:
 
 
 def _review(db: sqlite3.Connection, row: sqlite3.Row, correct: bool, at: datetime,
-            origin: str, source_ref: str) -> bool:
+            origin: str, source_ref: str, **grade) -> bool:
     """Aplica uma revisão uma única vez por `source_ref`; devolve False se já existia."""
     if db.execute("SELECT 1 FROM review_logs WHERE source_ref=?", (source_ref,)).fetchone():
         return False
     if row["last_review_at"] and at < _parse(row["last_review_at"]):
         at = _parse(row["last_review_at"])
-    card, log = scheduler.review(json.loads(row["card_json"]), correct, at)
+    card, log = scheduler.review(json.loads(row["card_json"]), correct, at, **grade)
     db.execute("UPDATE review_cards SET card_json=?,due_at=?,last_review_at=? WHERE id=?",
                (json.dumps(card), _iso(scheduler.due_at(card)), _iso(at), row["id"]))
     db.execute("INSERT INTO review_logs(card_id,rating,reviewed_at,origin,source_ref,log_json) "
@@ -134,25 +142,43 @@ def _review(db: sqlite3.Connection, row: sqlite3.Row, correct: bool, at: datetim
     return True
 
 
+def _delay_question(db: sqlite3.Connection, card_id: str, at: datetime, days: int) -> None:
+    """Marca a volta da questão para daqui a ``days`` dias, por cima do que o FSRS decidiu."""
+    row = db.execute("SELECT card_json FROM review_cards WHERE id=?", (card_id,)).fetchone()
+    card = json.loads(row["card_json"])
+    due = at + timedelta(days=days)
+    card["due"] = due.astimezone(timezone.utc).isoformat()
+    db.execute("UPDATE review_cards SET card_json=?,due_at=? WHERE id=?", (json.dumps(card), _iso(due), card_id))
+
+
 def _apply_answer(db: sqlite3.Connection, *, content_id: str, subject: str, source_id: str,
-                  number: int, correct: bool, at: datetime, origin: str, ref: str) -> sqlite3.Row:
-    """Revisa o cartão do conteúdo; erro cria (ou revisa) também o cartão da questão."""
+                  number: int, correct: bool, at: datetime, origin: str, ref: str,
+                  confidence: str | None = None, elapsed_ms: int | None = None,
+                  hints_used: int = 0, reason: str | None = None) -> sqlite3.Row:
+    """Revisa o cartão do conteúdo; erro ou chute cria (ou revisa) também o cartão da questão.
+
+    Alguns motivos de erro (``REVIEW_DELAY_DAYS``) fixam em quantos dias a questão volta.
+    """
+    grade = {"confidence": confidence, "elapsed_ms": elapsed_ms, "hints_used": hints_used or 0}
     content_card = _card(db, "content", content_id, subject, at)
-    _review(db, content_card, correct, at, origin, ref)
+    _review(db, content_card, correct, at, origin, ref, **grade)
     question_card = db.execute("SELECT * FROM review_cards WHERE kind='question' AND content_id=? "
                                "AND source_id=? AND question_number=?",
                                (content_id, source_id, number)).fetchone()
-    if question_card is None and not correct:
+    if question_card is None and (not correct or confidence == "guess"):
         question_card = _card(db, "question", content_id, subject, at, source_id, number)
     if question_card is not None:
-        _review(db, question_card, correct, at, origin, ref + ":q")
+        reviewed = _review(db, question_card, correct, at, origin, ref + ":q", **grade)
+        if reviewed and not correct and reason in REVIEW_DELAY_DAYS:
+            _delay_question(db, question_card["id"], at, REVIEW_DELAY_DAYS[reason])
     return db.execute("SELECT * FROM review_cards WHERE id=?", (content_card["id"],)).fetchone()
 
 
 def sync_diagnostic_answers(db: sqlite3.Connection) -> int:
     """Importa as respostas dos diagnósticos para o agendamento; seguro para repetir."""
     rows = db.execute("""SELECT attempt_id,ordinal,source_id,question_number,subject,question_json,
-        is_correct,answered_at FROM attempt_questions WHERE answered_at IS NOT NULL
+        is_correct,answered_at,confidence,elapsed_ms,hints_used,error_reason FROM attempt_questions
+        WHERE answered_at IS NOT NULL
         ORDER BY answered_at, attempt_id, ordinal""").fetchall()
     imported = 0
     with db:
@@ -165,7 +191,9 @@ def sync_diagnostic_answers(db: sqlite3.Connection) -> int:
                 continue
             _apply_answer(db, content_id=content_id, subject=row["subject"], source_id=row["source_id"],
                           number=int(row["question_number"]), correct=bool(row["is_correct"]),
-                          at=_parse(row["answered_at"]), origin="diagnostic", ref=ref)
+                          at=_parse(row["answered_at"]), origin="diagnostic", ref=ref,
+                          confidence=row["confidence"], elapsed_ms=row["elapsed_ms"],
+                          hints_used=row["hints_used"] or 0, reason=row["error_reason"])
             imported += 1
     return imported
 
@@ -210,15 +238,18 @@ def course_responses(db: sqlite3.Connection, course_id: str) -> list[dict]:
                           "kind": "exam" if row["attempt_mode"] == "exam" else "diagnostic",
                           "source_id": row["source_id"], "number": int(row["question_number"]),
                           "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
-                          "reason": row["error_reason"]})
+                          "reason": row["error_reason"], "note": row["note"]})
     for row in db.execute("""SELECT sa.* FROM study_answers sa JOIN study_sessions s ON s.id = sa.session_id
             WHERE s.course_id = ?""", (course_id,)):
-        responses.append({"correct": bool(row["is_correct"]), "subject": row["subject"],
+        # Como em ``mastery.response_from_row``: acerto no chute não conta como domínio.
+        responses.append({"correct": bool(row["is_correct"]) and row["confidence"] != "guess",
+                          "is_correct": bool(row["is_correct"]), "subject": row["subject"],
                           "principal_id": live_id(row["content_id"]), "related_ids": [],
                           "answered_at": row["answered_at"], "kind": "daily",
                           "source_id": row["source_id"], "number": int(row["question_number"]),
                           "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
-                          "reason": row["error_reason"]})
+                          "reason": row["error_reason"], "confidence": row["confidence"],
+                          "elapsed_ms": row["elapsed_ms"], "note": row["note"]})
     responses.sort(key=lambda response: response["answered_at"] or "")
     return responses
 
@@ -287,12 +318,20 @@ def _item(reason: str, entry: dict, content_id: str) -> dict:
             "question": entry["question"], "correctAnswer": entry["correct_answer"]}
 
 
+def target_phase(db: sqlite3.Connection, course_id: str, now: datetime) -> str | None:
+    """Fase da próxima prova cadastrada do curso (hoje conta), ou ``None`` sem prova."""
+    row = db.execute("SELECT phase FROM exam_dates WHERE course_id=? AND exam_date>=? "
+                     "ORDER BY exam_date, created_at LIMIT 1", (course_id, local_date(now).isoformat())).fetchone()
+    return row["phase"] if row else None
+
+
 def build_plan(db: sqlite3.Connection, pool: list[dict], profile: dict, course_id: str, now: datetime,
                *, size: int = 15, new_per_day: int = 5, recent_days: int = 7) -> list[dict]:
     """Monta as faixas do dia: questões erradas vencidas, conteúdos vencidos e conteúdos novos."""
-    # Pesos efetivos do curso (fórmula FUVEST quando configurada; senão os pesos manuais).
+    # Pesos efetivos do curso para a fase da próxima prova (fórmula FUVEST quando
+    # configurada; senão os pesos manuais).
     try:
-        effective = resolve_weights(profile, pool)["weights"]
+        effective = resolve_weights(profile, pool, target_phase(db, course_id, now))["weights"]
     except ValueError:  # pool vazio: sem incidência para aplicar a fórmula
         effective = profile["pesos"]
     weights = {subject: float(weight) for subject, weight in effective.items() if weight > 0}
@@ -369,12 +408,16 @@ def plan_today(db: sqlite3.Connection, pool: list[dict], config: dict, course_id
 
 def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dict], config: dict,
                         now: datetime, *, subjects: list[str] | None = None, count: int = 1,
-                        content_ids: list[str] | None = None) -> dict:
+                        content_ids: list[str] | None = None,
+                        question_refs: list[tuple[str, int]] | None = None) -> dict:
     """Acrescenta um bloco de questões recomendadas à sessão diária.
 
     ``content_ids`` (do calendário) restringe o bloco às questões desses nós da
     taxonomia; sem questões neles, o bloco usa só o filtro por matéria.
+    ``question_refs`` (do caderno de erros) acrescenta exatamente essas questões.
     """
+    if question_refs:
+        return _append_questions(db, session_id, pool, question_refs)
     if not 1 <= count <= 100:
         raise ValueError("a quantidade deve ficar entre 1 e 100 questões")
     row, existing = _session(db, session_id, pool)
@@ -421,6 +464,32 @@ def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dic
     return session_payload(db, session_id, pool)
 
 
+def _append_questions(db: sqlite3.Connection, session_id: str, pool: list[dict],
+                      refs: list[tuple[str, int]]) -> dict:
+    """Refazer questões escolhidas (caderno de erros), na ordem pedida."""
+    if not 1 <= len(refs) <= 100:
+        raise ValueError("escolha de 1 a 100 questões para refazer")
+    row, existing = _session(db, session_id, pool)
+    by_ref = {(entry["source_id"], int(entry["number"])): entry for entry in pool}
+    plan = json.loads(row["plan_json"])
+    added = 0
+    for source_id, number in dict.fromkeys((str(s), int(n)) for s, n in refs):
+        entry = by_ref.get((source_id, number))
+        content_id = content_id_of(entry["question"]) if entry else None
+        if not content_id:
+            continue
+        candidate = _item("redo", entry, content_id)
+        candidate["id"] = f"t{len(existing) + added + 1}"
+        plan["items"].append(candidate)
+        added += 1
+    if not added:
+        raise ValueError("nenhuma das questões escolhidas está no acervo revisado deste curso")
+    with db:
+        db.execute("UPDATE study_sessions SET plan_json=? WHERE id=?",
+                   (json.dumps(plan, ensure_ascii=False), session_id))
+    return session_payload(db, session_id, pool)
+
+
 def _session(db: sqlite3.Connection, session_id: str,
              pool: list[dict] | None = None) -> tuple[sqlite3.Row, list[dict]]:
     """
@@ -455,7 +524,9 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
         entry.update(question=question, answered=answer is not None)
         if answer:
             entry.update(selectedAnswer=answer["selected_answer"], correct=bool(answer["is_correct"]),
-                         correctAnswer=answer["correct_answer"], errorReason=answer["error_reason"])
+                         correctAnswer=answer["correct_answer"], errorReason=answer["error_reason"],
+                         confidence=answer["confidence"], elapsedMs=answer["elapsed_ms"],
+                         hintsUsed=answer["hints_used"], note=answer["note"])
         payload_items.append(entry)
     counts = Counter(item["reason"] for item in items)
     return {"id": row["id"], "date": row["local_date"], "courseId": row["course_id"],
@@ -465,8 +536,13 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
 
 
 def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, answer: str | None,
-                        reason: str | None, now: datetime, pool: list[dict] | None = None) -> dict:
-    """Registra a resposta do estudo diário e realimenta os cartões."""
+                        reason: str | None, now: datetime, pool: list[dict] | None = None, *,
+                        confidence: str | None = None, elapsed_ms: object = None, hints_used: object = 0,
+                        note: str | None = None) -> dict:
+    """Registra a resposta do estudo diário e realimenta os cartões.
+
+    ``confidence``/``elapsed_ms``/``hints_used`` definem a nota do FSRS (``scheduler.rating_for``).
+    """
     _, items = _session(db, session_id, pool)
     item = next((i for i in items if i["id"] == item_id), None)
     if item is None:
@@ -478,16 +554,88 @@ def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, a
     if normalized and normalized != item["correctAnswer"] and not reason:
         return {"requiresReason": True}
     answer, correct, reason = diagnostics.grade_answer(answer, alternatives, item["correctAnswer"], reason)
+    extras = diagnostics.answer_extras(confidence if answer else None, elapsed_ms, hints_used, note)
     with db:
         db.execute("""INSERT INTO study_answers(session_id,item_id,source_id,question_number,subject,content_id,
-            selected_answer,correct_answer,is_correct,error_reason,answered_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            selected_answer,correct_answer,is_correct,error_reason,answered_at,confidence,elapsed_ms,hints_used,note)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                    (session_id, item_id, item["sourceId"], item["number"], item["subject"], item["contentId"],
-                    answer, item["correctAnswer"], int(correct), reason, _iso(now)))
+                    answer, item["correctAnswer"], int(correct), reason, _iso(now), extras["confidence"],
+                    extras["elapsed_ms"], extras["hints_used"], extras["note"]))
         card = _apply_answer(db, content_id=item["contentId"], subject=item["subject"],
                              source_id=item["sourceId"], number=int(item["number"]), correct=correct,
-                             at=now, origin="daily", ref=f"daily:{session_id}:{item_id}")
+                             at=now, origin="daily", ref=f"daily:{session_id}:{item_id}",
+                             confidence=extras["confidence"], elapsed_ms=extras["elapsed_ms"],
+                             hints_used=extras["hints_used"], reason=reason)
+        followups = _insert_followups(db, session_id, items, item, reason, pool, now) if not correct else []
+    rating = scheduler.rating_for(correct, extras["confidence"], extras["elapsed_ms"], extras["hints_used"])
+    question_card = db.execute("SELECT due_at FROM review_cards WHERE kind='question' AND content_id=? "
+                               "AND source_id=? AND question_number=?",
+                               (item["contentId"], item["sourceId"], int(item["number"]))).fetchone()
     return {"itemId": item_id, "answer": answer, "correct": correct, "reason": reason,
-            "correctAnswer": item["correctAnswer"], "nextReview": card["due_at"]}
+            "correctAnswer": item["correctAnswer"], "nextReview": card["due_at"],
+            "questionReview": question_card["due_at"] if question_card else None,
+            "confidence": extras["confidence"], "rating": scheduler.rating_label(rating),
+            "followups": followups,
+            "summaryContentId": item["contentId"] if reason == "unknown_content" else None}
+
+
+def _followup_entries(db: sqlite3.Connection, pool: list[dict], item: dict, used: set[tuple[str, int]],
+                      count: int, now: datetime) -> list[dict]:
+    """Questões para praticar o mesmo assunto depois de um erro.
+
+    Primeiro o mesmo subconteúdo, depois o conteúdo acima dele; entre elas, as mais
+    fáceis segundo a resolução comentada (sem resolução, contam como médias). Questões
+    respondidas na última semana ficam de fora.
+    """
+    leaf = item["contentId"]
+    parent = depth.content_ancestor(leaf)
+    recent = _recently_answered(db, now - timedelta(days=7))
+    explanations.ensure_schema(db)
+    difficulty = {(row[0], int(row[1])): json.loads(row[2]).get("difficulty", 2) for row in db.execute(
+        "SELECT source_id,question_number,content_json FROM question_explanations WHERE status!='rejected'")}
+    candidates = []
+    for entry in pool:
+        identity = (entry["source_id"], int(entry["number"]))
+        content_id = content_id_of(entry["question"])
+        if identity in used or identity in recent or not content_id:
+            continue
+        if content_id == leaf:
+            tier = 0
+        elif parent != leaf and parent in CONTENT_INDEX[content_id]["path_ids"]:
+            tier = 1
+        else:
+            continue
+        candidates.append((tier, difficulty.get(identity, 2), identity, entry, content_id))
+    candidates.sort(key=lambda candidate: candidate[:3])
+    return [_item("followup_practice", entry, content_id) for *_, entry, content_id in candidates[:count]]
+
+
+def _insert_followups(db: sqlite3.Connection, session_id: str, items: list[dict], item: dict,
+                      reason: str | None, pool: list[dict] | None, now: datetime) -> list[str]:
+    """Põe na sessão as questões de prática que o motivo do erro pede (``FOLLOWUPS``)."""
+    if reason not in FOLLOWUPS or not pool:
+        return []
+    count, offset = FOLLOWUPS[reason]
+    used = {(entry["sourceId"], int(entry["number"])) for entry in items}
+    chosen = _followup_entries(db, pool, item, used, count, now)
+    if not chosen:
+        return []
+    plan = json.loads(db.execute("SELECT plan_json FROM study_sessions WHERE id=?", (session_id,)).fetchone()[0])
+    taken = sum(1 for entry in plan["items"] if entry["id"].startswith("tf"))
+    # Prefixo "t": como os blocos de treino, não conta na tarefa diária.
+    for index, followup in enumerate(chosen, 1):
+        followup["id"] = f"tf{taken + index}"
+    position = next(index for index, entry in enumerate(plan["items"]) if entry["id"] == item["id"]) + 1
+    answered = {row[0] for row in db.execute("SELECT item_id FROM study_answers WHERE session_id=?", (session_id,))}
+    # ``offset`` conta só as questões ainda por responder depois da atual.
+    while offset and position < len(plan["items"]):
+        if plan["items"][position]["id"] not in answered:
+            offset -= 1
+        position += 1
+    plan["items"][position:position] = chosen
+    db.execute("UPDATE study_sessions SET plan_json=? WHERE id=?", (json.dumps(plan, ensure_ascii=False), session_id))
+    return [followup["id"] for followup in chosen]
 
 
 def progress(db: sqlite3.Connection, now: datetime, *, days: int = 7) -> dict:
@@ -540,7 +688,8 @@ def reset_learning_context(db: sqlite3.Connection) -> dict:
         db.execute("DELETE FROM attempts WHERE mode!='exam'")
         # Mantém a tentativa e as questões da prova, removendo apenas respostas e métricas pessoais.
         db.execute("""UPDATE attempt_questions SET selected_answer=NULL,error_reason=NULL,
-            is_correct=NULL,answered_at=NULL WHERE attempt_id IN
+            is_correct=NULL,answered_at=NULL,confidence=NULL,elapsed_ms=NULL,hints_used=0,note=NULL
+            WHERE attempt_id IN
             (SELECT id FROM attempts WHERE mode='exam')""")
         db.execute("""UPDATE attempts SET status='in_progress',metrics_json=NULL,analysis_json=NULL,
             analysis_status=NULL,analysis_error=NULL WHERE mode='exam'""")

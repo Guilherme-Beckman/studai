@@ -19,6 +19,7 @@ from collections import Counter
 
 FORMULAS = {"fuvest-2027"}
 REDACAO = "Redação"
+FIRST_PHASE = "fase1"
 PORTUGUESE = ("Língua Portuguesa", "Literatura")
 
 
@@ -68,11 +69,21 @@ def derive_subject_weights(profile: dict, counts: dict[str, int]) -> dict:
             "formula": formula, "first_phase_sample": total}
 
 
-def resolve_weights(profile: dict, pool: list[dict]) -> dict:
-    """Pesos efetivos do curso: fórmula FUVEST quando configurada, senão ``pesos`` manuais."""
+def resolve_weights(profile: dict, pool: list[dict], phase: str | None = None) -> dict:
+    """Pesos efetivos do curso: fórmula FUVEST quando configurada, senão ``pesos`` manuais.
+
+    Com ``phase="fase1"`` e a fórmula FUVEST, os pesos são só o componente F1: na
+    1ª fase cada questão vale 1 ponto, então o peso da 2ª fase (D1, D2) não conta.
+    """
     if profile.get("formula"):
-        return derive_subject_weights(profile, subject_counts(pool))
+        resolved = derive_subject_weights(profile, subject_counts(pool))
+        if phase == FIRST_PHASE:
+            first = {s: c["f1"] for s, c in resolved["components"].items() if c["f1"] > 0}
+            total = sum(first.values())
+            resolved["weights"] = {s: round(v / total, 4) for s, v in first.items()}
+        return {**resolved, "phase": phase}
     manual = {s: float(v) for s, v in profile["pesos"].items()}
     total = sum(manual.values())
     return {"weights": {s: round(v / total, 4) for s, v in manual.items()}, "raw": manual,
-            "components": {}, "non_assessable": {}, "formula": None, "first_phase_sample": None}
+            "components": {}, "non_assessable": {}, "formula": None, "first_phase_sample": None,
+            "phase": phase}

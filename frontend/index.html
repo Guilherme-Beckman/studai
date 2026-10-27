@@ -15,6 +15,7 @@
     <aside class="sidebar">
       <button class="nav-item" data-view="training"><span>✦</span> Treinamento</button>
       <button class="nav-item" data-view="calendar"><span>◷</span> Calendário</button>
+      <button class="nav-item" data-view="readings"><span>❧</span> Leituras</button>
       <button class="nav-item active" data-view="overview"><span>⌂</span> Visão geral</button>
       <button class="nav-item" data-view="process"><span>↥</span> Processar prova</button>
       <button class="nav-item" data-view="exams"><span>▤</span> Provas e gabaritos</button>
@@ -54,8 +55,14 @@
           <p class="training-block-status" id="training-block-status" role="status">Nenhum bloco extra adicionado ainda.</p>
         </div>
         <div id="today-workspace" class="panel diagnostic-workspace"><div class="loading-card">Carregando sua tarefa diária…</div></div>
+        <div class="panel error-notebook"><div class="panel-heading"><span class="step-number step-violet">✎</span><div><h2>Caderno de erros</h2><p>As questões que você errou ou acertou no chute, com o motivo e a sua anotação. Escolha algumas para refazer.</p></div><button class="icon-button" id="refresh-error-notebook" title="Atualizar">↻</button></div><div id="error-notebook"></div></div>
         <div class="panel today-progress"><div class="panel-heading"><span class="step-number step-green">◷</span><div><h2>Domínio por conteúdo</h2><p>Veja o que já consolidou e quais conteúdos precisam de reforço.</p></div><button class="icon-button" id="refresh-today" title="Atualizar">↻</button></div><div id="today-progress"></div></div>
         <div class="learning-reset-panel"><div><strong>Resetar contexto de aprendizado</strong><p>Apaga progresso, respostas e diagnósticos. Mantém provas, questões, gabaritos e configurações.</p></div><button class="button button-danger" id="reset-learning-context" type="button">Resetar meu contexto</button></div>
+      </section>
+
+      <section class="view" id="view-readings">
+        <div class="page-heading reports-heading"><div><h1>Leituras obrigatórias</h1><p class="muted">As obras da lista da FUVEST: o que já leu, suas anotações e as questões de cada obra.</p></div><label class="reports-course-picker">Curso<select id="readings-course" aria-label="Curso das leituras"><option value="">Carregando cursos…</option></select></label></div>
+        <div id="readings-root" class="readings-root"><div class="loading-card">Carregando as leituras…</div></div>
       </section>
 
       <section class="view" id="view-calendar">
@@ -116,8 +123,10 @@
   <div id="toast" class="toast" role="status"></div>
   <script src="/focus-mode.js" defer></script>
   <script src="/app.js" defer></script>
+  <script src="/explanations.js" defer></script>
   <script src="/reports.js" defer></script>
   <script src="/calendar.js" defer></script>
+  <script src="/readings.js" defer></script>
   <script src="/knowledge-map.js" defer></script>
   <script src="/crop-editor.js" defer></script>
 </body>

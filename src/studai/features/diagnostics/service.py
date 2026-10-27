@@ -28,7 +28,7 @@ from studai.features.classification.taxonomy import (
     CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, aggregate_content_ids,
 )
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_STATIC_TOTAL = 51
 DEFAULT_ADAPTIVE_TOTAL = 30
 MAX_ADAPTIVE_TOTAL = 51
@@ -40,10 +40,20 @@ STOP_MIN_AREA_ANSWERS = 2
 STOP_GAP_UPPER = 0.55
 STOP_STRONG_LOWER = 0.5
 MODES = {"static", "adaptive", "exam"}
-REASONS = {"unknown_content", "calc_error", "misread", "blank"}
-ACTIONS = {"theory", "calculation_practice", "interpretation_practice", "review"}
-ACTION_BY_REASON = {"unknown_content": "theory", "calc_error": "calculation_practice",
-                    "misread": "interpretation_practice", "blank": "review"}
+# Motivo do erro informado pelo aluno (v4 acrescentou concept_confusion, trap e time_pressure).
+REASONS = {"unknown_content", "concept_confusion", "calc_error", "misread", "trap", "time_pressure", "blank"}
+ACTIONS = {"theory", "concept_review", "calculation_practice", "interpretation_practice", "distractor_practice",
+           "pace_practice", "review"}
+ACTION_BY_REASON = {"unknown_content": "theory", "concept_confusion": "concept_review",
+                    "calc_error": "calculation_practice", "misread": "interpretation_practice",
+                    "trap": "distractor_practice", "time_pressure": "pace_practice", "blank": "review"}
+CONFIDENCES = ("sure", "doubt", "guess")
+MAX_ELAPSED_MS = 30 * 60 * 1000
+MAX_HINTS = 3
+MAX_NOTE_LENGTH = 1000
+# Colunas extras de cada resposta (v4): confiança, tempo gasto, dicas usadas e anotação.
+ANSWER_EXTRA_COLUMNS = (("confidence", "TEXT"), ("elapsed_ms", "INTEGER"),
+                        ("hints_used", "INTEGER NOT NULL DEFAULT 0"), ("note", "TEXT"))
 ALIASES = {
     "arte": "artes", "artes": "arte", "portugues": "lingua portuguesa",
     "lingua portuguesa": "lingua portuguesa", "educacao fisica": "educacao fisica",
@@ -84,6 +94,14 @@ def course_profile(config: dict, course_id: str) -> dict:
     return profile
 
 
+def add_missing_columns(db: sqlite3.Connection, table: str, declarations: tuple[tuple[str, str], ...]) -> None:
+    """Migração aditiva: acrescenta à tabela as colunas que ainda não existem."""
+    columns = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+    for name, declaration in declarations:
+        if name not in columns:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {declaration}")
+
+
 def connect_db(path: Path) -> sqlite3.Connection:
     db = connect_sqlite(path)
     db.executescript("""
@@ -121,6 +139,7 @@ def connect_db(path: Path) -> sqlite3.Connection:
     if "mode" not in attempt_columns:
         # v3: origem da tentativa (diagnóstico estático/adaptativo ou prova completa).
         db.execute("ALTER TABLE attempts ADD COLUMN mode TEXT NOT NULL DEFAULT 'static'")
+    add_missing_columns(db, "attempt_questions", ANSWER_EXTRA_COLUMNS + (("flagged", "INTEGER NOT NULL DEFAULT 0"),))
     old = db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
     if old and int(old[0]) > SCHEMA_VERSION:
         db.close()
@@ -668,12 +687,42 @@ def grade_answer(answer: str | None, alternatives: dict, correct_answer: str,
     elif reason is None and not require_reason:
         pass
     elif reason not in REASONS - {"blank"}:
-        raise ValueError("resposta incorreta exige motivo: unknown_content, calc_error ou misread")
+        raise ValueError("resposta incorreta exige motivo: " + ", ".join(sorted(REASONS - {"blank"})))
     return answer, correct, reason
 
 
+def answer_extras(confidence: str | None = None, elapsed_ms: object = None, hints_used: object = 0,
+                  note: str | None = None) -> dict:
+    """Valida os dados extras de uma resposta.
+
+    ``confidence`` é ``sure``/``doubt``/``guess`` (ou vazio); ``elapsed_ms`` é limitado a
+    30 min, para não contar uma aba esquecida aberta; ``note`` é a anotação livre do aluno.
+    """
+    confidence = (confidence or "").strip().lower() or None
+    if confidence is not None and confidence not in CONFIDENCES:
+        raise ValueError("confiança deve ser sure, doubt ou guess")
+    if elapsed_ms is not None:
+        if isinstance(elapsed_ms, bool):
+            raise ValueError("tempo da resposta inválido")
+        try:
+            elapsed_ms = int(float(elapsed_ms))
+        except (TypeError, ValueError):
+            raise ValueError("tempo da resposta inválido") from None
+        if elapsed_ms < 0:
+            raise ValueError("tempo da resposta não pode ser negativo")
+        elapsed_ms = min(elapsed_ms, MAX_ELAPSED_MS)
+    if isinstance(hints_used, bool) or not isinstance(hints_used, (int, float)) or not 0 <= hints_used <= MAX_HINTS:
+        raise ValueError(f"dicas usadas devem ficar entre 0 e {MAX_HINTS}")
+    note = (note or "").strip() or None
+    if note is not None and len(note) > MAX_NOTE_LENGTH:
+        raise ValueError(f"a anotação deve ter até {MAX_NOTE_LENGTH} caracteres")
+    return {"confidence": confidence, "elapsed_ms": elapsed_ms, "hints_used": int(hints_used), "note": note}
+
+
 def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
-                    answer: str | None, reason: str | None = None, *, require_reason: bool = True) -> dict:
+                    answer: str | None, reason: str | None = None, *, require_reason: bool = True,
+                    confidence: str | None = None, elapsed_ms: object = None, hints_used: object = 0,
+                    note: str | None = None) -> dict:
     """Registra a resposta e informa a próxima questão.
 
     Resultado: ``{"ordinal", "answer", "correct", "reason", "next_ordinal",
@@ -689,18 +738,21 @@ def record_response(db: sqlite3.Connection, attempt_id: str, ordinal: int,
     alternatives = json.loads(row["question_json"]).get("alternativas", {})
     answer, correct, reason = grade_answer(answer, alternatives, row["correct_answer"], reason,
                                            require_reason=require_reason)
+    extras = answer_extras(confidence if answer else None, elapsed_ms, hints_used, note)
     mode_row = db.execute("SELECT mode FROM attempts WHERE id=?", (attempt_id,)).fetchone()
     with db:
-        db.execute("UPDATE attempt_questions SET selected_answer=?,error_reason=?,is_correct=?,answered_at=? "
-                   "WHERE attempt_id=? AND ordinal=?",
-                   (answer, reason, int(correct), datetime.now(timezone.utc).isoformat(), attempt_id, ordinal))
+        db.execute("UPDATE attempt_questions SET selected_answer=?,error_reason=?,is_correct=?,answered_at=?,"
+                   "confidence=?,elapsed_ms=?,hints_used=?,note=? WHERE attempt_id=? AND ordinal=?",
+                   (answer, reason, int(correct), datetime.now(timezone.utc).isoformat(), extras["confidence"],
+                    extras["elapsed_ms"], extras["hints_used"], extras["note"], attempt_id, ordinal))
         if mode_row and mode_row["mode"] == "adaptive":
             progress = _advance_adaptive(db, attempt_id)
         else:
             pending = db.execute("SELECT MIN(ordinal) FROM attempt_questions WHERE attempt_id=? "
                                  "AND answered_at IS NULL", (attempt_id,)).fetchone()[0]
             progress = {"next_ordinal": pending, "done": pending is None}
-    return {"ordinal": ordinal, "answer": answer, "correct": bool(correct), "reason": reason, **progress}
+    return {"ordinal": ordinal, "answer": answer, "correct": bool(correct), "reason": reason,
+            "confidence": extras["confidence"], **progress}
 
 
 def attempt_weights(attempt: dict) -> dict:
@@ -832,11 +884,11 @@ def analyze(provider, metrics: dict, profile: dict) -> tuple[dict | None, str | 
     system = ("Você interpreta resultados de um diagnóstico FUVEST e propõe um caminho inicial de estudo. "
               "Os números recebidos já foram calculados pelo programa: não os recalcule, altere ou infira dados. "
               "Não conclua nada sobre matérias com status insufficient_data. "
-              "Use ações apenas theory, calculation_practice, interpretation_practice ou review. "
-              "Associe unknown_content a theory, calc_error a calculation_practice, "
-              "misread a interpretation_practice e blank a review. "
+              "Use ações apenas " + ", ".join(sorted(ACTIONS)) + ". "
+              "Associe cada motivo a uma ação: "
+              + ", ".join(f"{reason} a {action}" for reason, action in sorted(ACTION_BY_REASON.items())) + ". "
               "Devolva JSON sem markdown: {\"summary\": texto, \"steps\": [{\"subject\": matéria, "
-              "\"action\": ação, \"reason_code\": unknown_content|calc_error|misread|blank, "
+              "\"action\": ação, \"reason_code\": " + "|".join(sorted(REASONS)) + ", "
               "\"rationale\": texto, \"exit_criterion\": critério mensurável com número}]}.")
     user = json.dumps({"course": profile["nome"], "configured_course_weights": profile["pesos"],
                        "course_specific_subjects": profile.get("disciplinas_especificas", []),

@@ -29,9 +29,15 @@ from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
+from studai.features.explanations import service as explanations
+from studai.features.explanations import summaries as content_summaries
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
+from studai.features.reports import simulado
 from studai.features.study import calendar as study_calendar
+from studai.features.study import error_notebook
+from studai.features.study import proficiency as study_proficiency
+from studai.features.study import readings
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import manual_crop, source_pdf
@@ -918,6 +924,12 @@ def _study_today(course_id: str) -> dict:
         db.close()
 
 
+def _answer_extras(body: dict) -> dict:
+    """Campos extras da resposta no corpo HTTP (``diagnostics.answer_extras`` valida)."""
+    return {"confidence": body.get("confidence"), "elapsed_ms": body.get("elapsedMs"),
+            "hints_used": body.get("hintsUsed") or 0, "note": body.get("note")}
+
+
 def _study_answer(body: dict) -> dict:
     session_id = str(body.get("sessionId") or "")
     db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
@@ -929,7 +941,8 @@ def _study_answer(body: dict) -> dict:
             config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
             pool = _study_pool(db, config, row["course_id"])
         return study.record_study_answer(db, session_id, str(body.get("itemId") or ""), body.get("answer"),
-                                         body.get("reason"), datetime.now(timezone.utc), pool)
+                                         body.get("reason"), datetime.now(timezone.utc), pool,
+                                         **_answer_extras(body))
     finally:
         db.close()
 
@@ -957,8 +970,15 @@ def _study_training_next(body: dict) -> dict:
         if content_ids is not None and (not isinstance(content_ids, list)
                                         or any(not isinstance(value, str) for value in content_ids)):
             raise ValueError("conteúdos deve ser uma lista")
+        refs = body.get("questionRefs")
+        if refs is not None:
+            try:
+                refs = [(str(ref["sourceId"]), int(ref["number"])) for ref in refs]
+            except (KeyError, TypeError, ValueError):
+                raise ValueError("questionRefs deve ser uma lista de {sourceId, number}") from None
         return study.append_training_item(db, session_id, pool, config, datetime.now(timezone.utc),
-                                          subjects=subjects, count=count, content_ids=content_ids)
+                                          subjects=subjects, count=count, content_ids=content_ids,
+                                          question_refs=refs)
     finally:
         db.close()
 
@@ -983,7 +1003,8 @@ def _calendar_add_exam(body: dict) -> dict:
     db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
     try:
         return study_calendar.add_exam(db, course_id, body.get("name"), body.get("date"),
-                                       str(body.get("phase") or "fase1"), datetime.now(timezone.utc))
+                                       str(body.get("phase") or "fase1"), datetime.now(timezone.utc),
+                                       body.get("cutoff"))
     finally:
         db.close()
 
@@ -1172,6 +1193,172 @@ def _reports_pool(db, config: dict, course_id: str) -> list[dict]:
     return pool
 
 
+# ---- Resoluções comentadas: geradas em segundo plano, uma tarefa por questão.
+EXPLANATION_JOBS: dict[tuple, str] = {}
+EXPLANATION_PROVIDERS: dict[str, tuple[float, object]] = {}
+EXPLANATION_LOCK = threading.Lock()
+EXPLANATION_MAX_TOKENS = 8000  # o gpt-oss gasta parte disso raciocinando antes do JSON
+
+
+def _explanations_provider():
+    """Provedor das resoluções (``STUDAI_EXPLANATIONS_PROVIDER``; padrão: faixas grátis de nuvem)."""
+    load_dotenv(SERVICE_ROOT / ".env")
+    name = os.environ.get("STUDAI_EXPLANATIONS_PROVIDER", "pool").strip() or "pool"
+    with EXPLANATION_LOCK:
+        cached = EXPLANATION_PROVIDERS.get(name)
+        if cached and time.monotonic() - cached[0] < SHARED_POOL_TTL_SECONDS:
+            return cached[1]
+    if name == "pool":
+        provider = _pool_provider({"useOllama": "false", "useFreeCloud": "true"}, max_tokens=EXPLANATION_MAX_TOKENS)
+    else:
+        provider = _provider({"provider": name}, max_tokens=EXPLANATION_MAX_TOKENS)
+    with EXPLANATION_LOCK:
+        EXPLANATION_PROVIDERS[name] = (time.monotonic(), provider)
+    return provider
+
+
+def _question_entry(db, config: dict, course_id: str, source_id: str, number: int) -> dict:
+    entry = next((item for item in _reports_pool(db, config, course_id)
+                  if item["source_id"] == source_id and int(item["number"]) == int(number)), None)
+    if entry is None:
+        raise reports.NotFound("questão fora do acervo revisado deste curso")
+    return entry
+
+
+def _explanation_job_running(key: tuple) -> str | None:
+    job_id = EXPLANATION_JOBS.get(key)
+    with JOBS_LOCK:
+        job = JOBS.get(job_id or "")
+        return job_id if job and job["status"] in ("queued", "running") else None
+
+
+def _start_explanation_job(course_id: str, source_id: str, number: int) -> str:
+    key = (source_id, int(number))
+    with EXPLANATION_LOCK:
+        running = _explanation_job_running(key)
+        if running:
+            return running
+
+        def task(cancelled, job_id):
+            config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+            db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+            try:
+                entry = _question_entry(db, config, course_id, source_id, number)
+                record = explanations.get_explanation(db, source_id, number)
+                feedback = record["feedback"] if record and record["status"] == "rejected" else None
+                _set_job(job_id, stage="generating", message="Gerando a resolução comentada")
+                explanations.generate_explanation(db, entry, _explanations_provider(), feedback=feedback)
+                return {"sourceId": source_id, "number": int(number)}
+            finally:
+                db.close()
+
+        job_id = _submit_job(f"Resolução {source_id} Q{number}", task)
+        EXPLANATION_JOBS[key] = job_id
+        return job_id
+
+
+def _explanation_context(query: dict) -> dict:
+    value = lambda name: (query.get(name) or [None])[0]
+    ordinal = value("ordinal")
+    return {"session_id": value("sessionId"), "item_id": value("itemId"), "attempt_id": value("attemptId"),
+            "ordinal": int(ordinal) if ordinal not in (None, "") else None}
+
+
+def _explanation_get(source_id: str, number: int, query: dict) -> tuple[int, dict]:
+    course_id = _report_course_id(query)
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        record = explanations.get_explanation(db, source_id, number)
+        if explanations.needs_generation(record):
+            return 202, {"status": "generating", "jobId": _start_explanation_job(course_id, source_id, number)}
+        answered = explanations.question_answered(db, source_id, number, **_explanation_context(query))
+        try:
+            hints = int((query.get("hints") or ["0"])[0])
+        except ValueError:
+            raise ValueError("hints deve ser um número de 0 a 3") from None
+        return 200, explanations.public_payload(record, answered=answered, hints=hints)
+    finally:
+        db.close()
+
+
+def _explanation_review(source_id: str, number: int, body: dict) -> dict:
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        if not explanations.question_answered(db, source_id, number):
+            raise ValueError("responda à questão antes de revisar a resolução")
+        record = explanations.review_explanation(db, source_id, number, bool(body.get("approved")),
+                                                 body.get("feedback"))
+    finally:
+        db.close()
+    if record["status"] == "rejected":
+        return {"status": "generating", "jobId": _start_explanation_job(
+            _report_course_id({}, body), source_id, number)}
+    return {"status": record["status"]}
+
+
+def _prefetch_explanations(body: dict) -> dict:
+    """Adianta, em segundo plano, as resoluções das questões ainda sem resposta na sessão do dia."""
+    session_id = str(body.get("sessionId") or "")
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        row = db.execute("SELECT course_id FROM study_sessions WHERE id=?", (session_id,)).fetchone()
+        if row is None:
+            raise ValueError("sessão de estudo não encontrada")
+        course_id = row["course_id"]
+        answered = {r[0] for r in db.execute("SELECT item_id FROM study_answers WHERE session_id=?", (session_id,))}
+        items = json.loads(db.execute("SELECT plan_json FROM study_sessions WHERE id=?",
+                                      (session_id,)).fetchone()[0])["items"]
+        missing = [(item["sourceId"], int(item["number"])) for item in items if item["id"] not in answered
+                   and explanations.needs_generation(explanations.get_explanation(db, item["sourceId"], item["number"]))]
+    finally:
+        db.close()
+    jobs = [_start_explanation_job(course_id, source_id, number) for source_id, number in missing]
+    return {"queued": len(jobs), "jobIds": jobs}
+
+
+def _start_summary_job(content_id: str) -> str:
+    key = ("summary", content_id)
+    with EXPLANATION_LOCK:
+        running = _explanation_job_running(key)
+        if running:
+            return running
+
+        def task(cancelled, job_id):
+            db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+            try:
+                _set_job(job_id, stage="generating", message="Gerando o mini-resumo")
+                content_summaries.generate_summary(db, content_id, _explanations_provider())
+                return {"contentId": content_id}
+            finally:
+                db.close()
+
+        job_id = _submit_job(f"Mini-resumo {content_id}", task)
+        EXPLANATION_JOBS[key] = job_id
+        return job_id
+
+
+def _summary_get(content_id: str) -> tuple[int, dict]:
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        record = content_summaries.get_summary(db, content_id)
+        if content_summaries.needs_generation(record):
+            return 202, {"status": "generating", "jobId": _start_summary_job(content_id)}
+        return 200, content_summaries.public_payload(record)
+    finally:
+        db.close()
+
+
+def _summary_review(content_id: str, body: dict) -> dict:
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        record = content_summaries.review_summary(db, content_id, bool(body.get("approved")), body.get("feedback"))
+    finally:
+        db.close()
+    if record["status"] == "rejected":
+        return {"status": "generating", "jobId": _start_summary_job(content_id)}
+    return {"status": record["status"]}
+
+
 def _report_course_id(query: dict, body: dict | None = None) -> str:
     value = (body or {}).get("courseId") or (query.get("courseId") or [""])[0]
     return str(value or reports.DEFAULT_COURSE_ID)
@@ -1220,6 +1407,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        # Aplicação local: o navegador revalida a cada carga para não ficar com JS/CSS antigos.
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
 
@@ -1230,7 +1419,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 return self._static("index.html")
             if path in ("/app.js", "/focus-mode.js", "/reports.js", "/calendar.js", "/knowledge-map.js", "/crop-editor.js",
-                        "/styles.css"):
+                        "/explanations.js", "/readings.js", "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})
@@ -1309,6 +1498,54 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     study.sync_diagnostic_answers(db)
                     return self._json(200, study.progress(db, datetime.now(timezone.utc)))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/contents/([^/]+)/summary", path)
+            if match:
+                status, payload = _summary_get(unquote(match.group(1)))
+                return self._json(status, payload)
+            if path == "/api/study/errors":
+                query = parse_qs(parsed.query)
+                value = lambda name: (query.get(name) or [None])[0] or None
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, error_notebook.list_errors(
+                        db, _report_course_id(query), subject=value("subject"), reason=value("reason"),
+                        status=value("status") or "pending"))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/explanation", path)
+            if match:
+                status, payload = _explanation_get(unquote(match.group(1)), int(match.group(2)),
+                                                   parse_qs(parsed.query))
+                return self._json(status, payload)
+            match = re.fullmatch(r"/api/exam-sessions/([^/]+)", path)
+            if match:
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    detail = simulado.detail(db, match.group(1))
+                    # Próxima 1ª fase do curso, com a nota de corte, para comparar na correção.
+                    course_id = db.execute("SELECT course_id FROM attempts WHERE id=?",
+                                           (match.group(1),)).fetchone()["course_id"]
+                    exams = study_calendar.list_exams(db, course_id, study.local_date(datetime.now(timezone.utc)))
+                    detail["target"] = study_calendar.next_exam([exam for exam in exams if exam["phase"] == "fase1"])
+                    return self._json(200, detail)
+                finally:
+                    db.close()
+            if path == "/api/readings":
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, readings.list_readings(db, _reports_pool(db, config, course_id), course_id))
+                finally:
+                    db.close()
+            if path == "/api/study/proficiency":
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_proficiency.subject_proficiency(
+                        study.course_responses(db, course_id)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/jobs/([a-f0-9]+)", path)
@@ -1445,6 +1682,35 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         path = unquote(urlsplit(self.path).path)
         try:
+            match = re.fullmatch(r"/api/readings/([^/]+)", path)
+            if match:
+                body = self._read_json()
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, readings.set_reading(db, match.group(1), body.get("status"), body.get("note")))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/exam-sessions/([^/]+)/questions/(\d+)", path)
+            if match:
+                body = self._read_json()
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    if "flagged" in body:
+                        return self._json(200, simulado.flag(db, match.group(1), int(match.group(2)),
+                                                             bool(body["flagged"])))
+                    return self._json(200, simulado.set_reason(db, match.group(1), int(match.group(2)),
+                                                               body.get("reason"), body.get("note")))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/calendar/exams/([a-f0-9]+)", path)
+            if match:
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_calendar.set_exam_cutoff(
+                        db, match.group(1), self._read_json().get("cutoff"),
+                        study.local_date(datetime.now(timezone.utc))))
+                finally:
+                    db.close()
             match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/review", path)
             if not match:
                 return self._json(404, {"error": "rota não encontrada"})
@@ -1485,9 +1751,17 @@ class Handler(BaseHTTPRequestHandler):
                 course_id = _report_course_id({}, body)
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
+                    pool = _reports_pool(db, config, course_id)
+                    if body.get("timed"):
+                        try:
+                            duration = int(float(body.get("durationMinutes") or 300) * 60)
+                        except (TypeError, ValueError):
+                            raise ValueError("durationMinutes deve ser um número de minutos") from None
+                        return self._json(201, simulado.start_simulado(
+                            db, config, course_id, pool, summary["id"], exam_name=summary.get("name"),
+                            duration_s=duration))
                     return self._json(201, reports.start_exam_session(
-                        db, config, course_id, _reports_pool(db, config, course_id), summary["id"],
-                        exam_name=summary.get("name")))
+                        db, config, course_id, pool, summary["id"], exam_name=summary.get("name")))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/exam-sessions/([^/]+)/answers", path)
@@ -1499,14 +1773,21 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("informe ordinal como número inteiro") from None
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
+                    if simulado.is_timed(db, match.group(1)):
+                        return self._json(200, simulado.answer(
+                            db, match.group(1), ordinal, body.get("answer"), confidence=body.get("confidence"),
+                            elapsed_ms=body.get("elapsedMs")))
                     return self._json(200, reports.answer_exam_question(
-                        db, match.group(1), ordinal, body.get("answer"), body.get("reason")))
+                        db, match.group(1), ordinal, body.get("answer"), body.get("reason"),
+                        **_answer_extras(body)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/exam-sessions/([^/]+)/finish", path)
             if match:
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
+                    if simulado.is_timed(db, match.group(1)):
+                        return self._json(200, simulado.finish(db, match.group(1)))
                     return self._json(200, reports.finish_exam_session(db, match.group(1)))
                 finally:
                     db.close()
@@ -1712,6 +1993,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(201, _calendar_add_exam(self._read_json()))
             if path == "/api/study/training/next":
                 return self._json(200, _study_training_next(self._read_json()))
+            if path == "/api/study/explanations/prefetch":
+                return self._json(202, _prefetch_explanations(self._read_json()))
+            match = re.fullmatch(r"/api/contents/([^/]+)/summary/review", path)
+            if match:
+                return self._json(200, _summary_review(unquote(match.group(1)), self._read_json()))
+            match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/explanation/review", path)
+            if match:
+                return self._json(200, _explanation_review(unquote(match.group(1)), int(match.group(2)),
+                                                           self._read_json()))
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/answers", path)
             if match:
                 body = self._read_json()
@@ -1728,7 +2018,8 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError(f"questão {ordinal} não pertence ao diagnóstico")
                     if answer and str(answer).upper() != row["correct_answer"] and not reason:
                         return self._json(200, {"requiresReason": True})
-                    return self._json(200, diagnostics.record_response(db, attempt_id, ordinal, answer, reason))
+                    return self._json(200, diagnostics.record_response(db, attempt_id, ordinal, answer, reason,
+                                                                       **_answer_extras(body)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/finalize", path)

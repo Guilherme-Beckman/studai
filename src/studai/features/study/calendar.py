@@ -29,6 +29,7 @@ from datetime import date, datetime, time, timedelta
 from studai.features.classification.taxonomy import CONTENT_INDEX, DEFAULT_SUBJECT_IDS
 from studai.features.diagnostics import depth, mastery
 from studai.features.reports.service import HALF_LIFE_DAYS, _course, exam_label
+from studai.features.study import projection
 from studai.features.study import service as study
 
 PHASES = {"fase1": "1ª fase", "fase2": "2ª fase", "outra": "Outra prova"}
@@ -41,6 +42,7 @@ MAX_SUBJECTS_PER_DAY = 2
 REVIEW_CONTENTS = 3
 MAX_HORIZON_DAYS = 730
 SIMULADO_DONE_SHARE = 0.8
+FIRST_PHASE_QUESTIONS = 90
 
 
 class ExamNotFound(FileNotFoundError):
@@ -59,11 +61,37 @@ def _parse_day(value: str) -> date:
 def _public_exam(row: sqlite3.Row | dict, today: date) -> dict:
     day = date.fromisoformat(row["exam_date"])
     return {"id": row["id"], "courseId": row["course_id"], "name": row["name"], "date": row["exam_date"],
-            "phase": row["phase"], "phaseLabel": PHASES[row["phase"]], "daysLeft": (day - today).days}
+            "phase": row["phase"], "phaseLabel": PHASES[row["phase"]], "daysLeft": (day - today).days,
+            "cutoff": row["cutoff_correct"]}
+
+
+def _cutoff(value: object, phase: str) -> int | None:
+    """Nota de corte em acertos; na 1ª fase vai de 0 a 90."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        raise ValueError("nota de corte inválida")
+    try:
+        cutoff = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("a nota de corte deve ser um número inteiro de acertos") from None
+    top = FIRST_PHASE_QUESTIONS if phase == "fase1" else 1000
+    if not 0 <= cutoff <= top:
+        raise ValueError(f"a nota de corte deve ficar entre 0 e {top} acertos")
+    return cutoff
+
+
+def set_exam_cutoff(db: sqlite3.Connection, exam_id: str, cutoff: object, today: date) -> dict:
+    row = db.execute("SELECT * FROM exam_dates WHERE id=?", (exam_id,)).fetchone()
+    if not row:
+        raise ExamNotFound(f"prova não encontrada: {exam_id}")
+    with db:
+        db.execute("UPDATE exam_dates SET cutoff_correct=? WHERE id=?", (_cutoff(cutoff, row["phase"]), exam_id))
+    return _public_exam(db.execute("SELECT * FROM exam_dates WHERE id=?", (exam_id,)).fetchone(), today)
 
 
 def add_exam(db: sqlite3.Connection, course_id: str, name: str, exam_date: str, phase: str,
-             now: datetime) -> dict:
+             now: datetime, cutoff: object = None) -> dict:
     """Cadastra a data de uma prova do curso; a data não pode estar no passado."""
     name = " ".join(str(name or "").split())
     if not name:
@@ -76,10 +104,11 @@ def add_exam(db: sqlite3.Connection, course_id: str, name: str, exam_date: str, 
         raise ValueError("a data da prova já passou")
     if (day - today).days > MAX_HORIZON_DAYS:
         raise ValueError("a prova precisa estar nos próximos dois anos")
+    cutoff = _cutoff(cutoff, phase)
     exam_id = uuid.uuid4().hex[:12]
     with db:
-        db.execute("INSERT INTO exam_dates(id,course_id,name,exam_date,phase,created_at) VALUES(?,?,?,?,?,?)",
-                   (exam_id, course_id, name, day.isoformat(), phase, study._iso(now)))
+        db.execute("INSERT INTO exam_dates(id,course_id,name,exam_date,phase,created_at,cutoff_correct) "
+                   "VALUES(?,?,?,?,?,?,?)", (exam_id, course_id, name, day.isoformat(), phase, study._iso(now), cutoff))
     return _public_exam(db.execute("SELECT * FROM exam_dates WHERE id=?", (exam_id,)).fetchone(), today)
 
 
@@ -406,10 +435,10 @@ def _week_key(day: date) -> str:
 def calendar_overview(db: sqlite3.Connection, pool: list[dict], config: dict, course_id: str,
                       now: datetime) -> dict:
     """Calendário do curso: provas, prontidão, carga diária, dias, semanas e meses até a próxima prova."""
-    profile, resolved = _course(config, course_id, pool)
     today = study.local_date(now)
     exams = list_exams(db, course_id, today)
     target = next_exam(exams)
+    profile, resolved = _course(config, course_id, pool, target["phase"] if target else None)
     subjects = exam_subjects(profile, target["phase"] if target else "fase1")
     weights = _scope_weights(resolved["weights"], subjects)
     course_pool = [item for item in pool if item.get("subject") in profile["pesos"]]
@@ -421,6 +450,12 @@ def calendar_overview(db: sqlite3.Connection, pool: list[dict], config: dict, co
                "readiness": readiness(nodes, weights), "load": None, "days": [], "weeks": [], "months": []}
     if target:
         payload["target"] = {**target, "subjects": list(weights)}
+    if not target or target["phase"] == "fase1":
+        # Acertos estimados na 1ª fase (cada questão vale 1 ponto: pesos F1).
+        first_phase = resolved["weights"] if target else _course(config, course_id, pool, "fase1")[1]["weights"]
+        payload["projection"] = projection.project(
+            db, course_id, first_phase, now, date.fromisoformat(target["date"]) if target else None,
+            target.get("cutoff") if target else None)
     if not target or not weights:
         return payload
 

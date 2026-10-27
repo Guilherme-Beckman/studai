@@ -191,6 +191,24 @@ class CalendarUseCaseTests(unittest.TestCase):
         self.assertEqual(data["subjects"], ["Física"])
         self.assertEqual({block["subject"] for entry in data["days"] for block in entry["blocks"]}, {"Física"})
 
+    def test_fase1_target_weights_every_question_the_same(self):
+        cfg = config()
+        cfg["cursos"][COURSE_ID].update(formula="fuvest-2027", fase2={"dia1": [], "dia2": ["Matemática"]})
+        weights = lambda data: {item["subject"]: item["weight"] for item in data["readiness"]["subjects"]}
+        # Sem prova cadastrada vale a nota final, em que a 2ª fase pesa Matemática.
+        self.assertEqual(weights(self.overview(cfg=cfg)), {"Matemática": 0.75, "Física": 0.25})
+        calendar.add_exam(self.db, COURSE_ID, "FUVEST", "2026-11-22", "fase1", NOW)
+        self.assertEqual(weights(self.overview(cfg=cfg)), {"Matemática": 0.5, "Física": 0.5})
+
+    def test_daily_plan_uses_the_phase_of_the_next_exam(self):
+        self.assertIsNone(study.target_phase(self.db, COURSE_ID, NOW))
+        calendar.add_exam(self.db, COURSE_ID, "FUVEST", "2026-11-22", "fase1", NOW)
+        self.assertEqual(study.target_phase(self.db, COURSE_ID, NOW), "fase1")
+        self.assertIsNone(study.target_phase(self.db, COURSE_ID, NOW + timedelta(days=32)))
+        with patch.object(study, "resolve_weights", wraps=study.resolve_weights) as resolve:
+            study.plan_today(self.db, self.pool, config(), COURSE_ID, NOW)
+        self.assertEqual(resolve.call_args.args[2], "fase1")
+
     def test_today_is_frozen_while_progress_updates(self):
         calendar.add_exam(self.db, COURSE_ID, "FUVEST", "2026-11-22", "fase1", NOW)
         before = next(entry for entry in self.overview()["days"] if entry["date"] == "2026-10-22")

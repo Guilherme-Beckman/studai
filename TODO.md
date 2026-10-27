@@ -5,7 +5,7 @@
 > Este arquivo é o **roadmap do produto** e serve para o usuário acompanhar o progresso.
 > Coordenação de quem está trabalhando em quê agora → [`WORK_STATUS.md`](WORK_STATUS.md). Regras gerais → [`AGENTS.md`](AGENTS.md).
 >
-> **Última atualização:** 2026-10-22
+> **Última atualização:** 2026-10-27
 
 ---
 
@@ -35,6 +35,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
+| 11 | Experiência de estudo (1ª fase) | concluída | 11/11 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -193,6 +194,30 @@ Base: `src/studai/features/study/calendar.py`, aba “Calendário” (`frontend/
 - [x] Hoje fixo, futuro adapta: o dia é gravado na primeira consulta (`calendar_days`); os próximos são recalculados pelo desempenho; progresso do dia conta qualquer questão da matéria (2026-10-22)
 - [x] “Treinar agora” leva ao Treinamento com um bloco filtrado por matéria e conteúdos (`contentIds` em `/api/study/training/next`), mostrado antes da tarefa diária; faixa “Plano de hoje” no Treinamento (2026-10-22)
 
+## Fase 11 — Experiência de estudo (1ª fase)
+Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a prova em si. Foco atual: 1ª fase de Eng. Computação São Carlos (prova cadastrada para 01/11/2027); 2ª fase e redação ficam fora por enquanto.
+- [x] Prioridade da 1ª fase: com a próxima prova em `fase1`, "Hoje", Treinamento e Calendário usam só o componente F1 dos pesos (cada questão vale 1 ponto). Antes, Matemática e Física pesavam ~25% cada por causa da 2ª fase; agora ~12% cada, e Geografia/Química/Biologia/História sobem de ~4% para ~10% (`courses.resolve_weights(..., phase)`, `study.target_phase`) (2026-10-27)
+  - [ ] O diagnóstico adaptativo e os Relatórios ainda usam a nota final completa (não conhecem a prova-alvo)
+- [x] Confiança ao responder ("Certeza / Dúvida / Chutei", teclas 1/2/3 no modo foco) nos três fluxos; vira a nota do FSRS (erro ou chute → Again, dúvida ou dica → Hard, certeza → Good, certeza dentro do ritmo → Easy); acerto no chute conta na nota, mas não no domínio (`scheduler.rating_for`, `diagnostics.answer_extras`, colunas `confidence/elapsed_ms/hints_used/note` em `study_answers` e `attempt_questions`) (2026-10-27)
+- [x] Tempo por questão: cronômetro discreto em cada questão (fica âmbar acima de 3:20), enviado como `elapsedMs` (2026-10-27)
+- [x] Painel "Confiança e ritmo por matéria" em Relatórios: acerto com certeza / dúvida / chute / erro, certeza confirmada (calibração) e tempo médio (`study/proficiency.py`, `GET /api/study/proficiency`) (2026-10-27)
+  - [ ] Relatórios ainda não contam as respostas do Treinamento na linha do tempo nem nos KPIs (só diagnósticos e provas)
+- [x] Resolução comentada e dicas graduais (`features/explanations/service.py`): a IA recebe o gabarito e devolve conceito-chave, passos, por que cada alternativa errada está errada, 3 dicas e dificuldade; a resposta só vale se confirmar o gabarito, comentar todas as erradas e não entregar a letra nas dicas. Antes de responder, "Me dá uma dica" (conta como dúvida no FSRS); depois, "Resolução comentada" (abre sozinha no erro ou no chute) com "Está certa ✓" / "Tem erro" (a crítica gera outra). Gerada em segundo plano (`GET /api/questions/<prova>/<n>/explanation`, 202 + tarefa), pré-gerada para a sessão do dia; provedor `STUDAI_EXPLANATIONS_PROVIDER` (padrão: faixas grátis de nuvem). Treinamento e "Responder prova"; o diagnóstico fica sem, para não enviesar a medida (2026-10-27)
+  - [ ] Qualidade medida em 2 questões reais (Groq `gpt-oss-120b`): chega ao gabarito, mas uma afirmação histórica saiu errada; revisar pelo botão "Tem erro" e acompanhar
+  - [ ] Imagens das questões ficam de fora por padrão (as faixas grátis só aceitam texto); `STUDAI_EXPLANATIONS_IMAGES=1` liga para provedores com visão (Gemini)
+  - [ ] OpenRouter: `nemotron-3-super-120b-a12b:free` deixou de ser grátis (404) e os `gemma-4` estão com limite; atualizar `STUDAI_OPENROUTER_MODELS`
+- [x] Seis motivos de erro (não sabia o conteúdo, confundiu um detalhe, conta, interpretação, pegadinha, faltou tempo) + anotação "o que eu devia ter percebido", iguais nos três fluxos (teclas 1–6 no modo foco); retrocompatível com os 3 motivos antigos (2026-10-27)
+- [x] O motivo decide o próximo passo no Treinamento: conteúdo → mini-resumo do subconteúdo + 2 questões do mesmo subconteúdo logo depois (as mais fáceis pela resolução); conta → 1 questão parecida 3 posições depois; confundiu/interpretação → a questão volta em 3 dias; pegadinha → em 7 dias (vale também para diagnósticos e provas na sincronização). Mini-resumo em `features/explanations/summaries.py` (`GET /api/contents/<id>/summary`), revisável como as resoluções (2026-10-27)
+- [x] Caderno de erros no Treinamento (`study/error_notebook.py`, `GET /api/study/errors`): erros e acertos no chute de todos os fluxos, com motivo, anotação, quantas vezes errou, quando volta e se já foi resolvida; filtros por situação, matéria e motivo; "Refazer selecionadas" vira um bloco de treino (`questionRefs` em `/api/study/training/next`) (2026-10-27)
+- [x] Simulado cronometrado (`reports/simulado.py`): prova completa do acervo com 5 h (ajustável), sem gabarito até a entrega, troca de resposta, "marquei no chute", marcar para revisar, mapa da prova e entrega automática quando o tempo acaba; correção com acertos (projetados para 90 se faltam questões revisadas), corte, acertos por matéria, questões acima do ritmo e os erros com resolução e motivo. Botão "Simulado cronometrado" na prova e nos dias de simulado do Calendário (2026-10-27)
+- [x] Nota de corte (em acertos) nas provas do Calendário (`exam_dates.cutoff_correct`, `PATCH /api/calendar/exams/<id>`) e projeção (`study/projection.py`): "se a prova fosse hoje: ~X/90", contra o corte, e a reta das últimas 6 semanas (estimativas semanais + simulados) até a data da prova (2026-10-27)
+  - [ ] A estimativa usa a priori (50%) nas matérias ainda sem respostas: com poucas respostas ela fica perto de 45/90; aparece só a partir de 30 respostas
+- [x] Leituras obrigatórias (aba "Leituras", `study/readings.py`, `GET /api/readings`, `PATCH /api/readings/<obra>`): as 11 obras da lista FUVEST da taxonomia, status (não comecei / lendo / li / revisei), anotações, questões no acervo e acertos por obra, "Treinar esta obra" (2026-10-27)
+  - [x] Correção: blocos do calendário com conteúdos pedidos só reaproveitam questões desses conteúdos que já estão na fila (antes, qualquer questão da matéria) (2026-10-27)
+- Teste manual no navegador embutido (desktop e 375 px): Treinamento com confiança, dica, resolução, motivo, prática e caderno; "Responder prova"; simulado com correção; Calendário com corte e projeção; Leituras (2026-10-27)
+  - [x] No celular, o contador do Treinamento e a tabela "Domínio por conteúdo" transbordavam a tela; o cabeçalho do simulado agora quebra a linha
+  - [ ] A lista de provas da aba "Provas e gabaritos" ainda transborda em 375 px (linha da prova com o botão Remover)
+
 ## Processamento de provas
 
 - [x] Mostrar etapas do processamento com progresso granular por página no OCR, por questão nos recortes e na classificação; incluir estado atual e tarefas ativas
@@ -251,3 +276,9 @@ Base: `src/studai/features/study/calendar.py`, aba “Calendário” (`frontend/
 | 2026-10-22 | Claude / `feature/questions/legacy-ocr` | Fase 3: OCR por coluna, `por+eng`, alternativas lado a lado e 2ª passada `--psm 11`; 2021 com 4 questões incompletas (eram 19) | — |
 | 2026-10-22 | Claude / `feature/study/exam-calendar` | Fase 10: aba Calendário com datas de prova, prontidão, carga diária automática, plano dia/semana/mês com simulados e integração com o Treinamento | — |
 | 2026-10-22 | Claude / `claude/frontend-ai-improvement-0dd116` | Interface redesenhada com a skill frontend-design: estilo "cartão-resposta", CSS legível e tokenizado, tema escuro só por tokens | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11 adicionada (brainstorm de experiência de estudo); prioridade da 1ª fase usa só o componente F1 | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 1: confiança e tempo por questão alimentam o FSRS; painel de confiança e ritmo; estáticos com `Cache-Control: no-cache` | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 2: resolução comentada e dicas graduais por IA, revisáveis pelo aluno | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 3: seis motivos de erro com próximo passo, mini-resumo por subconteúdo e caderno de erros | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 4: simulado cronometrado, nota de corte e projeção de acertos até a prova | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 5: aba Leituras com as obras obrigatórias | — |
