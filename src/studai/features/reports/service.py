@@ -51,17 +51,17 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _course(config: dict, course_id: str, pool: list[dict]) -> tuple[dict, dict]:
-    """Perfil do curso e pesos efetivos (``resolve_weights``)."""
+def _course(config: dict, course_id: str, pool: list[dict], phase: str | None = None) -> tuple[dict, dict]:
+    """Perfil do curso e pesos efetivos (``resolve_weights``) para a fase da prova-alvo."""
     if course_id not in (config.get("cursos") or {}):
         raise NotFound(f"curso não configurado: {course_id}")
     profile = diagnostics.course_profile(config, course_id)
     course_pool = [item for item in pool if item.get("subject") in profile["pesos"]]
     try:
-        resolved = resolve_weights(profile, course_pool)
+        resolved = resolve_weights(profile, course_pool, phase)
     except ValueError:
         # Sem questões revisadas para estimar a 1ª fase: usa os pesos manuais.
-        resolved = resolve_weights({**profile, "formula": None}, course_pool)
+        resolved = resolve_weights({**profile, "formula": None}, course_pool, phase)
     return profile, resolved
 
 

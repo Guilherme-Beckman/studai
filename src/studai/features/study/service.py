@@ -287,12 +287,20 @@ def _item(reason: str, entry: dict, content_id: str) -> dict:
             "question": entry["question"], "correctAnswer": entry["correct_answer"]}
 
 
+def target_phase(db: sqlite3.Connection, course_id: str, now: datetime) -> str | None:
+    """Fase da próxima prova cadastrada do curso (hoje conta), ou ``None`` sem prova."""
+    row = db.execute("SELECT phase FROM exam_dates WHERE course_id=? AND exam_date>=? "
+                     "ORDER BY exam_date, created_at LIMIT 1", (course_id, local_date(now).isoformat())).fetchone()
+    return row["phase"] if row else None
+
+
 def build_plan(db: sqlite3.Connection, pool: list[dict], profile: dict, course_id: str, now: datetime,
                *, size: int = 15, new_per_day: int = 5, recent_days: int = 7) -> list[dict]:
     """Monta as faixas do dia: questões erradas vencidas, conteúdos vencidos e conteúdos novos."""
-    # Pesos efetivos do curso (fórmula FUVEST quando configurada; senão os pesos manuais).
+    # Pesos efetivos do curso para a fase da próxima prova (fórmula FUVEST quando
+    # configurada; senão os pesos manuais).
     try:
-        effective = resolve_weights(profile, pool)["weights"]
+        effective = resolve_weights(profile, pool, target_phase(db, course_id, now))["weights"]
     except ValueError:  # pool vazio: sem incidência para aplicar a fórmula
         effective = profile["pesos"]
     weights = {subject: float(weight) for subject, weight in effective.items() if weight > 0}

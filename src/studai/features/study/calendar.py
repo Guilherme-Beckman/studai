@@ -406,10 +406,10 @@ def _week_key(day: date) -> str:
 def calendar_overview(db: sqlite3.Connection, pool: list[dict], config: dict, course_id: str,
                       now: datetime) -> dict:
     """Calendário do curso: provas, prontidão, carga diária, dias, semanas e meses até a próxima prova."""
-    profile, resolved = _course(config, course_id, pool)
     today = study.local_date(now)
     exams = list_exams(db, course_id, today)
     target = next_exam(exams)
+    profile, resolved = _course(config, course_id, pool, target["phase"] if target else None)
     subjects = exam_subjects(profile, target["phase"] if target else "fase1")
     weights = _scope_weights(resolved["weights"], subjects)
     course_pool = [item for item in pool if item.get("subject") in profile["pesos"]]

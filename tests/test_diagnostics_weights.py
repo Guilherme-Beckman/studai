@@ -30,6 +30,21 @@ class CourseWeightsTest(unittest.TestCase):
         result = courses.derive_subject_weights(profile, COUNTS)
         self.assertAlmostEqual(result["components"]["Química"]["d2"], 1 / 3, places=3)
 
+    def test_first_phase_uses_only_f1_so_every_question_counts_the_same(self):
+        profile = core.course_profile(self.config, "eng-comp-sao-carlos")
+        pool = [{"subject": subject} for subject, count in COUNTS.items() for _ in range(count)]
+        result = courses.resolve_weights(profile, pool, "fase1")
+        weights = result["weights"]
+        self.assertEqual(result["phase"], "fase1")
+        self.assertAlmostEqual(sum(weights.values()), 1.0, places=2)
+        self.assertEqual(weights["Geografia"], weights["Matemática"])
+        self.assertAlmostEqual(weights["Física"] / weights["Química"], 41 / 39, places=2)
+        # Sem fase (ou na 2ª fase) continua valendo a nota final completa.
+        self.assertEqual(courses.resolve_weights(profile, pool)["weights"],
+                         courses.derive_subject_weights(profile, COUNTS)["weights"])
+        self.assertEqual(courses.resolve_weights(profile, pool, "fase2")["weights"],
+                         courses.derive_subject_weights(profile, COUNTS)["weights"])
+
     def test_manual_weights_without_formula_still_work(self):
         profile = {"nome": "Teste", "pesos": {"Matemática": 3, "Física": 1}}
         result = courses.resolve_weights(profile, [])
