@@ -29,6 +29,7 @@ from datetime import date, datetime, time, timedelta
 from studai.features.classification.taxonomy import CONTENT_INDEX, DEFAULT_SUBJECT_IDS
 from studai.features.diagnostics import depth, mastery
 from studai.features.reports.service import HALF_LIFE_DAYS, _course, exam_label
+from studai.features.questions.origin import is_fuvest
 from studai.features.study import projection
 from studai.features.study import service as study
 
@@ -327,8 +328,8 @@ def build_schedule(today: date, exam_day: date, demand: list[dict], weights: dic
 
 
 def simulado_suggestions(db: sqlite3.Connection, pool: list[dict], course_id: str, subjects: list[str]) -> list[dict]:
-    """Provas completas do acervo, ainda não respondidas primeiro e as mais recentes antes."""
-    counts = Counter(item["source_id"] for item in pool if item["subject"] in subjects)
+    """Provas completas da FUVEST no acervo, ainda não respondidas primeiro e as mais recentes antes."""
+    counts = Counter(item["source_id"] for item in pool if item["subject"] in subjects and is_fuvest(item))
     answered = set()
     for row in db.execute("SELECT plan_json FROM attempts WHERE course_id=? AND mode='exam'", (course_id,)):
         try:

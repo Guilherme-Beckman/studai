@@ -3514,6 +3514,20 @@ textarea {
 .reading-actions { display: flex; gap: 10px; align-items: center; }
 .reading-card > .button { justify-self: start; }
 
+/* Origem da prova e selos de origem */
+.origin-badge { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-line); }
+.exam-origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+.exam-origin label { display: grid; gap: 3px; color: var(--muted); }
+.exam-origin input { min-width: 180px; }
+.exam-origin-note { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; }
+
 /* Caderno de erros */
 .notebook-filters {
   display: flex;

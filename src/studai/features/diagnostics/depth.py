@@ -74,7 +74,8 @@ def direct_evidence(responses: list[dict], *, now: datetime,
     successes: Counter = Counter()
     failures: Counter = Counter()
     for response in responses:
-        factor = mastery.recency_factor(response.get("answered_at"), now, half_life_days)
+        factor = (mastery.recency_factor(response.get("answered_at"), now, half_life_days)
+                  * float(response.get("evidence_factor", 1.0)))
         labelled: dict[str, float] = {}
         for identity, weight in ([(response.get("principal_id"), mastery.PRINCIPAL_WEIGHT)]
                                  + [(value, mastery.RELATED_WEIGHT) for value in response.get("related_ids") or []]):

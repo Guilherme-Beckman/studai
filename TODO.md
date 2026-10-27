@@ -36,6 +36,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
 | 11 | Experiência de estudo (1ª fase) | concluída | 11/11 |
+| 12 | Questões de treino, da IA e trilha por nível | em andamento | 1/4 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -218,6 +219,13 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
   - [x] No celular, o contador do Treinamento e a tabela "Domínio por conteúdo" transbordavam a tela; o cabeçalho do simulado agora quebra a linha
   - [ ] A lista de provas da aba "Provas e gabaritos" ainda transborda em 375 px (linha da prova com o botão Remover)
 
+## Fase 12 — Questões de treino, da IA e trilha por nível
+Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero com questões fáceis e subir até a FUVEST. O acervo ganha outras fontes (provas e listas em PDF, questões geradas pela IA) com dificuldade, e a trilha usa essas questões por nível. A FUVEST continua sendo a referência de incidência, pesos, simulados, diagnóstico e projeção.
+- [x] Origem e dificuldade de cada questão (`questions/origin.py`): `"origem": {tipo, nome}` no JSON da prova (sem o campo = FUVEST), dificuldade na revisão (ou a estimada pela resolução comentada); só a FUVEST entra na incidência, nos pesos F1, nos simulados, no diagnóstico e na projeção; fora dela a resposta pesa menos no domínio (fácil 0,3 · média 0,6 · difícil 0,8); origem editável na revisão da prova (`PATCH /api/exams/<id>/origin`) e selo na lista (2026-10-27)
+- [ ] PDFs de outras provas e listas: origem no envio; extrator com "QUESTÃO 01", numeração que começa no meio e alternativas "A)"
+- [ ] Questões geradas pela IA por subconteúdo e nível, direto no treino com selo e "Tem erro"
+- [ ] Trilha por nível depois de "Não sabia o conteúdo": fácil → média → difícil → FUVEST
+
 ## Processamento de provas
 
 - [x] Mostrar etapas do processamento com progresso granular por página no OCR, por questão nos recortes e na classificação; incluir estado atual e tarefas ativas
@@ -282,3 +290,4 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 3: seis motivos de erro com próximo passo, mini-resumo por subconteúdo e caderno de erros | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 4: simulado cronometrado, nota de corte e projeção de acertos até a prova | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 5: aba Leituras com as obras obrigatórias | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12 adicionada; etapa 1: origem e dificuldade das questões, FUVEST como referência | — |

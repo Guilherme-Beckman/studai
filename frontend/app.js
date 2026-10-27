@@ -166,7 +166,9 @@ function examCard(exam, compact = false) {
     : exam.classified
       ? `<span class="badge">Classificada</span>`
       : `<span class="badge pending">Pendente</span>`;
-  const element = `<div class="exam-item exam-item-row"><button class="exam-open-button" type="button" data-open-exam="${escapeHtml(exam.id)}"><span class="exam-file-icon">▤</span><span class="exam-item-main"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}% · ${exam.importedAnswers || 0} respostas do gabarito</span></span>${state}<span class="exam-open-arrow" aria-hidden="true">›</span></button><button class="exam-remove-button" type="button" data-delete-exam="${escapeHtml(exam.id)}" aria-label="Remover ${escapeHtml(exam.name)}" title="Remover prova e questões">Remover</button></div>`;
+  const origin = exam.origin && exam.origin.tipo !== "fuvest"
+    ? `<span class="badge origin-badge" title="${escapeHtml(ORIGIN_LABELS[exam.origin.tipo] || "")}">${escapeHtml(exam.origin.nome || ORIGIN_LABELS[exam.origin.tipo])}</span>` : "";
+  const element = `<div class="exam-item exam-item-row"><button class="exam-open-button" type="button" data-open-exam="${escapeHtml(exam.id)}"><span class="exam-file-icon">▤</span><span class="exam-item-main"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}% · ${exam.importedAnswers || 0} respostas do gabarito</span></span>${origin}${state}<span class="exam-open-arrow" aria-hidden="true">›</span></button><button class="exam-remove-button" type="button" data-delete-exam="${escapeHtml(exam.id)}" aria-label="Remover ${escapeHtml(exam.name)}" title="Remover prova e questões">Remover</button></div>`;
   return compact ? `<div class="exam-mini"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}%</span></div>` : element;
 }
 
@@ -487,7 +489,7 @@ function renderExamReview() {
   reviewSelection = new Set([...reviewSelection].filter(number => known.has(number)));
   const cards = questions.map(question => renderReviewQuestion(exam.id, question, sharedTexts)).join("");
   const counter = (key, label, cls = "") => `<span class="review-count ${cls}"><strong>${reviewProgress[key] ?? 0}</strong>${label}</span>`;
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="button button-secondary" data-start-simulado="${escapeHtml(exam.id)}" title="Prova completa com cronômetro e correção só no fim">Simulado cronometrado</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div>${originEditorMarkup(exam)}</div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="button button-secondary" data-start-simulado="${escapeHtml(exam.id)}" title="Prova completa com cronômetro e correção só no fim">Simulado cronometrado</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
     <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="review-counts">${counter("approved", "aprovadas", "is-approved")}${counter("pending", "pendentes", "is-pending")}${counter("unusable", "inutilizáveis")}${counter("badCrop", "recorte ruim", "is-bad-crop")}</div><div class="workspace-meta">${escapeHtml(ragLabel)} · só questões aprovadas entram no RAG</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
     ${questions.length ? reviewFilterBar(questions) : ""}
     <div class="exam-review-list">${cards || `<div class="loading-card">Esta prova não contém questões extraídas.</div>`}</div>`;
@@ -516,6 +518,7 @@ function renderReviewEditor(examId, question) {
   const options = Object.fromEntries(Object.entries(question.alternativas || {}));
   return `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar questão ${escapeHtml(number)}</strong><span>As correções ficam salvas na revisão; a extração original do PDF é mantida.</span></div>
     <div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}"><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${item === label.subject ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><div class="review-topic-field"><label for="review-topic-search-${number}">Conteúdo principal</label><input id="review-topic-search-${number}" type="search" data-review-topic-search="${number}" placeholder="Buscar: logaritmo, Clarice, ecologia…" autocomplete="off"><select data-review-topic="${number}" size="9" aria-label="Conteúdo principal"><option value="">Selecione uma matéria primeiro</option></select><span class="review-topic-path" data-review-topic-path="${number}"></span></div></div>
+    <label>Dificuldade<select data-review-difficulty="${number}"><option value="">Não definida</option>${[1, 2, 3].map(level => `<option value="${level}" ${Number(review.difficulty) === level ? "selected" : ""}>${DIFFICULTY_LABELS[level]}</option>`).join("")}</select></label>
     <label>Gabarito<select data-review-answer="${number}"><option value="" ${answer ? "" : "selected"}>Sem gabarito</option>${"ABCDE".split("").map(letter => `<option value="${letter}" ${answer === letter ? "selected" : ""}>${letter}</option>`).join("")}<option value="*" ${answer === "*" ? "selected" : ""}>Anulada</option></select></label>
     <label>Enunciado<textarea data-edit-stem rows="5">${escapeHtml(question.enunciado || "")}</textarea></label>
     ${figureEditor(examId, number, "stem", question.figuras_enunciado)}
@@ -523,6 +526,30 @@ function renderReviewEditor(examId, question) {
     <div class="review-edit-options">${letters.map(letter => { const option = options[letter]; const text = typeof option === "string" ? option : option?.texto || ""; const figures = typeof option === "object" ? option?.figuras : []; return `<div class="review-edit-option" data-edit-option="${letter}"><span class="exam-option-letter">${letter}</span><div><textarea rows="2" data-edit-option-text placeholder="${option ? "" : "Alternativa ausente na extração"}">${escapeHtml(text)}</textarea>${figureEditor(examId, number, `option:${letter}`, figures)}</div></div>`; }).join("")}</div>
     <label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label>
     <div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar e aprovar</button><button class="button button-secondary" type="button" data-save-draft="${number}">Salvar sem aprovar</button>${review.edits ? `<button class="blank-button" type="button" data-discard-edits="${number}">Descartar correções</button>` : ""}</div></form>`;
+}
+
+// ---- Origem da prova: só a FUVEST define incidência, pesos, simulados e diagnóstico.
+const ORIGIN_LABELS = { fuvest: "FUVEST", vestibular: "Outro vestibular", lista: "Lista de exercícios", ia: "Gerada por IA" };
+const DIFFICULTY_LABELS = { 1: "Fácil", 2: "Média", 3: "Difícil" };
+
+function originEditorMarkup(exam) {
+  const origin = exam.origin || { tipo: "fuvest", nome: null };
+  if (origin.tipo === "ia") return `<p class="exam-origin-note">Questões geradas pela IA para treino.</p>`;
+  return `<form class="exam-origin" data-exam-origin="${escapeHtml(exam.id)}"><label>Origem<select name="tipo">${["fuvest", "vestibular", "lista"].map(kind => `<option value="${kind}" ${origin.tipo === kind ? "selected" : ""}>${ORIGIN_LABELS[kind]}</option>`).join("")}</select></label><label>Nome<input name="nome" value="${escapeHtml(origin.nome || "")}" placeholder="ex.: ENEM 2023 dia 2" maxlength="120"></label><button class="text-button" type="submit">Salvar origem</button></form>`;
+}
+
+async function saveExamOrigin(form) {
+  try {
+    const origin = await api(`/api/exams/${encodeURIComponent(form.dataset.examOrigin)}/origin`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: form.tipo.value, nome: form.nome.value }),
+    });
+    if (currentExamReview?.exam) currentExamReview.exam.origin = origin;
+    toast(origin.tipo === "fuvest" ? "Prova marcada como FUVEST." : `Origem salva: ${origin.nome}. As questões entram como treino, com peso menor no domínio.`);
+    refreshExams();
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
 function renderReviewQuestion(examId, question, sharedTexts) {
@@ -644,6 +671,8 @@ function reviewPayloadFromForm(form, status) {
     content_id: $(`[data-review-topic="${number}"]`, form).value || undefined, note: $(`[data-review-note="${number}"]`, form).value };
   const edits = collectReviewEdits(form, question);
   if (edits) payload.edits = edits;
+  const difficulty = $(`[data-review-difficulty="${number}"]`, form)?.value;
+  if (difficulty !== undefined) payload.difficulty = difficulty ? Number(difficulty) : null;
   const answer = $(`[data-review-answer="${number}"]`, form).value;
   if (answer !== (currentExamReview.answerKeys?.[number]?.answer || "")) payload.answer = answer;
   return payload;
@@ -674,6 +703,7 @@ function bindExamReviewActions() {
   });
   $("[data-start-quiz]", workspace)?.addEventListener("click", () => openExamQuiz(examId));
   $("[data-start-simulado]", workspace)?.addEventListener("click", () => openSimulado(examId));
+  $("[data-exam-origin]", workspace)?.addEventListener("submit", event => { event.preventDefault(); saveExamOrigin(event.target); });
   $("[data-retry-rag]", workspace)?.addEventListener("click", () => retryReviewIndex(examId));
   $$("[data-review-filter]", workspace).forEach(control => control.addEventListener(control.type === "search" ? "input" : "change", () => {
     const key = control.dataset.reviewFilter;

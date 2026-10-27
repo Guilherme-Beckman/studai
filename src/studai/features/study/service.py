@@ -15,9 +15,10 @@ from studai.features.diagnostics import depth, mastery
 from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
 from studai.features.explanations import service as explanations
+from studai.features.questions.origin import evidence_factor
 from studai.features.study import scheduler
 
-STUDY_SCHEMA_VERSION = 3
+STUDY_SCHEMA_VERSION = 4
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 GAP_ACCURACY = 0.7
 HALF_LIFE_DAYS = 30
@@ -73,6 +74,8 @@ def connect_db(path: Path) -> sqlite3.Connection:
         );
     """)
     diagnostics.add_missing_columns(db, "study_answers", diagnostics.ANSWER_EXTRA_COLUMNS)
+    # v4: origem e dificuldade da questão, para o peso da resposta no domínio.
+    diagnostics.add_missing_columns(db, "study_answers", (("origin", "TEXT"), ("difficulty", "INTEGER")))
     # v3: nota de corte da prova, em número de acertos.
     diagnostics.add_missing_columns(db, "exam_dates", (("cutoff_correct", "INTEGER"),))
     old = db.execute("SELECT value FROM metadata WHERE key='study_schema_version'").fetchone()
@@ -241,8 +244,11 @@ def course_responses(db: sqlite3.Connection, course_id: str) -> list[dict]:
                           "reason": row["error_reason"], "note": row["note"]})
     for row in db.execute("""SELECT sa.* FROM study_answers sa JOIN study_sessions s ON s.id = sa.session_id
             WHERE s.course_id = ?""", (course_id,)):
-        # Como em ``mastery.response_from_row``: acerto no chute não conta como domínio.
+        # Como em ``mastery.response_from_row``: acerto no chute não conta como domínio,
+        # e questões fora da FUVEST pesam menos.
         responses.append({"correct": bool(row["is_correct"]) and row["confidence"] != "guess",
+                          "origin": row["origin"], "difficulty": row["difficulty"],
+                          "evidence_factor": evidence_factor(row["origin"], row["difficulty"]),
                           "is_correct": bool(row["is_correct"]), "subject": row["subject"],
                           "principal_id": live_id(row["content_id"]), "related_ids": [],
                           "answered_at": row["answered_at"], "kind": "daily",
@@ -557,11 +563,12 @@ def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, a
     extras = diagnostics.answer_extras(confidence if answer else None, elapsed_ms, hints_used, note)
     with db:
         db.execute("""INSERT INTO study_answers(session_id,item_id,source_id,question_number,subject,content_id,
-            selected_answer,correct_answer,is_correct,error_reason,answered_at,confidence,elapsed_ms,hints_used,note)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            selected_answer,correct_answer,is_correct,error_reason,answered_at,confidence,elapsed_ms,hints_used,note,
+            origin,difficulty) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                    (session_id, item_id, item["sourceId"], item["number"], item["subject"], item["contentId"],
                     answer, item["correctAnswer"], int(correct), reason, _iso(now), extras["confidence"],
-                    extras["elapsed_ms"], extras["hints_used"], extras["note"]))
+                    extras["elapsed_ms"], extras["hints_used"], extras["note"],
+                    item["question"].get("_origem"), item["question"].get("_dificuldade")))
         card = _apply_answer(db, content_id=item["contentId"], subject=item["subject"],
                              source_id=item["sourceId"], number=int(item["number"]), correct=correct,
                              at=now, origin="daily", ref=f"daily:{session_id}:{item_id}",
@@ -591,9 +598,6 @@ def _followup_entries(db: sqlite3.Connection, pool: list[dict], item: dict, used
     leaf = item["contentId"]
     parent = depth.content_ancestor(leaf)
     recent = _recently_answered(db, now - timedelta(days=7))
-    explanations.ensure_schema(db)
-    difficulty = {(row[0], int(row[1])): json.loads(row[2]).get("difficulty", 2) for row in db.execute(
-        "SELECT source_id,question_number,content_json FROM question_explanations WHERE status!='rejected'")}
     candidates = []
     for entry in pool:
         identity = (entry["source_id"], int(entry["number"]))
@@ -606,7 +610,7 @@ def _followup_entries(db: sqlite3.Connection, pool: list[dict], item: dict, used
             tier = 1
         else:
             continue
-        candidates.append((tier, difficulty.get(identity, 2), identity, entry, content_id))
+        candidates.append((tier, entry.get("difficulty") or 2, identity, entry, content_id))
     candidates.sort(key=lambda candidate: candidate[:3])
     return [_item("followup_practice", entry, content_id) for *_, entry, content_id in candidates[:count]]
 

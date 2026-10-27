@@ -31,6 +31,7 @@ from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_
 from studai.features.diagnostics import service as diagnostics
 from studai.features.explanations import service as explanations
 from studai.features.explanations import summaries as content_summaries
+from studai.features.questions import origin as question_origin
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
 from studai.features.reports import simulado
@@ -581,7 +582,7 @@ def _exam_files() -> list[tuple[dict, Path]]:
         source_id = diagnostics.source_id_for(data, path)
         has_errors = bool((data.get("classificacao") or {}).get("erros"))
         exam_name = Path(str(data.get("arquivo_origem") or path.parent.name)).stem
-        exams.append(({"id": source_id, "name": exam_name,
+        exams.append(({"id": source_id, "name": exam_name, "origin": question_origin.exam_origin(data),
                        "totalQuestions": len(data["questoes"]),
                        "classified": "classificado" in path.name and not has_errors,
                        "subjects": sorted({q.get("materia") or (q.get("classificacao") or {}).get("materia")
@@ -666,6 +667,8 @@ def _review_values(question: dict, body: dict, exam_dir: Path) -> dict:
         values.update(subject=None, topic=None)
     if "edits" in body:
         values["edits"] = question_review.validate_edits(question, body["edits"], exam_dir)
+    if "difficulty" in body:
+        values["difficulty"] = question_origin.validate_difficulty(body["difficulty"])
     return values
 
 
@@ -1682,6 +1685,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         path = unquote(urlsplit(self.path).path)
         try:
+            match = re.fullmatch(r"/api/exams/([^/]+)/origin", path)
+            if match:
+                _, exam_json = _find_exam(match.group(1))
+                origin = question_origin.write_exam_origin(exam_json, question_origin.validate_origin(self._read_json()))
+                with POOL_CACHE_LOCK:
+                    POOL_CACHE.clear()
+                return self._json(200, origin)
             match = re.fullmatch(r"/api/readings/([^/]+)", path)
             if match:
                 body = self._read_json()
