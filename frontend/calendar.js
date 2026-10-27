@@ -77,11 +77,25 @@
   }
 
   async function addExam(form) {
-    const body = { courseId: state.courseId, name: form.name.value, date: form.date.value, phase: form.phase.value };
+    const body = { courseId: state.courseId, name: form.name.value, date: form.date.value, phase: form.phase.value,
+      cutoff: form.cutoff.value === "" ? null : Number(form.cutoff.value) };
     try {
       await request("/api/calendar/exams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       toast("Prova adicionada ao calendário.");
       state.month = null;
+      await refreshCalendar();
+    } catch (error) {
+      toast(error.message, true);
+    }
+  }
+
+  async function editCutoff(id, current) {
+    const value = window.prompt("Nota de corte da 1ª fase, em acertos de 90 (deixe vazio para apagar):", current ?? "");
+    if (value === null) return;
+    try {
+      await request(`/api/calendar/exams/${encodeURIComponent(id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cutoff: value.trim() }),
+      });
       await refreshCalendar();
     } catch (error) {
       toast(error.message, true);
@@ -106,8 +120,9 @@
       const target = data.target?.id === exam.id;
       const left = exam.daysLeft === 0 ? "É hoje!" : past ? "Já passou" : `faltam ${plural(exam.daysLeft, "dia", "dias")}`;
       return `<div class="cal-exam ${target ? "target" : ""} ${past ? "past" : ""}">
-        <div><strong>${esc(exam.name)}</strong><span>${esc(exam.phaseLabel)} · ${esc(fmt(exam.date, { day: "2-digit", month: "long", year: "numeric" }))}</span></div>
+        <div><strong>${esc(exam.name)}</strong><span>${esc(exam.phaseLabel)} · ${esc(fmt(exam.date, { day: "2-digit", month: "long", year: "numeric" }))}${exam.cutoff != null ? ` · corte ${esc(exam.cutoff)} acertos` : ""}</span></div>
         <div class="cal-exam-side"><b>${esc(left)}</b>${target ? `<small>Plano atual</small>` : ""}
+        <button class="text-button" data-cal-cutoff="${esc(exam.id)}" data-value="${esc(exam.cutoff ?? "")}">${exam.cutoff != null ? "Editar corte" : "Definir corte"}</button>
         <button class="text-button" data-cal-remove="${esc(exam.id)}" data-name="${esc(exam.name)}">Remover</button></div></div>`;
     }).join("");
     return `<div class="panel cal-exams"><div class="panel-heading"><span class="step-number">◷</span><div><h2>Suas provas</h2><p>O plano mira a próxima prova; a 2ª fase foca nas matérias específicas do curso.</p></div></div>
@@ -116,6 +131,7 @@
         <label>Prova<input name="name" required placeholder="FUVEST 2027 · 1ª fase"></label>
         <label>Data<input name="date" type="date" required min="${esc(data.today)}"></label>
         <label>Fase<select name="phase"><option value="fase1">1ª fase</option><option value="fase2">2ª fase</option><option value="outra">Outra prova</option></select></label>
+        <label>Nota de corte<input name="cutoff" type="number" min="0" max="90" inputmode="numeric" placeholder="acertos (opcional)"></label>
         <button class="button button-primary" type="submit">Adicionar</button>
       </form></div>`;
   }
@@ -133,7 +149,29 @@
     return `<div class="panel cal-readiness"><div class="panel-heading"><span class="step-number step-green">✓</span><div><h2>Quão preparado você está</h2><p>Profundidade por matéria nas questões que já respondeu, ponderada pelo peso no curso.</p></div></div>
       <div class="cal-ready-top"><div class="cal-ring" style="--p:${Math.round(r.overall * 100)}"><span>${pct(r.overall)}</span></div>
       <div>${data.target ? `<strong>${esc(data.target.name)}</strong><p class="muted">${data.target.daysLeft === 0 ? "A prova é hoje." : `Faltam ${plural(data.target.daysLeft, "dia", "dias")}.`}</p>` : `<p class="muted">Cadastre uma prova para ver o ritmo necessário.</p>`}${loadNote}</div></div>
+      ${projectionBlock(data.projection)}
       <div class="cal-ready-list">${rows}</div></div>`;
+  }
+
+  // Acertos estimados na 1ª fase: hoje, contra o corte e no ritmo atual até a prova.
+  function projectionBlock(p) {
+    if (!p) return "";
+    if (p.current == null) {
+      return `<div class="cal-projection empty"><strong>Acertos estimados na 1ª fase</strong><p class="muted">Responda pelo menos ${p.minResponses} questões (você tem ${p.responses}) para ver quantas acertaria se a prova fosse hoje.</p></div>`;
+    }
+    const gap = p.cutoff != null ? Math.round(p.current - p.cutoff) : null;
+    const cutoffNote = p.cutoff == null ? `<span class="muted">Defina a nota de corte na sua prova para comparar.</span>`
+      : `<span class="${gap >= 0 ? "cal-proj-ok" : "cal-proj-bad"}">corte ${p.cutoff} · ${gap >= 0 ? `${gap} acima` : `faltam ${-gap}`}</span>`;
+    const atExam = p.atExam != null
+      ? `<p>No ritmo atual (${p.slopePerWeek >= 0 ? "+" : ""}${String(p.slopePerWeek).replace(".", ",")} por semana), você chega à prova com <b>~${Math.round(p.atExam)}/${p.questions}</b>.</p>`
+      : `<p class="muted">A tendência aparece com duas semanas de histórico.</p>`;
+    const points = [...p.weekly.map(point => ({ ...point, kind: "estimate" })),
+      ...p.simulados.map(point => ({ date: point.at.slice(0, 10), value: point.value, kind: "simulado", label: point.label }))]
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const max = Math.max(p.questions, ...points.map(point => point.value));
+    const spark = points.length > 1 ? `<div class="cal-proj-spark" role="img" aria-label="Evolução dos acertos estimados">${points.map(point =>
+      `<i class="${point.kind}" style="height:${Math.max(4, (point.value / max) * 100)}%" title="${esc(fmt(point.date, { day: "2-digit", month: "2-digit" }))}: ${Math.round(point.value)}${point.kind === "simulado" ? ` (${esc(point.label || "simulado")})` : ""}"></i>`).join("")}${p.cutoff != null ? `<b style="bottom:${(p.cutoff / max) * 100}%"></b>` : ""}</div>` : "";
+    return `<div class="cal-projection"><div><strong>Se a prova fosse hoje: ~${Math.round(p.current)}/${p.questions} acertos</strong> ${cutoffNote}</div>${atExam}${spark}</div>`;
   }
 
   function blockRow(block, entry, { actions = true } = {}) {
@@ -255,6 +293,7 @@
       const target = event.target.closest("button");
       if (!target) return;
       if (target.dataset.calRemove) return removeExam(target.dataset.calRemove, target.dataset.name);
+      if (target.dataset.calCutoff) return editCutoff(target.dataset.calCutoff, target.dataset.value);
       if (target.dataset.calTrain) return train(target);
       if (target.dataset.calSimulado) return simulado(target.dataset.calSimulado);
       if (target.dataset.calMonth) {
@@ -281,7 +320,7 @@
 
   function simulado(sourceId) {
     showView("exams");
-    openExamQuiz(sourceId);
+    openSimulado(sourceId);
   }
 
   // ---------------------------------------------------------------- faixa do Treinamento

@@ -139,7 +139,7 @@ def connect_db(path: Path) -> sqlite3.Connection:
     if "mode" not in attempt_columns:
         # v3: origem da tentativa (diagnóstico estático/adaptativo ou prova completa).
         db.execute("ALTER TABLE attempts ADD COLUMN mode TEXT NOT NULL DEFAULT 'static'")
-    add_missing_columns(db, "attempt_questions", ANSWER_EXTRA_COLUMNS)
+    add_missing_columns(db, "attempt_questions", ANSWER_EXTRA_COLUMNS + (("flagged", "INTEGER NOT NULL DEFAULT 0"),))
     old = db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
     if old and int(old[0]) > SCHEMA_VERSION:
         db.close()

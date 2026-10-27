@@ -35,7 +35,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
-| 11 | Experiência de estudo (1ª fase) | em andamento | 6/9 |
+| 11 | Experiência de estudo (1ª fase) | em andamento | 8/10 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -209,7 +209,9 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 - [x] Seis motivos de erro (não sabia o conteúdo, confundiu um detalhe, conta, interpretação, pegadinha, faltou tempo) + anotação "o que eu devia ter percebido", iguais nos três fluxos (teclas 1–6 no modo foco); retrocompatível com os 3 motivos antigos (2026-10-27)
 - [x] O motivo decide o próximo passo no Treinamento: conteúdo → mini-resumo do subconteúdo + 2 questões do mesmo subconteúdo logo depois (as mais fáceis pela resolução); conta → 1 questão parecida 3 posições depois; confundiu/interpretação → a questão volta em 3 dias; pegadinha → em 7 dias (vale também para diagnósticos e provas na sincronização). Mini-resumo em `features/explanations/summaries.py` (`GET /api/contents/<id>/summary`), revisável como as resoluções (2026-10-27)
 - [x] Caderno de erros no Treinamento (`study/error_notebook.py`, `GET /api/study/errors`): erros e acertos no chute de todos os fluxos, com motivo, anotação, quantas vezes errou, quando volta e se já foi resolvida; filtros por situação, matéria e motivo; "Refazer selecionadas" vira um bloco de treino (`questionRefs` em `/api/study/training/next`) (2026-10-27)
-- [ ] Simulado de 90 questões cronometrado com acertos estimados contra o corte da 1ª fase (corte cadastrado junto da data da prova)
+- [x] Simulado cronometrado (`reports/simulado.py`): prova completa do acervo com 5 h (ajustável), sem gabarito até a entrega, troca de resposta, "marquei no chute", marcar para revisar, mapa da prova e entrega automática quando o tempo acaba; correção com acertos (projetados para 90 se faltam questões revisadas), corte, acertos por matéria, questões acima do ritmo e os erros com resolução e motivo. Botão "Simulado cronometrado" na prova e nos dias de simulado do Calendário (2026-10-27)
+- [x] Nota de corte (em acertos) nas provas do Calendário (`exam_dates.cutoff_correct`, `PATCH /api/calendar/exams/<id>`) e projeção (`study/projection.py`): "se a prova fosse hoje: ~X/90", contra o corte, e a reta das últimas 6 semanas (estimativas semanais + simulados) até a data da prova (2026-10-27)
+  - [ ] A estimativa usa a priori (50%) nas matérias ainda sem respostas: com poucas respostas ela fica perto de 45/90; aparece só a partir de 30 respostas
 - [ ] Leituras obrigatórias: lista de obras, progresso de leitura e questões por obra
 
 ## Processamento de provas
@@ -274,3 +276,4 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 1: confiança e tempo por questão alimentam o FSRS; painel de confiança e ritmo; estáticos com `Cache-Control: no-cache` | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 2: resolução comentada e dicas graduais por IA, revisáveis pelo aluno | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 3: seis motivos de erro com próximo passo, mini-resumo por subconteúdo e caderno de erros | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 4: simulado cronometrado, nota de corte e projeção de acertos até a prova | — |

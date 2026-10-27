@@ -73,6 +73,8 @@ def connect_db(path: Path) -> sqlite3.Connection:
         );
     """)
     diagnostics.add_missing_columns(db, "study_answers", diagnostics.ANSWER_EXTRA_COLUMNS)
+    # v3: nota de corte da prova, em número de acertos.
+    diagnostics.add_missing_columns(db, "exam_dates", (("cutoff_correct", "INTEGER"),))
     old = db.execute("SELECT value FROM metadata WHERE key='study_schema_version'").fetchone()
     if old and int(old[0]) > STUDY_SCHEMA_VERSION:
         db.close()

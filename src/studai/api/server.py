@@ -33,6 +33,7 @@ from studai.features.explanations import service as explanations
 from studai.features.explanations import summaries as content_summaries
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
+from studai.features.reports import simulado
 from studai.features.study import calendar as study_calendar
 from studai.features.study import error_notebook
 from studai.features.study import proficiency as study_proficiency
@@ -1001,7 +1002,8 @@ def _calendar_add_exam(body: dict) -> dict:
     db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
     try:
         return study_calendar.add_exam(db, course_id, body.get("name"), body.get("date"),
-                                       str(body.get("phase") or "fase1"), datetime.now(timezone.utc))
+                                       str(body.get("phase") or "fase1"), datetime.now(timezone.utc),
+                                       body.get("cutoff"))
     finally:
         db.close()
 
@@ -1516,6 +1518,19 @@ class Handler(BaseHTTPRequestHandler):
                 status, payload = _explanation_get(unquote(match.group(1)), int(match.group(2)),
                                                    parse_qs(parsed.query))
                 return self._json(status, payload)
+            match = re.fullmatch(r"/api/exam-sessions/([^/]+)", path)
+            if match:
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    detail = simulado.detail(db, match.group(1))
+                    # Próxima 1ª fase do curso, com a nota de corte, para comparar na correção.
+                    course_id = db.execute("SELECT course_id FROM attempts WHERE id=?",
+                                           (match.group(1),)).fetchone()["course_id"]
+                    exams = study_calendar.list_exams(db, course_id, study.local_date(datetime.now(timezone.utc)))
+                    detail["target"] = study_calendar.next_exam([exam for exam in exams if exam["phase"] == "fase1"])
+                    return self._json(200, detail)
+                finally:
+                    db.close()
             if path == "/api/study/proficiency":
                 course_id = _report_course_id(parse_qs(parsed.query))
                 db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
@@ -1658,6 +1673,27 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         path = unquote(urlsplit(self.path).path)
         try:
+            match = re.fullmatch(r"/api/exam-sessions/([^/]+)/questions/(\d+)", path)
+            if match:
+                body = self._read_json()
+                db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    if "flagged" in body:
+                        return self._json(200, simulado.flag(db, match.group(1), int(match.group(2)),
+                                                             bool(body["flagged"])))
+                    return self._json(200, simulado.set_reason(db, match.group(1), int(match.group(2)),
+                                                               body.get("reason"), body.get("note")))
+                finally:
+                    db.close()
+            match = re.fullmatch(r"/api/calendar/exams/([a-f0-9]+)", path)
+            if match:
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_calendar.set_exam_cutoff(
+                        db, match.group(1), self._read_json().get("cutoff"),
+                        study.local_date(datetime.now(timezone.utc))))
+                finally:
+                    db.close()
             match = re.fullmatch(r"/api/exams/([^/]+)/questions/(\d+)/review", path)
             if not match:
                 return self._json(404, {"error": "rota não encontrada"})
@@ -1698,9 +1734,17 @@ class Handler(BaseHTTPRequestHandler):
                 course_id = _report_course_id({}, body)
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
+                    pool = _reports_pool(db, config, course_id)
+                    if body.get("timed"):
+                        try:
+                            duration = int(float(body.get("durationMinutes") or 300) * 60)
+                        except (TypeError, ValueError):
+                            raise ValueError("durationMinutes deve ser um número de minutos") from None
+                        return self._json(201, simulado.start_simulado(
+                            db, config, course_id, pool, summary["id"], exam_name=summary.get("name"),
+                            duration_s=duration))
                     return self._json(201, reports.start_exam_session(
-                        db, config, course_id, _reports_pool(db, config, course_id), summary["id"],
-                        exam_name=summary.get("name")))
+                        db, config, course_id, pool, summary["id"], exam_name=summary.get("name")))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/exam-sessions/([^/]+)/answers", path)
@@ -1712,6 +1756,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("informe ordinal como número inteiro") from None
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
+                    if simulado.is_timed(db, match.group(1)):
+                        return self._json(200, simulado.answer(
+                            db, match.group(1), ordinal, body.get("answer"), confidence=body.get("confidence"),
+                            elapsed_ms=body.get("elapsedMs")))
                     return self._json(200, reports.answer_exam_question(
                         db, match.group(1), ordinal, body.get("answer"), body.get("reason"),
                         **_answer_extras(body)))
@@ -1721,6 +1769,8 @@ class Handler(BaseHTTPRequestHandler):
             if match:
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
+                    if simulado.is_timed(db, match.group(1)):
+                        return self._json(200, simulado.finish(db, match.group(1)))
                     return self._json(200, reports.finish_exam_session(db, match.group(1)))
                 finally:
                     db.close()

@@ -486,7 +486,7 @@ function renderExamReview() {
   reviewSelection = new Set([...reviewSelection].filter(number => known.has(number)));
   const cards = questions.map(question => renderReviewQuestion(exam.id, question, sharedTexts)).join("");
   const counter = (key, label, cls = "") => `<span class="review-count ${cls}"><strong>${reviewProgress[key] ?? 0}</strong>${label}</span>`;
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="button button-secondary" data-start-simulado="${escapeHtml(exam.id)}" title="Prova completa com cronômetro e correção só no fim">Simulado cronometrado</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
     <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="review-counts">${counter("approved", "aprovadas", "is-approved")}${counter("pending", "pendentes", "is-pending")}${counter("unusable", "inutilizáveis")}${counter("badCrop", "recorte ruim", "is-bad-crop")}</div><div class="workspace-meta">${escapeHtml(ragLabel)} · só questões aprovadas entram no RAG</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
     ${questions.length ? reviewFilterBar(questions) : ""}
     <div class="exam-review-list">${cards || `<div class="loading-card">Esta prova não contém questões extraídas.</div>`}</div>`;
@@ -672,6 +672,7 @@ function bindExamReviewActions() {
     workspace.classList.add("hidden"); currentExamReview = null; reviewSelection = new Set();
   });
   $("[data-start-quiz]", workspace)?.addEventListener("click", () => openExamQuiz(examId));
+  $("[data-start-simulado]", workspace)?.addEventListener("click", () => openSimulado(examId));
   $("[data-retry-rag]", workspace)?.addEventListener("click", () => retryReviewIndex(examId));
   $$("[data-review-filter]", workspace).forEach(control => control.addEventListener(control.type === "search" ? "input" : "change", () => {
     const key = control.dataset.reviewFilter;
@@ -1108,6 +1109,248 @@ async function commitExamAnswer(quiz, number, answer, reason = null, extras = {}
     quiz.selected = null;
     renderExamQuiz();
   }, 800);
+}
+
+// ---- Simulado cronometrado: prova completa nas condições da 1ª fase (5 h, sem gabarito até a entrega).
+const SIMULADO_PREFIX = "studai-simulado:";
+let currentSimulado = null;
+
+function simuladoStorage(examId, value) {
+  try {
+    if (value === undefined) return localStorage.getItem(`${SIMULADO_PREFIX}${examId}`);
+    if (value === null) localStorage.removeItem(`${SIMULADO_PREFIX}${examId}`);
+    else localStorage.setItem(`${SIMULADO_PREFIX}${examId}`, value);
+  } catch { return null; }
+  return null;
+}
+
+function formatCountdown(seconds) {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  return `${hours}:${String(Math.floor((total % 3600) / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+async function openSimulado(examId) {
+  const workspace = $("#exam-quiz-workspace");
+  workspace.classList.remove("hidden");
+  $("#exam-question-workspace").classList.add("hidden");
+  workspace.innerHTML = `<div class="loading-card">Preparando o simulado…</div>`;
+  try {
+    const data = await api(`/api/exams/${encodeURIComponent(examId)}/questions`);
+    currentSimulado = { examId, data, detail: null, index: 0, guesses: {} };
+    const stored = simuladoStorage(examId);
+    if (stored) {
+      try {
+        const detail = await api(`/api/exam-sessions/${encodeURIComponent(stored)}`);
+        currentSimulado.detail = detail;
+        if (detail.status === "completed") simuladoStorage(examId, null);
+      } catch { simuladoStorage(examId, null); }
+    }
+    renderSimulado();
+    workspace.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    workspace.innerHTML = `<div class="exam-quiz-error">Não foi possível abrir o simulado: ${escapeHtml(error.message)}<button class="blank-button" data-sim-close>Voltar</button></div>`;
+    bindSimulado();
+  }
+}
+
+async function startSimulado(minutes) {
+  const sim = currentSimulado;
+  try {
+    sim.detail = await api(`/api/exams/${encodeURIComponent(sim.examId)}/sessions`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseId: examSessionCourseId(), timed: true, durationMinutes: minutes }),
+    });
+    sim.index = 0;
+    simuladoStorage(sim.examId, sim.detail.id);
+    renderSimulado();
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function simuladoQuestion(sim, ordinal) {
+  const entry = sim.detail.questions.find(item => item.ordinal === ordinal);
+  const question = sim.data.questions.find(item => Number(item.numero) === Number(entry.number));
+  return { entry, question };
+}
+
+function simuladoContent(sim, question) {
+  const shared = question.texto_id != null ? (sim.data.sharedTexts || {})[String(question.texto_id)] : null;
+  const sharedText = typeof shared === "string" ? shared : shared?.texto;
+  const sharedImages = shared && typeof shared === "object" ? shared.figuras : [];
+  return questionContentMarkup(sim.data.exam.id, question, sharedText, sharedImages);
+}
+
+function renderSimulado() {
+  const workspace = $("#exam-quiz-workspace");
+  const sim = currentSimulado;
+  if (!sim) return;
+  const exam = sim.data.exam;
+  if (!sim.detail) {
+    const eligible = sim.data.questions.length;
+    workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Simulado cronometrado</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">Como na 1ª fase: tempo corrido, sem gabarito até entregar. Você pode trocar respostas, marcar questões para voltar e entregar quando quiser.</div></div><button class="blank-button" data-sim-close>Voltar</button></div>
+      <div class="sim-setup"><label>Tempo de prova (minutos)<input type="number" id="sim-minutes" min="5" max="360" value="300"></label><p class="help-copy">Entram só as questões revisadas e com gabarito desta prova (até ${eligible}). Com menos de 90, a nota é projetada para 90 questões.</p><button class="button button-primary" data-sim-start>Começar o simulado</button></div>`;
+    bindSimulado();
+    return;
+  }
+  if (sim.detail.status === "completed") return renderSimuladoResult();
+  const detail = sim.detail;
+  const total = detail.questions.length;
+  sim.index = Math.min(Math.max(sim.index, 0), total - 1);
+  const { entry, question } = simuladoQuestion(sim, detail.questions[sim.index].ordinal);
+  startQuestionClock(`sim:${detail.id}:${entry.ordinal}`);
+  const answered = detail.questions.filter(item => item.selected).length;
+  const grid = detail.questions.map((item, index) => `<button type="button" class="sim-cell ${item.selected ? "answered" : ""} ${item.flagged ? "flagged" : ""} ${index === sim.index ? "current" : ""}" data-sim-go="${index}" aria-label="Questão ${item.number}${item.selected ? `, marcada ${item.selected}` : ", em branco"}${item.flagged ? ", para revisar" : ""}">${item.number}</button>`).join("");
+  const guess = Boolean(sim.guesses[entry.ordinal]);
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Simulado · ${escapeHtml(exam.name)}</p><h2>Questão ${entry.number} <small>(${sim.index + 1} de ${total})</small></h2><div class="workspace-meta">${answered} de ${total} respondidas · ${clockMarkup()}</div></div><div class="sim-top-actions"><span class="sim-countdown" data-sim-countdown title="Tempo restante">${formatCountdown(detail.remainingS)}</span><button class="button button-primary" data-sim-finish>Entregar prova</button></div></div>
+    <details class="sim-grid-wrap"><summary>Mapa da prova · ${answered}/${total} respondidas · ${detail.questions.filter(item => item.flagged).length} para revisar</summary><div class="sim-grid">${grid}</div></details>
+    ${simuladoContent(sim, question)}
+    <div class="exam-options">${optionsMarkup(exam.id, question, { selected: entry.selected, submitted: false, correctAnswer: null, saved: null, attr: "data-sim-option" })}</div>
+    <div class="sim-question-actions"><label class="sim-toggle"><input type="checkbox" data-sim-guess ${guess ? "checked" : ""}> Marquei no chute</label><button type="button" class="text-button" data-sim-flag>${entry.flagged ? "★ Marcada para revisar" : "☆ Marcar para revisar"}</button>${entry.selected ? `<button type="button" class="text-button" data-sim-clear>Apagar resposta</button>` : ""}</div>
+    <div class="exam-quiz-actions"><button class="blank-button" data-sim-prev ${sim.index === 0 ? "disabled" : ""}>← Anterior</button><button class="button button-secondary" data-sim-next ${sim.index === total - 1 ? "disabled" : ""}>Próxima →</button></div>`;
+  window.studaiFocus?.attach(workspace, { current: sim.index + 1, total, key: `sim-${entry.ordinal}` });
+  bindSimulado();
+}
+
+async function simuladoAnswer(letter) {
+  const sim = currentSimulado;
+  const entry = sim.detail.questions[sim.index];
+  const confidence = letter && sim.guesses[entry.ordinal] ? "guess" : null;
+  try {
+    await api(`/api/exam-sessions/${encodeURIComponent(sim.detail.id)}/answers`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ordinal: entry.ordinal, answer: letter, confidence, elapsedMs: questionElapsedMs(`sim:${sim.detail.id}:${entry.ordinal}`) }),
+    });
+    entry.selected = letter;
+    questionClock.key = null; // a próxima visita conta do zero e soma no servidor
+    renderSimulado();
+  } catch (error) {
+    toast(error.message, true);
+    if (/tempo acabou|entregue/.test(error.message)) refreshSimulado();
+  }
+}
+
+async function refreshSimulado() {
+  const sim = currentSimulado;
+  if (!sim?.detail) return;
+  sim.detail = await api(`/api/exam-sessions/${encodeURIComponent(sim.detail.id)}`);
+  if (sim.detail.status === "completed") simuladoStorage(sim.examId, null);
+  renderSimulado();
+}
+
+async function finishSimulado(confirmFirst = true) {
+  const sim = currentSimulado;
+  const blank = sim.detail.questions.filter(item => !item.selected).length;
+  if (confirmFirst && !window.confirm(`Entregar o simulado?${blank ? ` ${blank} ${blank === 1 ? "questão está" : "questões estão"} em branco.` : ""}`)) return;
+  try {
+    await api(`/api/exam-sessions/${encodeURIComponent(sim.detail.id)}/finish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    await refreshSimulado();
+    $("#exam-quiz-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+window.setInterval(() => {
+  const sim = currentSimulado;
+  if (!sim?.detail || sim.detail.status !== "in_progress") return;
+  const left = (new Date(sim.detail.deadline) - Date.now()) / 1000;
+  $$("[data-sim-countdown]").forEach(el => {
+    el.textContent = formatCountdown(left);
+    el.classList.toggle("warn", left < 30 * 60);
+  });
+  if (left <= 0 && !sim.closing) {
+    sim.closing = true;
+    toast("Tempo esgotado: o simulado foi entregue.");
+    finishSimulado(false).finally(() => { sim.closing = false; });
+  }
+}, 1000);
+
+function renderSimuladoResult() {
+  const workspace = $("#exam-quiz-workspace");
+  const sim = currentSimulado;
+  const detail = sim.detail;
+  const score = detail.score;
+  const target = detail.target;
+  const projected = score.total < 90 ? score.scaledTo90 : score.correct;
+  const cutoff = target?.cutoff;
+  const verdict = cutoff == null
+    ? `<p class="muted">Cadastre a nota de corte da sua 1ª fase no Calendário para comparar.</p>`
+    : `<p class="${projected >= cutoff ? "sim-ok" : "sim-bad"}">${projected >= cutoff ? `Acima do corte (${cutoff}) por ${projected - cutoff}.` : `Faltaram ${cutoff - projected} para o corte (${cutoff}).`}</p>`;
+  const subjects = score.subjects.map(item => `<tr><td>${escapeHtml(item.subject)}</td><td>${item.correct}/${item.total}</td><td>${item.total ? Math.round(item.correct / item.total * 100) : 0}%</td><td>${item.total - (item.answered || 0) || "—"}</td></tr>`).join("");
+  const timed = detail.questions.filter(item => item.elapsedMs);
+  const avg = timed.length ? timed.reduce((sum, item) => sum + item.elapsedMs, 0) / timed.length / 1000 : null;
+  const errors = detail.questions.filter(item => !item.correct && item.selected);
+  const blanks = detail.questions.filter(item => !item.selected);
+  const errorRows = errors.map(item => {
+    const { question } = simuladoQuestion(sim, item.ordinal);
+    const picker = item.selected
+      ? (item.reason
+        ? `<p class="sim-reason">Motivo: <b>${escapeHtml(ERROR_REASON_LABELS[item.reason] || item.reason)}</b>${item.note ? ` · “${escapeHtml(item.note)}”` : ""}</p>`
+        : `<div data-sim-reason-for="${item.ordinal}">${reasonPickerMarkup("data-sim-reason")}</div>`)
+      : "";
+    return `<details class="sim-error"><summary><b>Questão ${item.number}</b> · ${escapeHtml(item.subject)} · ${item.selected ? `marcou ${escapeHtml(item.selected)}` : "em branco"}, gabarito ${escapeHtml(item.correctAnswer)}${item.reason ? "" : item.selected ? ` <span class="sim-pending">motivo pendente</span>` : ""}</summary>
+      ${simuladoContent(sim, question)}${picker}${explainSlot(sim.data.exam.id, item.number, { attemptId: detail.id, ordinal: item.ordinal, courseId: examSessionCourseId() }, { mode: "full" })}</details>`;
+  }).join("");
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Simulado corrigido</p><h2>${escapeHtml(sim.data.exam.name)}</h2><div class="workspace-meta">${score.answered} de ${score.total} respondidas${avg ? ` · ${formatClock(avg)} por questão em média (ritmo: ${formatClock(PACE_SECONDS)})` : ""}</div></div><button class="blank-button" data-sim-close>Fechar</button></div>
+    <div class="sim-score"><div><strong>${score.correct} de ${score.total} acertos</strong>${score.total < 90 ? `<span>≈ ${score.scaledTo90}/90 projetado para a prova inteira</span>` : ""}</div>${verdict}</div>
+    <table class="subject-table"><thead><tr><th>Matéria</th><th>Acertos</th><th>%</th><th>Em branco</th></tr></thead><tbody>${subjects}</tbody></table>
+    ${score.overPace.length ? `<p class="help-copy">${score.overPace.length} ${score.overPace.length === 1 ? "questão passou" : "questões passaram"} de ${formatClock(PACE_SECONDS)}: ${score.overPace.map(ordinal => detail.questions.find(item => item.ordinal === ordinal)?.number).join(", ")}.</p>` : ""}
+    <h3 class="sim-errors-title">Erros (${errors.length})</h3><p class="help-copy">Abra cada um para ver a resolução e dizer o motivo do erro; ele vai para o caderno de erros e decide quando a questão volta.</p>
+    <div class="sim-errors">${errorRows || `<p>Nenhum erro entre as respondidas.</p>`}</div>
+    ${blanks.length ? `<p class="help-copy">Em branco (${blanks.length}): ${blanks.map(item => item.number).join(", ")}.</p>` : ""}
+    <div class="exam-quiz-actions"><span></span><button class="button button-secondary" data-sim-new>Fazer outro simulado desta prova</button></div>`;
+  window.studaiExplain?.mount(workspace);
+  window.studaiFocus?.attach(workspace, { key: "sim-result", label: "Simulado corrigido" });
+  bindSimulado();
+}
+
+function bindSimulado() {
+  const workspace = $("#exam-quiz-workspace");
+  const sim = currentSimulado;
+  $("[data-sim-close]", workspace)?.addEventListener("click", () => {
+    workspace.classList.add("hidden");
+    $("#exam-question-workspace").classList.remove("hidden");
+  });
+  $("[data-sim-start]", workspace)?.addEventListener("click", () => startSimulado(Number($("#sim-minutes", workspace).value) || 300));
+  $$("[data-sim-option]", workspace).forEach(button => button.addEventListener("click", () => simuladoAnswer(button.dataset.simOption)));
+  $("[data-sim-clear]", workspace)?.addEventListener("click", () => simuladoAnswer(null));
+  $("[data-sim-guess]", workspace)?.addEventListener("change", event => {
+    const entry = sim.detail.questions[sim.index];
+    sim.guesses[entry.ordinal] = event.target.checked;
+    if (entry.selected) simuladoAnswer(entry.selected);
+  });
+  $("[data-sim-flag]", workspace)?.addEventListener("click", async () => {
+    const entry = sim.detail.questions[sim.index];
+    try {
+      await api(`/api/exam-sessions/${encodeURIComponent(sim.detail.id)}/questions/${entry.ordinal}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ flagged: !entry.flagged }),
+      });
+      entry.flagged = !entry.flagged;
+      renderSimulado();
+    } catch (error) { toast(error.message, true); }
+  });
+  $("[data-sim-prev]", workspace)?.addEventListener("click", () => { sim.index--; renderSimulado(); });
+  $("[data-sim-next]", workspace)?.addEventListener("click", () => { sim.index++; renderSimulado(); });
+  $$("[data-sim-go]", workspace).forEach(button => button.addEventListener("click", () => { sim.index = Number(button.dataset.simGo); renderSimulado(); }));
+  $("[data-sim-finish]", workspace)?.addEventListener("click", () => finishSimulado());
+  $("[data-sim-new]", workspace)?.addEventListener("click", () => { sim.detail = null; renderSimulado(); });
+  $$("[data-sim-reason]", workspace).forEach(button => button.addEventListener("click", async () => {
+    const holder = button.closest("[data-sim-reason-for]");
+    const ordinal = Number(holder.dataset.simReasonFor);
+    try {
+      const saved = await api(`/api/exam-sessions/${encodeURIComponent(sim.detail.id)}/questions/${ordinal}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: button.dataset.simReason, note: reasonNote(holder) }),
+      });
+      Object.assign(sim.detail.questions.find(item => item.ordinal === ordinal), { reason: saved.reason, note: saved.note });
+      const open = [...workspace.querySelectorAll(".sim-error")].map(el => el.open);
+      renderSimuladoResult();
+      workspace.querySelectorAll(".sim-error").forEach((el, index) => { el.open = open[index]; });
+      refreshErrorNotebook();
+    } catch (error) { toast(error.message, true); }
+  }));
 }
 
 async function refreshCourses() {
