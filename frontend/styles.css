@@ -3373,6 +3373,11 @@ textarea {
 .sim-setup label { display: grid; gap: 5px; font-weight: 600; }
 .sim-setup input { max-width: 140px; }
 .sim-top-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+@media (max-width: 700px) {
+  /* Cronômetro, "Entregar" e "Modo foco" descem para a linha de baixo no celular. */
+  #exam-quiz-workspace .workspace-top { flex-wrap: wrap; }
+  #exam-quiz-workspace .workspace-top > div:first-child { flex: 1 1 100%; min-width: 0; }
+}
 .sim-countdown {
   font: 700 20px var(--font-ui);
   font-variant-numeric: tabular-nums;
@@ -3670,6 +3675,8 @@ textarea {
 .today-progress {
   margin-top: 18px;
 }
+/* A tabela de domínio tem 5 colunas: no celular ela rola dentro do painel. */
+#today-progress { overflow-x: auto; }
 .today-reason {
   display: inline-block;
   font-size: 12.5px;
@@ -3911,7 +3918,9 @@ textarea {
     padding: 15px;
   }
   .training-section-heading .training-count {
+    width: auto;
     margin: 0 0 0 51px;
+    white-space: normal;
   }
   .training-builder-actions {
     align-items: stretch;

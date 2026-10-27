@@ -35,7 +35,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
-| 11 | Experiência de estudo (1ª fase) | concluída | 9/10 |
+| 11 | Experiência de estudo (1ª fase) | concluída | 11/11 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -214,6 +214,9 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
   - [ ] A estimativa usa a priori (50%) nas matérias ainda sem respostas: com poucas respostas ela fica perto de 45/90; aparece só a partir de 30 respostas
 - [x] Leituras obrigatórias (aba "Leituras", `study/readings.py`, `GET /api/readings`, `PATCH /api/readings/<obra>`): as 11 obras da lista FUVEST da taxonomia, status (não comecei / lendo / li / revisei), anotações, questões no acervo e acertos por obra, "Treinar esta obra" (2026-10-27)
   - [x] Correção: blocos do calendário com conteúdos pedidos só reaproveitam questões desses conteúdos que já estão na fila (antes, qualquer questão da matéria) (2026-10-27)
+- Teste manual no navegador embutido (desktop e 375 px): Treinamento com confiança, dica, resolução, motivo, prática e caderno; "Responder prova"; simulado com correção; Calendário com corte e projeção; Leituras (2026-10-27)
+  - [x] No celular, o contador do Treinamento e a tabela "Domínio por conteúdo" transbordavam a tela; o cabeçalho do simulado agora quebra a linha
+  - [ ] A lista de provas da aba "Provas e gabaritos" ainda transborda em 375 px (linha da prova com o botão Remover)
 
 ## Processamento de provas
 
