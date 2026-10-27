@@ -62,6 +62,13 @@ SHARED_RE = re.compile(
 ALT_RE = re.compile(r"^\(([A-E])\)\s*(.*)$", re.S)
 # Provas até 2017 usam "a) texto"; a linha é reescrita como "(A) texto" ao ser lida.
 LOWER_ALT_RE = re.compile(r"^([a-e])\)\s*(.*)$", re.S)
+# Outras provas e listas: "A) texto" ou "A. texto" (também reescritas como "(A) texto").
+PAREN_ALT_RE = re.compile(r"^([A-E])\)\s*(.*)$", re.S)
+DOT_ALT_RE = re.compile(r"^([A-E])\.\s+(.*)$", re.S)
+ALT_STYLES = {"lower": LOWER_ALT_RE, "paren": PAREN_ALT_RE, "dot": DOT_ALT_RE}
+# Marcador com a palavra "QUESTÃO 91" (ENEM, cursinhos): abre a questão mesmo quando a
+# numeração da prova não começa em 1.
+QUESTION_WORD_RE = re.compile(r"^QUEST[ÃA]O\s*(\d{1,3})\b\s*[.:–—-]?\s*(.*)$", re.I | re.S)
 # Número colado ao começo do enunciado: "07 Na perspectiva..." (2001–2017) ou
 # "V.01 – Em relação..." (1998–2000, com a letra do dia).
 INLINE_MARKER_RE = re.compile(r"^\*?\s*(?:[A-Z]\s?\.\s?)?(\d{2,3})(?:\s*[–—-])?(?:\s+(.*)|$)", re.S)
@@ -625,8 +632,9 @@ def _ocr_fix_marker(txt: str) -> str:
 
 
 def _normalize_alt(txt: str, alt_style: str) -> str:
-    """Na prova de alternativas "a)" a linha passa a ser "(A)", o formato do resto do código."""
-    m = LOWER_ALT_RE.match(txt) if alt_style == "lower" else None
+    """Alternativas "a)", "A)" ou "A." passam a ser "(A)", o formato do resto do código."""
+    pattern = ALT_STYLES.get(alt_style)
+    m = pattern.match(txt) if pattern else None
     return f"({m.group(1).upper()}) {m.group(2)}".strip() if m else txt
 
 
@@ -1049,7 +1057,8 @@ def extract_page(page: pymupdf.Page, pno: int, alt_style: str = "upper",
         # Em alguns PDFs oficiais o marcador numérico fica dentro da caixa de
         # uma imagem; ele continua sendo texto estrutural e não pode sumir.
         # Vale também para o número em negrito colado ao texto (2013 Q61).
-        if MARKER_RE.match(r.text) or r.lead_num is not None or (r.fonts == {"OCR"} and OCR_INLINE_RE.match(r.text)):
+        if (MARKER_RE.match(r.text) or QUESTION_WORD_RE.match(r.text) or r.lead_num is not None
+                or (r.fonts == {"OCR"} and OCR_INLINE_RE.match(r.text))):
             items.append(Item("text", pno, r.col, r.bbox.y0, row=r))
             continue
         if id(r) in captions:
@@ -1196,15 +1205,19 @@ def new_question(num: int, page: int) -> dict:
 
 
 def _alt_style(doc: pymupdf.Document, texts: dict[int, str] | None = None) -> str:
-    """"lower" quando a prova marca as alternativas com "a)" em vez de "(A)" (provas até 2017)."""
-    upper = lower = 0
+    """Como a prova marca as alternativas: "upper" para "(A)" (FUVEST), "lower" para "a)"
+    (FUVEST até 2017), "paren" para "A)" e "dot" para "A." (outras provas e listas)."""
+    counts = dict.fromkeys(("upper", *ALT_STYLES), 0)
     for pno, page in enumerate(doc):
         text = texts[pno] if texts and pno in texts else page.get_text("text")
         for line in text.splitlines():
             line = line.strip()
-            upper += bool(ALT_RE.match(line))
-            lower += bool(LOWER_ALT_RE.match(line))
-    return "lower" if lower > upper else "upper"
+            counts["upper"] += bool(ALT_RE.match(line))
+            for style, pattern in ALT_STYLES.items():
+                counts[style] += bool(pattern.match(line))
+    # Empate fica com o formato FUVEST; os outros só valem com maioria.
+    best = max(ALT_STYLES, key=lambda style: counts[style])
+    return best if counts[best] > counts["upper"] else "upper"
 
 
 def _inline_marker(t: str, expected: int) -> str | None:
@@ -1276,7 +1289,7 @@ def _order_by_markers(items: list[Item]) -> list[Item]:
     """
     nums: list[int | None] = []
     for it in items:
-        m = MARKER_RE.match(it.row.text) if it.kind == "text" else None
+        m = (MARKER_RE.match(it.row.text) or QUESTION_WORD_RE.match(it.row.text)) if it.kind == "text" else None
         nums.append(int(m.group(1)) if m else it.row.lead_num if it.kind == "text" else None)
     found = [n for n in nums if n is not None]
     if (len(found) < 2 or found == sorted(found) or len(set(found)) != len(found)
@@ -1453,10 +1466,15 @@ def _parse_pages(doc: pymupdf.Document, ocr_pages: dict[int, dict], progress=Non
 
                 mk = MARKER_RE.match(t)
                 rest = None
+                qm = QUESTION_WORD_RE.match(t)
+                word_num = int(qm.group(1)) if qm else None
                 # Número colado ao texto abre questão quando vem destacado (negrito ou
                 # corpo maior) ou quando a anterior já chegou à alternativa E: "12 frascos..."
                 # no meio de um enunciado não é marcador.
-                if not (mk and int(mk.group(1)) == expected) and (
+                if qm and (word_num == expected or not questions or expected < word_num <= expected + OCR_SKIP):
+                    # "QUESTÃO 91": a primeira questão pode ter qualquer número (ENEM dia 2, listas).
+                    mk, rest, expected = None, qm.group(2).strip(), word_num
+                elif not (mk and int(mk.group(1)) == expected) and (
                         it.row.lead_num == expected
                         or cur is None or mode != "stem" and "E" in cur["alternativas"]
                         # OCR não sabe o negrito: "02 Considere..." (2002 dia 2) abre questão

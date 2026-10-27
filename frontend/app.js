@@ -532,10 +532,38 @@ function renderReviewEditor(examId, question) {
 const ORIGIN_LABELS = { fuvest: "FUVEST", vestibular: "Outro vestibular", lista: "Lista de exercícios", ia: "Gerada por IA" };
 const DIFFICULTY_LABELS = { 1: "Fácil", 2: "Média", 3: "Difícil" };
 
+function pasteKeyMarkup(exam) {
+  return `<details class="paste-key"><summary>Colar gabarito</summary><form data-paste-key="${escapeHtml(exam.id)}"><textarea name="key" rows="3" placeholder="1-C 2-A 3-E … (ou uma resposta por linha: 91 B)"></textarea><label class="check-row"><input type="checkbox" name="replace"><span>Substituir respostas já importadas</span></label><button class="button button-secondary" type="submit">Importar gabarito</button></form></details>`;
+}
+
+// "1-C 2-A", "91 B", "Q12: e" → {"1": "C", ...}; "*" marca questão anulada.
+function parseAnswerKey(text) {
+  const answers = {};
+  for (const match of String(text).matchAll(/(?:^|[^\dA-Za-z])(?:q(?:uest[ãa]o)?\s*)?(\d{1,3})\s*[-–.:)=]?\s*([A-Ea-e*])(?![A-Za-z])/gi)) {
+    answers[String(Number(match[1]))] = match[2].toUpperCase();
+  }
+  return answers;
+}
+
+async function importPastedKey(form) {
+  const answers = parseAnswerKey(form.key.value);
+  if (!Object.keys(answers).length) return toast("Não encontrei respostas no texto (use o formato 1-C 2-A).", true);
+  try {
+    const result = await api("/api/answer-keys/import", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ examId: form.dataset.pasteKey, answers, replace: form.replace.checked }),
+    });
+    toast(`${result.imported ?? Object.keys(answers).length} respostas importadas.`);
+    await openExamReview(form.dataset.pasteKey);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
 function originEditorMarkup(exam) {
   const origin = exam.origin || { tipo: "fuvest", nome: null };
   if (origin.tipo === "ia") return `<p class="exam-origin-note">Questões geradas pela IA para treino.</p>`;
-  return `<form class="exam-origin" data-exam-origin="${escapeHtml(exam.id)}"><label>Origem<select name="tipo">${["fuvest", "vestibular", "lista"].map(kind => `<option value="${kind}" ${origin.tipo === kind ? "selected" : ""}>${ORIGIN_LABELS[kind]}</option>`).join("")}</select></label><label>Nome<input name="nome" value="${escapeHtml(origin.nome || "")}" placeholder="ex.: ENEM 2023 dia 2" maxlength="120"></label><button class="text-button" type="submit">Salvar origem</button></form>`;
+  return `${origin.tipo === "fuvest" ? "" : pasteKeyMarkup(exam)}<form class="exam-origin" data-exam-origin="${escapeHtml(exam.id)}"><label>Origem<select name="tipo">${["fuvest", "vestibular", "lista"].map(kind => `<option value="${kind}" ${origin.tipo === kind ? "selected" : ""}>${ORIGIN_LABELS[kind]}</option>`).join("")}</select></label><label>Nome<input name="nome" value="${escapeHtml(origin.nome || "")}" placeholder="ex.: ENEM 2023 dia 2" maxlength="120"></label><button class="text-button" type="submit">Salvar origem</button></form>`;
 }
 
 async function saveExamOrigin(form) {
@@ -704,6 +732,7 @@ function bindExamReviewActions() {
   $("[data-start-quiz]", workspace)?.addEventListener("click", () => openExamQuiz(examId));
   $("[data-start-simulado]", workspace)?.addEventListener("click", () => openSimulado(examId));
   $("[data-exam-origin]", workspace)?.addEventListener("submit", event => { event.preventDefault(); saveExamOrigin(event.target); });
+  $("[data-paste-key]", workspace)?.addEventListener("submit", event => { event.preventDefault(); importPastedKey(event.target); });
   $("[data-retry-rag]", workspace)?.addEventListener("click", () => retryReviewIndex(examId));
   $$("[data-review-filter]", workspace).forEach(control => control.addEventListener(control.type === "search" ? "input" : "change", () => {
     const key = control.dataset.reviewFilter;
@@ -1520,7 +1549,10 @@ async function processPdf(event) {
   const file = $("#pdf-file").files[0];
   const keyFile = $("#key-pdf-file").files[0];
   if (!file) return toast("Selecione um PDF.", true);
-  if (!keyFile) return toast("Selecione o gabarito correspondente.", true);
+  const originType = $("#process-origin-type").value;
+  const originName = $("#process-origin-name").value.trim();
+  if (originType !== "fuvest" && !originName) return toast("Dê um nome à prova ou lista (ex.: ENEM 2023 dia 2).", true);
+  if (!keyFile && originType === "fuvest") return toast("Selecione o gabarito correspondente.", true);
   const button = $("#process-form button[type=submit]");
   const status = $("#process-status");
   button.disabled = true;
@@ -1530,7 +1562,8 @@ async function processPdf(event) {
   try {
     const config = processConfig();
     if (!config.ollamaModels.length && !config.geminiModels.length && !config.cloudProviders.length) throw new Error("Selecione ao menos um modelo Ollama, Gemini ou uma faixa grátis de nuvem.");
-    const record = { jobId: newClientJobId(), proof: file, keyFile, filename: file.name, keyFilename: keyFile.name, config, images: $("#process-images").checked };
+    const record = { jobId: newClientJobId(), proof: file, keyFile: keyFile || null, filename: file.name, keyFilename: keyFile?.name || null, config, images: $("#process-images").checked,
+      origin: originType === "fuvest" ? null : { tipo: originType, nome: originName } };
     await savePendingProcess(record);
     await runSavedProcess(record, processUploadController.signal);
   } catch (error) {
@@ -1559,6 +1592,7 @@ async function submitSavedProcess(record, signal) {
     query.set("cloudProviders", record.config.cloudProviders.join(","));
   }
   if (record.images) query.set("images", "sempre");
+  if (record.origin) { query.set("originType", record.origin.tipo); query.set("originName", record.origin.nome); }
   return api(`/api/exams/process?${query}`, { method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.proof, signal });
 }
 
@@ -1573,8 +1607,9 @@ async function runSavedProcess(record, signal) {
   currentProcessJob = record.jobId;
   const result = await pollJob(record.jobId, renderProcessProgress);
   let keySummary = "";
-  renderProcessProgress({ status: "running", stage: "answer_key", progress: 95, message: "Importando respostas do gabarito…" });
-  try {
+  if (record.keyFile) renderProcessProgress({ status: "running", stage: "answer_key", progress: 95, message: "Importando respostas do gabarito…" });
+  if (!record.keyFile) keySummary = "<br>Sem PDF de gabarito: cole as respostas na revisão da prova.";
+  else try {
     const imported = await api(`/api/exams/${encodeURIComponent(result.examId)}/answer-key?${new URLSearchParams({ filename: record.keyFilename })}`, {
       method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.keyFile,
     });
@@ -1604,7 +1639,7 @@ async function recoverActiveProcess() {
   button.textContent = "Retomando processamento…";
   try {
     const record = await readPendingProcess();
-    if (!record?.jobId || !record.proof || !record.keyFile) throw new Error("Os PDFs salvos para retomar não estão disponíveis neste navegador.");
+    if (!record?.jobId || !record.proof || (!record.keyFile && !record.origin)) throw new Error("Os PDFs salvos para retomar não estão disponíveis neste navegador.");
     currentProcessJob = record.jobId;
     renderProcessProgress({ status: "running", message: "Reconectando ao processamento…", progress: 2 });
     await runSavedProcess(record);
@@ -2258,6 +2293,11 @@ function bindEvents() {
   $("#add-training-block").addEventListener("click", appendTrainingBlock);
   $("#reset-learning-context").addEventListener("click", resetLearningContext);
   $("#pdf-file").addEventListener("change", event => { $("#file-label").textContent = event.target.files[0]?.name || "Escolher PDF"; });
+  $("#process-origin-type").addEventListener("change", event => {
+    const fuvest = event.target.value === "fuvest";
+    $("#process-origin-name-row").classList.toggle("hidden", fuvest);
+    $("#key-pdf-file").required = fuvest;
+  });
   $("#key-pdf-file").addEventListener("change", event => { $("#key-file-label").textContent = event.target.files[0]?.name || "Escolher PDF do gabarito"; });
   $("#drop-zone").addEventListener("dragover", event => { event.preventDefault(); event.currentTarget.classList.add("dragover"); });
   $("#drop-zone").addEventListener("dragleave", event => event.currentTarget.classList.remove("dragover"));

@@ -1016,6 +1016,9 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
     clean_name = Path(filename).name
     if not clean_name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
         raise ValueError("envie um arquivo PDF válido")
+    # Origem informada no envio (outra prova, lista); sem ela a prova é FUVEST.
+    origin = (question_origin.validate_origin({"tipo": payload.get("originType"), "nome": payload.get("originName")})
+              if payload.get("originType") else None)
     provider = (_shared_pool_provider(payload) if str(payload.get("provider") or "") == "pool"
                 else _provider(payload))
     workers = provider.worker_count if isinstance(provider, RotatingPoolProvider) else int(payload.get("workers") or 2)
@@ -1084,6 +1087,8 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         extracted_data["arquivo_origem"] = clean_name
         extracted_data["arquivo_sha256"] = pdf_hash
         extracted_path.write_text(json.dumps(extracted_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if origin:
+        question_origin.write_exam_origin(extracted_path, origin)
     question_review.preserve_reviews(PROCESSED_ROOT, stable_exam_id, extracted_path)
     _import_embedded_key(source, extracted_path)
     classified_path = output_dir / "questoes.classificado.json"
@@ -1103,6 +1108,8 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         except (OSError, json.JSONDecodeError):
             cached_meta = {}
         if cached_meta.get("signature") == cache_signature and classified_path.is_file():
+            if origin:
+                question_origin.write_exam_origin(classified_path, origin)
             cached_result = json.loads(classified_path.read_text(encoding="utf-8"))
             if job_id:
                 _set_job(job_id, stage="classifying", message="Este simulado já foi classificado · reutilizando resultado", progress=99,
@@ -1138,6 +1145,8 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         )
         if cancelled():
             raise JobCancelled()
+        if origin:
+            result["origem"] = origin
         classified_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         cache_info = result.get("processamento_cache", {})
         classification_errors = result.get("classificacao", {}).get("erros", {})

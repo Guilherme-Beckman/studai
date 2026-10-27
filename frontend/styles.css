@@ -3527,6 +3527,19 @@ textarea {
 .exam-origin label { display: grid; gap: 3px; color: var(--muted); }
 .exam-origin input { min-width: 180px; }
 .exam-origin-note { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; }
+.process-origin { display: grid; gap: 8px; margin-top: 16px; }
+.process-origin label { display: grid; gap: 4px; font-weight: 600; font-size: 13px; }
+.paste-key { margin-top: 10px; font-size: 13px; }
+.paste-key summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; }
+.paste-key form { display: grid; gap: 8px; margin-top: 8px; max-width: 520px; }
+.paste-key textarea {
+  font: 400 14px var(--font-ui);
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+}
 
 /* Caderno de erros */
 .notebook-filters {
