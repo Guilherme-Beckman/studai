@@ -114,6 +114,7 @@ function showView(name) {
   if (name === "map") window.refreshKnowledgeMap?.();
   if (name === "training") refreshToday();
   if (name === "calendar") window.refreshCalendar?.();
+  if (name === "readings") window.refreshReadings?.();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -2148,8 +2149,11 @@ async function trainCalendarBlock({ courseId, subject, contentIds = [], count })
   showView("training");
   await todayRequest;
   if (!currentStudy?.session) return toast("Não foi possível abrir a sessão de treino de hoje.", true);
-  // Questões da matéria já na fila (de um clique anterior) contam para a meta do bloco.
-  const queued = currentStudy.session.items.filter(item => !item.answered && item.subject === subject);
+  // Questões da matéria já na fila (de um clique anterior) contam para a meta do bloco;
+  // com conteúdos pedidos (calendário, leituras), só as desses conteúdos.
+  const wanted = new Set(contentIds);
+  const queued = currentStudy.session.items.filter(item => !item.answered && item.subject === subject
+    && (!wanted.size || wanted.has(item.contentId)));
   if (queued.length >= count) {
     currentStudy.focusIds = new Set(queued.map(item => item.id));
     Object.assign(currentStudy, { lastAnswer: null, selected: null, pendingReason: null });

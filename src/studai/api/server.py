@@ -37,6 +37,7 @@ from studai.features.reports import simulado
 from studai.features.study import calendar as study_calendar
 from studai.features.study import error_notebook
 from studai.features.study import proficiency as study_proficiency
+from studai.features.study import readings
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import manual_crop, source_pdf
@@ -1418,7 +1419,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 return self._static("index.html")
             if path in ("/app.js", "/focus-mode.js", "/reports.js", "/calendar.js", "/knowledge-map.js", "/crop-editor.js",
-                        "/explanations.js", "/styles.css"):
+                        "/explanations.js", "/readings.js", "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})
@@ -1529,6 +1530,14 @@ class Handler(BaseHTTPRequestHandler):
                     exams = study_calendar.list_exams(db, course_id, study.local_date(datetime.now(timezone.utc)))
                     detail["target"] = study_calendar.next_exam([exam for exam in exams if exam["phase"] == "fase1"])
                     return self._json(200, detail)
+                finally:
+                    db.close()
+            if path == "/api/readings":
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, readings.list_readings(db, _reports_pool(db, config, course_id), course_id))
                 finally:
                     db.close()
             if path == "/api/study/proficiency":
@@ -1673,6 +1682,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         path = unquote(urlsplit(self.path).path)
         try:
+            match = re.fullmatch(r"/api/readings/([^/]+)", path)
+            if match:
+                body = self._read_json()
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, readings.set_reading(db, match.group(1), body.get("status"), body.get("note")))
+                finally:
+                    db.close()
             match = re.fullmatch(r"/api/exam-sessions/([^/]+)/questions/(\d+)", path)
             if match:
                 body = self._read_json()

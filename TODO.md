@@ -35,7 +35,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
-| 11 | Experiência de estudo (1ª fase) | em andamento | 8/10 |
+| 11 | Experiência de estudo (1ª fase) | concluída | 9/10 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -212,7 +212,8 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 - [x] Simulado cronometrado (`reports/simulado.py`): prova completa do acervo com 5 h (ajustável), sem gabarito até a entrega, troca de resposta, "marquei no chute", marcar para revisar, mapa da prova e entrega automática quando o tempo acaba; correção com acertos (projetados para 90 se faltam questões revisadas), corte, acertos por matéria, questões acima do ritmo e os erros com resolução e motivo. Botão "Simulado cronometrado" na prova e nos dias de simulado do Calendário (2026-10-27)
 - [x] Nota de corte (em acertos) nas provas do Calendário (`exam_dates.cutoff_correct`, `PATCH /api/calendar/exams/<id>`) e projeção (`study/projection.py`): "se a prova fosse hoje: ~X/90", contra o corte, e a reta das últimas 6 semanas (estimativas semanais + simulados) até a data da prova (2026-10-27)
   - [ ] A estimativa usa a priori (50%) nas matérias ainda sem respostas: com poucas respostas ela fica perto de 45/90; aparece só a partir de 30 respostas
-- [ ] Leituras obrigatórias: lista de obras, progresso de leitura e questões por obra
+- [x] Leituras obrigatórias (aba "Leituras", `study/readings.py`, `GET /api/readings`, `PATCH /api/readings/<obra>`): as 11 obras da lista FUVEST da taxonomia, status (não comecei / lendo / li / revisei), anotações, questões no acervo e acertos por obra, "Treinar esta obra" (2026-10-27)
+  - [x] Correção: blocos do calendário com conteúdos pedidos só reaproveitam questões desses conteúdos que já estão na fila (antes, qualquer questão da matéria) (2026-10-27)
 
 ## Processamento de provas
 
@@ -277,3 +278,4 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 2: resolução comentada e dicas graduais por IA, revisáveis pelo aluno | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 3: seis motivos de erro com próximo passo, mini-resumo por subconteúdo e caderno de erros | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 4: simulado cronometrado, nota de corte e projeção de acertos até a prova | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 5: aba Leituras com as obras obrigatórias | — |
