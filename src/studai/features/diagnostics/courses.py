@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from collections import Counter
 
+from studai.features.questions.origin import is_fuvest
+
 FORMULAS = {"fuvest-2027"}
 REDACAO = "Redação"
 FIRST_PHASE = "fase1"
@@ -24,8 +26,8 @@ PORTUGUESE = ("Língua Portuguesa", "Literatura")
 
 
 def subject_counts(pool: list[dict]) -> dict[str, int]:
-    """Quantidade de questões revisadas por matéria (proxy da 1ª fase)."""
-    return dict(Counter(item["subject"] for item in pool if item.get("subject")))
+    """Quantidade de questões FUVEST revisadas por matéria (proxy da 1ª fase)."""
+    return dict(Counter(item["subject"] for item in pool if item.get("subject") and is_fuvest(item)))
 
 
 def derive_subject_weights(profile: dict, counts: dict[str, int]) -> dict:

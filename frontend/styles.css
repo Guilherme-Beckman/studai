@@ -1638,6 +1638,10 @@ textarea {
     align-items: flex-end;
     flex-direction: column;
   }
+  /* Com "Simulado cronometrado" os botões não cabem ao lado do título: descem para baixo dele. */
+  #exam-question-workspace .workspace-top { flex-wrap: wrap; }
+  #exam-question-workspace .workspace-top > div:first-child { flex: 1 1 100%; min-width: 0; }
+  #exam-question-workspace .review-header-actions { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .exam-review-question-top {
     flex-direction: column;
   }
@@ -3513,6 +3517,82 @@ textarea {
 }
 .reading-actions { display: flex; gap: 10px; align-items: center; }
 .reading-card > .button { justify-self: start; }
+
+/* Origem da prova e selos de origem */
+.origin-badge { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-line); }
+.origin-chip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.origin-chip.ai { background: var(--hl-soft); border-color: var(--warn-line); color: var(--warn-ink); }
+.exam-origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+.exam-origin label { display: grid; gap: 3px; color: var(--muted); }
+.exam-origin input { min-width: 180px; }
+.exam-origin-note { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; }
+.process-origin { display: grid; gap: 8px; margin-top: 16px; }
+.process-origin label { display: grid; gap: 4px; font-weight: 600; font-size: 13px; }
+.paste-key { margin-top: 10px; font-size: 13px; }
+.paste-key summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; }
+.paste-key form { display: grid; gap: 8px; margin-top: 8px; max-width: 520px; }
+.paste-key textarea {
+  font: 400 14px var(--font-ui);
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Trilhas por nível */
+.ladders-panel { margin-top: 18px; }
+.ladder-chip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ladder-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.ladder-row.done { opacity: .7; }
+.ladder-main { display: grid; gap: 4px; min-width: 0; }
+.ladder-main span { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.ladder-steps { display: flex; gap: 4px; margin-top: 4px; }
+.ladder-steps i {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--sunken);
+  color: var(--muted);
+  font: 600 11.5px var(--font-ui);
+  font-style: normal;
+}
+.ladder-steps i.done { background: var(--ok-soft); color: var(--ok-ink); }
+.ladder-steps i.current { background: var(--accent-soft); color: var(--accent-ink); outline: 1px solid var(--accent-line); }
+.ladder-actions { display: flex; gap: 10px; align-items: center; }
+.ladder-done { color: var(--ok-ink); font-weight: 700; font-size: 13px; }
 
 /* Caderno de erros */
 .notebook-filters {

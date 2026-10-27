@@ -35,6 +35,7 @@ from collections import Counter
 from datetime import datetime, timezone
 
 from studai.features.classification.taxonomy import CONTENT_INDEX, DEFAULT_SUBJECT_IDS
+from studai.features.questions.origin import evidence_factor, is_fuvest
 
 PRINCIPAL_WEIGHT = 1.0
 RELATED_WEIGHT = 0.5
@@ -66,26 +67,32 @@ def response_from_row(row: dict) -> dict:
     question = json.loads(row["question_json"]) if isinstance(row.get("question_json"), str) else (row.get("question_json") or {})
     classification = question.get("classificacao") or {}
     # Acerto no chute não é evidência de domínio; na nota da prova ele continua valendo.
+    origin, difficulty = question.get("_origem"), question.get("_dificuldade")
     return {"correct": bool(row.get("is_correct")) and row.get("confidence") != "guess", "subject": row["subject"],
             "principal_id": classification.get("conteudo_principal_id"),
             "related_ids": [value for value in (classification.get("conteudos_relacionados_ids") or []) if value],
             "answered_at": row.get("answered_at"), "is_correct": bool(row.get("is_correct")),
-            "confidence": row.get("confidence"), "elapsed_ms": row.get("elapsed_ms")}
+            "confidence": row.get("confidence"), "elapsed_ms": row.get("elapsed_ms"),
+            "origin": origin, "difficulty": difficulty, "evidence_factor": evidence_factor(origin, difficulty)}
 
 
 def evidence_weights(response: dict) -> dict[str, float]:
-    """Peso de evidência que uma resposta dá a cada nó (com ancestrais)."""
+    """Peso de evidência que uma resposta dá a cada nó (com ancestrais).
+
+    Respostas de questões fora da FUVEST valem menos (``evidence_factor``).
+    """
+    factor = float(response.get("evidence_factor", 1.0))
     weights: dict[str, float] = {}
     subject_id = DEFAULT_SUBJECT_IDS.get(response.get("subject"))
     if subject_id:
-        weights[subject_id] = PRINCIPAL_WEIGHT
+        weights[subject_id] = PRINCIPAL_WEIGHT * factor
     for content_id, weight in ([(response.get("principal_id"), PRINCIPAL_WEIGHT)]
                                + [(value, RELATED_WEIGHT) for value in response.get("related_ids") or []]):
         node = CONTENT_INDEX.get(content_id or "")
         if not node:
             continue
         for identity in node["path_ids"]:
-            weights[identity] = max(weights.get(identity, 0.0), weight)
+            weights[identity] = max(weights.get(identity, 0.0), weight * factor)
     return weights
 
 
@@ -135,6 +142,8 @@ def node_incidence(questions: list[dict]) -> dict[str, float]:
     per_node: Counter = Counter()
     per_subject: Counter = Counter()
     for item in questions:
+        if not is_fuvest(item):
+            continue
         if "principal_id" in item:
             principal, subject = item.get("principal_id"), item.get("subject")
         else:

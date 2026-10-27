@@ -200,6 +200,12 @@ def _record(value: dict, previous: dict | None) -> dict:
     }
     if record["status"] is None:
         record.pop("status")
+    # Dificuldade (1 fácil · 2 média · 3 difícil): sem o campo no pedido, vale a anterior.
+    difficulty = value["difficulty"] if "difficulty" in value else (previous or {}).get("difficulty")
+    if difficulty:
+        record["difficulty"] = difficulty
+    if value.get("generated") or (previous or {}).get("generated"):
+        record["generated"] = True
     # Sem "edits" no pedido a correção anterior continua valendo; None remove a camada.
     if "edits" in value:
         edits, edited_at = value["edits"], datetime.now(timezone.utc).isoformat(timespec="seconds")

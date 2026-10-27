@@ -23,6 +23,8 @@ from studai.features.answer_keys.service import (
 )
 from studai.features.diagnostics import courses, mastery
 from studai.features.diagnostics.report import build_report
+from studai.features.explanations import service as explanations
+from studai.features.questions import origin as question_origin
 from studai.features.questions import review as question_review
 from studai.features.classification.taxonomy import (
     CONTENT_INDEX, CONTENT_TAXONOMY_VERSION, aggregate_content_ids,
@@ -159,6 +161,10 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
     gabarito no banco recebem antes o ``gabarito.json`` distribuído com elas.
     """
     seed_corpus_answer_keys(db, root)
+    # Dificuldade estimada pela resolução comentada, quando a revisão não define uma.
+    explanations.ensure_schema(db)
+    estimated = {(row[0], int(row[1])): json.loads(row[2]).get("difficulty") for row in db.execute(
+        "SELECT source_id,question_number,content_json FROM question_explanations WHERE status!='rejected'")}
     pool: list[dict] = []
     excluded = Counter()
     seen_questions: set[tuple[str, int]] = set()
@@ -169,6 +175,7 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
             excluded["json_invalid"] += 1
             continue
         source_id = source_id_for(data, path)
+        origin = question_origin.exam_origin(data)
         reviewed_states = question_review.read_reviews(path).get("questions") or {}
         shared_texts = data.get("textos_compartilhados", {})
         keys = {int(r[0]): r[1] for r in db.execute(
@@ -216,13 +223,16 @@ def load_question_pool(root: Path, db: sqlite3.Connection, subjects: list[str]) 
             question_copy = dict(question)
             question_copy["classificacao"] = classification
             question_copy["_source_dir"] = str(path.parent.resolve())
+            difficulty = human_review.get("difficulty") or estimated.get(identity)
+            question_copy["_origem"], question_copy["_dificuldade"] = origin["tipo"], difficulty
             shared = shared_texts.get(question.get("texto_id") or "")
             if shared and shared.get("texto"):
                 question_copy["_texto_compartilhado"] = shared["texto"]
                 question_copy["_figuras_compartilhadas"] = list(shared.get("figuras") or [])
             pool.append({"source_id": source_id, "source_file": str(path), "number": number,
                          "subject": subject, "topic": topic, "question": question_copy,
-                         "correct_answer": answer})
+                         "correct_answer": answer, "origin": origin["tipo"], "origin_name": origin["nome"],
+                         "difficulty": difficulty})
     return pool, dict(excluded)
 
 
@@ -575,7 +585,8 @@ def create_attempt(db: sqlite3.Connection, config: dict, course_id: str, pool: l
         raise ValueError(f"diagnóstico adaptativo aceita de 1 a {MAX_ADAPTIVE_TOTAL} questões")
     profile = course_profile(config, course_id)
     subjects = list(profile["pesos"])
-    course_pool = [item for item in pool if item["subject"] in profile["pesos"]]
+    # O diagnóstico mede a FUVEST: questões de outras origens ficam de fora.
+    course_pool = [item for item in pool if item["subject"] in profile["pesos"] and question_origin.is_fuvest(item)]
     weights_result = effective_weights(profile, course_pool)
     weights = selection_weights(profile, weights_result)
     incidence = mastery.node_incidence(course_pool)

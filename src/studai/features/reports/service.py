@@ -23,6 +23,7 @@ from studai.features.answer_keys.service import exam_variant
 from studai.features.diagnostics import mastery
 from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
+from studai.features.questions.origin import FULL_EXAM_TYPES
 
 DEFAULT_COURSE_ID = "eng-comp-sao-carlos"
 HALF_LIFE_DAYS = 30
@@ -65,8 +66,13 @@ def _course(config: dict, course_id: str, pool: list[dict], phase: str | None = 
     return profile, resolved
 
 
-def exam_label(source_id: str | None, name: str | None = None) -> str:
-    """Rótulo pt-BR de uma prova completa, ex.: ``Prova FUVEST 2024 (K)``."""
+def exam_label(source_id: str | None, name: str | None = None, origin_name: str | None = None) -> str:
+    """Rótulo pt-BR de uma prova completa, ex.: ``Prova FUVEST 2024 (K)``.
+
+    Provas de outra origem usam o nome dado no envio (ex.: ``ENEM 2023 dia 2``).
+    """
+    if origin_name:
+        return origin_name
     for text in (name, source_id):
         if not text:
             continue
@@ -255,11 +261,14 @@ def start_exam_session(db: sqlite3.Connection, config: dict, course_id: str, poo
                    key=lambda item: item["number"])
     if not items:
         raise ValueError("a prova não tem questões elegíveis (classificadas, revisadas e com gabarito) para este curso")
+    origin = items[0].get("origin") or "fuvest"
+    if origin not in FULL_EXAM_TYPES:
+        raise ValueError("listas de exercícios e questões geradas pela IA não viram prova completa; use o Treinamento")
     attempt_id = uuid.uuid4().hex[:12]
-    label = exam_label(exam_source_id, exam_name)
+    label = exam_label(exam_source_id, exam_name, items[0].get("origin_name") if origin != "fuvest" else None)
     # ``weights``/``incidence`` seguem o formato do plano do diagnóstico para que
     # ``calculate_metrics`` use os mesmos pesos do curso ao finalizar.
-    plan = {"mode": "exam", "exam": exam_source_id, "exam_name": exam_name, "label": label,
+    plan = {"mode": "exam", "exam": exam_source_id, "exam_name": exam_name, "label": label, "origin": origin,
             "weights": resolved,
             "incidence": mastery.node_incidence([item for item in pool if item["subject"] in subjects]),
             "distribution": {"selected": len(items),

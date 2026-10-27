@@ -166,7 +166,9 @@ function examCard(exam, compact = false) {
     : exam.classified
       ? `<span class="badge">Classificada</span>`
       : `<span class="badge pending">Pendente</span>`;
-  const element = `<div class="exam-item exam-item-row"><button class="exam-open-button" type="button" data-open-exam="${escapeHtml(exam.id)}"><span class="exam-file-icon">▤</span><span class="exam-item-main"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}% · ${exam.importedAnswers || 0} respostas do gabarito</span></span>${state}<span class="exam-open-arrow" aria-hidden="true">›</span></button><button class="exam-remove-button" type="button" data-delete-exam="${escapeHtml(exam.id)}" aria-label="Remover ${escapeHtml(exam.name)}" title="Remover prova e questões">Remover</button></div>`;
+  const origin = exam.origin && exam.origin.tipo !== "fuvest"
+    ? `<span class="badge origin-badge" title="${escapeHtml(ORIGIN_LABELS[exam.origin.tipo] || "")}">${escapeHtml(exam.origin.nome || ORIGIN_LABELS[exam.origin.tipo])}</span>` : "";
+  const element = `<div class="exam-item exam-item-row"><button class="exam-open-button" type="button" data-open-exam="${escapeHtml(exam.id)}"><span class="exam-file-icon">▤</span><span class="exam-item-main"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}% · ${exam.importedAnswers || 0} respostas do gabarito</span></span>${origin}${state}<span class="exam-open-arrow" aria-hidden="true">›</span></button><button class="exam-remove-button" type="button" data-delete-exam="${escapeHtml(exam.id)}" aria-label="Remover ${escapeHtml(exam.name)}" title="Remover prova e questões">Remover</button></div>`;
   return compact ? `<div class="exam-mini"><strong title="${escapeHtml(exam.name)}">${escapeHtml(exam.name)}</strong><span>${exam.totalQuestions} questões · revisão ${progress}%</span></div>` : element;
 }
 
@@ -487,7 +489,7 @@ function renderExamReview() {
   reviewSelection = new Set([...reviewSelection].filter(number => known.has(number)));
   const cards = questions.map(question => renderReviewQuestion(exam.id, question, sharedTexts)).join("");
   const counter = (key, label, cls = "") => `<span class="review-count ${cls}"><strong>${reviewProgress[key] ?? 0}</strong>${label}</span>`;
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div></div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="button button-secondary" data-start-simulado="${escapeHtml(exam.id)}" title="Prova completa com cronômetro e correção só no fim">Simulado cronometrado</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div>${originEditorMarkup(exam)}</div><div class="review-header-actions">${["lista", "ia"].includes(exam.origin?.tipo) ? `<span class="muted">Estas questões entram pelo Treinamento e pelas trilhas.</span>` : `<button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="button button-secondary" data-start-simulado="${escapeHtml(exam.id)}" title="Prova completa com cronômetro e correção só no fim">Simulado cronometrado</button>`}<button class="blank-button" data-close-exam-review>Fechar</button></div></div>
     <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="review-counts">${counter("approved", "aprovadas", "is-approved")}${counter("pending", "pendentes", "is-pending")}${counter("unusable", "inutilizáveis")}${counter("badCrop", "recorte ruim", "is-bad-crop")}</div><div class="workspace-meta">${escapeHtml(ragLabel)} · só questões aprovadas entram no RAG</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
     ${questions.length ? reviewFilterBar(questions) : ""}
     <div class="exam-review-list">${cards || `<div class="loading-card">Esta prova não contém questões extraídas.</div>`}</div>`;
@@ -516,6 +518,7 @@ function renderReviewEditor(examId, question) {
   const options = Object.fromEntries(Object.entries(question.alternativas || {}));
   return `<form class="review-editor hidden" data-review-form="${number}"><div class="review-editor-heading"><strong>Revisar questão ${escapeHtml(number)}</strong><span>As correções ficam salvas na revisão; a extração original do PDF é mantida.</span></div>
     <div class="review-editor-fields"><label>Matéria<select data-review-subject="${number}"><option value="">Selecione</option>${(currentExamReview.subjects || []).map(item => `<option value="${escapeHtml(item)}" ${item === label.subject ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select></label><div class="review-topic-field"><label for="review-topic-search-${number}">Conteúdo principal</label><input id="review-topic-search-${number}" type="search" data-review-topic-search="${number}" placeholder="Buscar: logaritmo, Clarice, ecologia…" autocomplete="off"><select data-review-topic="${number}" size="9" aria-label="Conteúdo principal"><option value="">Selecione uma matéria primeiro</option></select><span class="review-topic-path" data-review-topic-path="${number}"></span></div></div>
+    <label>Dificuldade<select data-review-difficulty="${number}"><option value="">Não definida</option>${[1, 2, 3].map(level => `<option value="${level}" ${Number(review.difficulty) === level ? "selected" : ""}>${DIFFICULTY_LABELS[level]}</option>`).join("")}</select></label>
     <label>Gabarito<select data-review-answer="${number}"><option value="" ${answer ? "" : "selected"}>Sem gabarito</option>${"ABCDE".split("").map(letter => `<option value="${letter}" ${answer === letter ? "selected" : ""}>${letter}</option>`).join("")}<option value="*" ${answer === "*" ? "selected" : ""}>Anulada</option></select></label>
     <label>Enunciado<textarea data-edit-stem rows="5">${escapeHtml(question.enunciado || "")}</textarea></label>
     ${figureEditor(examId, number, "stem", question.figuras_enunciado)}
@@ -523,6 +526,58 @@ function renderReviewEditor(examId, question) {
     <div class="review-edit-options">${letters.map(letter => { const option = options[letter]; const text = typeof option === "string" ? option : option?.texto || ""; const figures = typeof option === "object" ? option?.figuras : []; return `<div class="review-edit-option" data-edit-option="${letter}"><span class="exam-option-letter">${letter}</span><div><textarea rows="2" data-edit-option-text placeholder="${option ? "" : "Alternativa ausente na extração"}">${escapeHtml(text)}</textarea>${figureEditor(examId, number, `option:${letter}`, figures)}</div></div>`; }).join("")}</div>
     <label>Observação <span class="optional">opcional</span><textarea data-review-note="${number}" rows="2" maxlength="2000">${escapeHtml(review.note || "")}</textarea></label>
     <div class="review-editor-actions"><button class="button button-primary" type="submit">Salvar e aprovar</button><button class="button button-secondary" type="button" data-save-draft="${number}">Salvar sem aprovar</button>${review.edits ? `<button class="blank-button" type="button" data-discard-edits="${number}">Descartar correções</button>` : ""}</div></form>`;
+}
+
+// ---- Origem da prova: só a FUVEST define incidência, pesos, simulados e diagnóstico.
+const ORIGIN_LABELS = { fuvest: "FUVEST", vestibular: "Outro vestibular", lista: "Lista de exercícios", ia: "Gerada por IA" };
+const DIFFICULTY_LABELS = { 1: "Fácil", 2: "Média", 3: "Difícil" };
+
+function pasteKeyMarkup(exam) {
+  return `<details class="paste-key"><summary>Colar gabarito</summary><form data-paste-key="${escapeHtml(exam.id)}"><textarea name="key" rows="3" placeholder="1-C 2-A 3-E … (ou uma resposta por linha: 91 B)"></textarea><label class="check-row"><input type="checkbox" name="replace"><span>Substituir respostas já importadas</span></label><button class="button button-secondary" type="submit">Importar gabarito</button></form></details>`;
+}
+
+// "1-C 2-A", "91 B", "Q12: e" → {"1": "C", ...}; "*" marca questão anulada.
+function parseAnswerKey(text) {
+  const answers = {};
+  for (const match of String(text).matchAll(/(?:^|[^\dA-Za-z])(?:q(?:uest[ãa]o)?\s*)?(\d{1,3})\s*[-–.:)=]?\s*([A-Ea-e*])(?![A-Za-z])/gi)) {
+    answers[String(Number(match[1]))] = match[2].toUpperCase();
+  }
+  return answers;
+}
+
+async function importPastedKey(form) {
+  const answers = parseAnswerKey(form.key.value);
+  if (!Object.keys(answers).length) return toast("Não encontrei respostas no texto (use o formato 1-C 2-A).", true);
+  try {
+    const result = await api("/api/answer-keys/import", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ examId: form.dataset.pasteKey, answers, replace: form.replace.checked }),
+    });
+    toast(`${result.imported ?? Object.keys(answers).length} respostas importadas.`);
+    await openExamReview(form.dataset.pasteKey);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+function originEditorMarkup(exam) {
+  const origin = exam.origin || { tipo: "fuvest", nome: null };
+  if (origin.tipo === "ia") return `<p class="exam-origin-note">Questões geradas pela IA para treino.</p>`;
+  return `${origin.tipo === "fuvest" ? "" : pasteKeyMarkup(exam)}<form class="exam-origin" data-exam-origin="${escapeHtml(exam.id)}"><label>Origem<select name="tipo">${["fuvest", "vestibular", "lista"].map(kind => `<option value="${kind}" ${origin.tipo === kind ? "selected" : ""}>${ORIGIN_LABELS[kind]}</option>`).join("")}</select></label><label>Nome<input name="nome" value="${escapeHtml(origin.nome || "")}" placeholder="ex.: ENEM 2023 dia 2" maxlength="120"></label><button class="text-button" type="submit">Salvar origem</button></form>`;
+}
+
+async function saveExamOrigin(form) {
+  try {
+    const origin = await api(`/api/exams/${encodeURIComponent(form.dataset.examOrigin)}/origin`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: form.tipo.value, nome: form.nome.value }),
+    });
+    if (currentExamReview?.exam) currentExamReview.exam.origin = origin;
+    toast(origin.tipo === "fuvest" ? "Prova marcada como FUVEST." : `Origem salva: ${origin.nome}. As questões entram como treino, com peso menor no domínio.`);
+    refreshExams();
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
 function renderReviewQuestion(examId, question, sharedTexts) {
@@ -644,6 +699,8 @@ function reviewPayloadFromForm(form, status) {
     content_id: $(`[data-review-topic="${number}"]`, form).value || undefined, note: $(`[data-review-note="${number}"]`, form).value };
   const edits = collectReviewEdits(form, question);
   if (edits) payload.edits = edits;
+  const difficulty = $(`[data-review-difficulty="${number}"]`, form)?.value;
+  if (difficulty !== undefined) payload.difficulty = difficulty ? Number(difficulty) : null;
   const answer = $(`[data-review-answer="${number}"]`, form).value;
   if (answer !== (currentExamReview.answerKeys?.[number]?.answer || "")) payload.answer = answer;
   return payload;
@@ -674,6 +731,8 @@ function bindExamReviewActions() {
   });
   $("[data-start-quiz]", workspace)?.addEventListener("click", () => openExamQuiz(examId));
   $("[data-start-simulado]", workspace)?.addEventListener("click", () => openSimulado(examId));
+  $("[data-exam-origin]", workspace)?.addEventListener("submit", event => { event.preventDefault(); saveExamOrigin(event.target); });
+  $("[data-paste-key]", workspace)?.addEventListener("submit", event => { event.preventDefault(); importPastedKey(event.target); });
   $("[data-retry-rag]", workspace)?.addEventListener("click", () => retryReviewIndex(examId));
   $$("[data-review-filter]", workspace).forEach(control => control.addEventListener(control.type === "search" ? "input" : "change", () => {
     const key = control.dataset.reviewFilter;
@@ -1490,7 +1549,10 @@ async function processPdf(event) {
   const file = $("#pdf-file").files[0];
   const keyFile = $("#key-pdf-file").files[0];
   if (!file) return toast("Selecione um PDF.", true);
-  if (!keyFile) return toast("Selecione o gabarito correspondente.", true);
+  const originType = $("#process-origin-type").value;
+  const originName = $("#process-origin-name").value.trim();
+  if (originType !== "fuvest" && !originName) return toast("Dê um nome à prova ou lista (ex.: ENEM 2023 dia 2).", true);
+  if (!keyFile && originType === "fuvest") return toast("Selecione o gabarito correspondente.", true);
   const button = $("#process-form button[type=submit]");
   const status = $("#process-status");
   button.disabled = true;
@@ -1500,7 +1562,8 @@ async function processPdf(event) {
   try {
     const config = processConfig();
     if (!config.ollamaModels.length && !config.geminiModels.length && !config.cloudProviders.length) throw new Error("Selecione ao menos um modelo Ollama, Gemini ou uma faixa grátis de nuvem.");
-    const record = { jobId: newClientJobId(), proof: file, keyFile, filename: file.name, keyFilename: keyFile.name, config, images: $("#process-images").checked };
+    const record = { jobId: newClientJobId(), proof: file, keyFile: keyFile || null, filename: file.name, keyFilename: keyFile?.name || null, config, images: $("#process-images").checked,
+      origin: originType === "fuvest" ? null : { tipo: originType, nome: originName } };
     await savePendingProcess(record);
     await runSavedProcess(record, processUploadController.signal);
   } catch (error) {
@@ -1529,6 +1592,7 @@ async function submitSavedProcess(record, signal) {
     query.set("cloudProviders", record.config.cloudProviders.join(","));
   }
   if (record.images) query.set("images", "sempre");
+  if (record.origin) { query.set("originType", record.origin.tipo); query.set("originName", record.origin.nome); }
   return api(`/api/exams/process?${query}`, { method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.proof, signal });
 }
 
@@ -1543,8 +1607,9 @@ async function runSavedProcess(record, signal) {
   currentProcessJob = record.jobId;
   const result = await pollJob(record.jobId, renderProcessProgress);
   let keySummary = "";
-  renderProcessProgress({ status: "running", stage: "answer_key", progress: 95, message: "Importando respostas do gabarito…" });
-  try {
+  if (record.keyFile) renderProcessProgress({ status: "running", stage: "answer_key", progress: 95, message: "Importando respostas do gabarito…" });
+  if (!record.keyFile) keySummary = "<br>Sem PDF de gabarito: cole as respostas na revisão da prova.";
+  else try {
     const imported = await api(`/api/exams/${encodeURIComponent(result.examId)}/answer-key?${new URLSearchParams({ filename: record.keyFilename })}`, {
       method: "POST", headers: { "Content-Type": "application/pdf" }, body: record.keyFile,
     });
@@ -1574,7 +1639,7 @@ async function recoverActiveProcess() {
   button.textContent = "Retomando processamento…";
   try {
     const record = await readPendingProcess();
-    if (!record?.jobId || !record.proof || !record.keyFile) throw new Error("Os PDFs salvos para retomar não estão disponíveis neste navegador.");
+    if (!record?.jobId || !record.proof || (!record.keyFile && !record.origin)) throw new Error("Os PDFs salvos para retomar não estão disponíveis neste navegador.");
     currentProcessJob = record.jobId;
     renderProcessProgress({ status: "running", message: "Reconectando ao processamento…", progress: 2 });
     await runSavedProcess(record);
@@ -1817,7 +1882,7 @@ async function finalizeDiagnostic(id) {
 const STUDY_REASONS = {
   overdue_question: "Questão errada", due_content: "Revisão vencida",
   new_gap: "Lacuna do diagnóstico", new_content: "Conteúdo novo", practice: "Prática",
-  followup_practice: "Prática do erro", redo: "Caderno de erros",
+  followup_practice: "Prática do erro", redo: "Caderno de erros", ladder: "Trilha",
 };
 
 function formatDay(isoDate) {
@@ -1836,7 +1901,65 @@ function updateTrainingCounters(session) {
 function refreshToday() {
   todayRequest = loadToday();
   refreshErrorNotebook();
+  refreshLadders();
   return todayRequest;
+}
+
+// ---- Trilhas por nível: fácil → média → difícil → FUVEST, abertas por "Não sabia o conteúdo".
+function requestLadderQuestions(state) {
+  api(`/api/contents/${encodeURIComponent(state.contentId)}/generate`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: state.level, count: 3 }),
+  }).catch(() => { /* sem provedor de IA: a trilha usa as questões mais próximas do nível */ });
+}
+
+function fillLadders(courseId) {
+  api("/api/study/ladders/fill", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseId }),
+  }).catch(() => {});
+}
+
+async function refreshLadders() {
+  const root = $("#ladders");
+  const courseId = $("#training-course")?.value;
+  if (!root || !courseId) return;
+  try {
+    const data = await api(`/api/study/ladders?courseId=${encodeURIComponent(courseId)}`);
+    const row = state => `<div class="ladder-row ${state.status}"><div class="ladder-main"><strong>${escapeHtml(state.name)}</strong><span>${escapeHtml(state.path)}</span><div class="ladder-steps" role="img" aria-label="Nível ${state.level} de 4">${[1, 2, 3, 4].map(level => `<i class="${level < state.level || state.status === "done" ? "done" : level === state.level ? "current" : ""}" title="${LADDER_LEVELS[level]}">${LADDER_LEVELS[level]}</i>`).join("")}</div></div>${state.status === "active" ? `<div class="ladder-actions"><button type="button" class="button button-secondary" data-ladder-train="${escapeHtml(state.contentId)}">Treinar agora</button><button type="button" class="text-button" data-ladder-close="${escapeHtml(state.contentId)}">Encerrar</button></div>` : `<span class="ladder-done">Concluída</span>`}</div>`;
+    root.innerHTML = data.active.length || data.done.length
+      ? `${data.active.map(row).join("")}${data.done.slice(0, 5).map(row).join("")}`
+      : `<div class="empty-state"><div class="empty-icon">⛰</div><strong>Nenhuma trilha aberta</strong><p>Quando você marcar "Não sabia o conteúdo", o assunto ganha uma trilha que começa em questões fáceis e sobe até o nível FUVEST.</p></div>`;
+  } catch (error) {
+    root.innerHTML = `<div class="inline-result error">Não foi possível carregar as trilhas: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function bindLadders() {
+  $("#ladders")?.addEventListener("click", async event => {
+    const train = event.target.closest("[data-ladder-train]");
+    const close = event.target.closest("[data-ladder-close]");
+    if (!train && !close) return;
+    try {
+      if (close) {
+        if (!window.confirm("Encerrar esta trilha? Ela volta a abrir se você errar o conteúdo de novo.")) return;
+        await api(`/api/study/ladders/${encodeURIComponent(close.dataset.ladderClose)}/close`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseId: $("#training-course").value }),
+        });
+        return refreshLadders();
+      }
+      if (!currentStudy?.session) return toast("Aguarde o carregamento da tarefa diária.", true);
+      const previous = new Set(currentStudy.session.items.map(item => item.id));
+      const session = await api(`/api/study/ladders/${encodeURIComponent(train.dataset.ladderTrain)}/train`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: currentStudy.session.id }),
+      });
+      const focusIds = new Set(session.items.filter(item => !previous.has(item.id)).map(item => item.id));
+      Object.assign(currentStudy, { session, focusIds, lastAnswer: null, selected: null, pendingReason: null });
+      updateTrainingCounters(session);
+      renderToday();
+      $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      toast(error.message, true);
+    }
+  });
 }
 
 // ---- Caderno de erros: filtros por matéria, motivo e situação; "Refazer" vira um bloco de treino.
@@ -1944,6 +2067,7 @@ async function loadToday() {
     currentStudy = { session, selected: null, pendingReason: null, training: true,
       dailyCount: session.items.filter(item => !item.id.startsWith("t")).length };
     window.studaiExplain?.prefetch(session.id);
+    fillLadders(courseId);
     $("#today-date").textContent = formatDay(session.date);
     updateTrainingCounters(session);
     const dailyItems = session.items.filter(item => !item.id.startsWith("t"));
@@ -2017,15 +2141,15 @@ function renderToday(workspace = $("#today-workspace")) {
   const result = currentStudy.lastAnswer;
   const submitted = Boolean(result);
   const feedback = submitted
-    ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? (result.confidence === "guess" ? "Acertou no chute: a questão volta para revisão." : "Resposta correta!") : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}${result.rating ? ` (${RATING_LABELS[result.rating]})` : ""}.${followupMessage(result)}</div>`
+    ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? (result.confidence === "guess" ? "Acertou no chute: a questão volta para revisão." : "Resposta correta!") : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}${result.rating ? ` (${RATING_LABELS[result.rating]})` : ""}.${followupMessage(result)}${ladderMessage(result.ladder)}</div>`
     : "";
   if (!submitted && !currentStudy.pendingReason) startQuestionClock(`today:${session.id}:${item.id}`);
   const explainContext = { sessionId: session.id, itemId: item.id, courseId: session.courseId };
   const reasonPanel = currentStudy.pendingReason ? reasonPickerMarkup("data-today-reason") : "";
   const actions = submitted
-    ? `<div class="exam-quiz-actions"><span></span><button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
+    ? `<div class="exam-quiz-actions">${question._origem === "ia" ? `<button type="button" class="text-button" id="today-report">Esta questão tem erro</button>` : "<span></span>"}<button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
     : `<div class="exam-quiz-actions"><button class="blank-button ${selected === "" ? "selected" : ""}" id="today-blank" aria-pressed="${selected === ""}">Deixar em branco</button>${answerButtonsMarkup({ blank: selected === "", ready: selected != null && !currentStudy.pendingReason, attr: "data-today-submit" })}</div>`;
-  workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span><span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
+  workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span>${originBadge(question)}${item.ladder ? `<span class="ladder-chip" title="Trilha de ${escapeHtml(item.ladder.name)}">nível ${item.ladder.level}/4 · ${escapeHtml(item.ladder.levelLabel)}</span>` : ""}<span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
     <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
     ${reasonPanel}${feedback}${submitted && result.summaryContentId && window.studaiExplain ? window.studaiExplain.summarySlot(result.summaryContentId) : ""}${explainSlot(item.sourceId, item.number, explainContext, submitted ? { mode: "full", open: !result.correct || result.confidence === "guess" } : { mode: "hints" })}${actions}`;
@@ -2045,11 +2169,49 @@ function renderToday(workspace = $("#today-workspace")) {
   $$("[data-today-reason]", workspace).forEach(button => button.addEventListener("click", () => {
     submitStudyAnswer(item, currentStudy.selected, button.dataset.todayReason, { ...currentStudy.pendingExtras, note: reasonNote(workspace) });
   }));
+  $("#today-report", workspace)?.addEventListener("click", () => reportGeneratedQuestion(item));
   $("#today-next", workspace)?.addEventListener("click", () => {
     currentStudy.lastAnswer = null;
     currentStudy.selected = null;
     renderToday(workspace);
   });
+}
+
+// Selo das questões que não são da FUVEST (treino): a IA, outra prova ou lista.
+function originBadge(question) {
+  const origin = question?._origem;
+  if (!origin || origin === "fuvest") return "";
+  const level = DIFFICULTY_LABELS[question._dificuldade];
+  return `<span class="origin-chip ${origin === "ia" ? "ai" : ""}" title="Questão de treino: conta com peso menor no domínio">${origin === "ia" ? "Gerada por IA" : "Treino"}${level ? ` · ${level.toLowerCase()}` : ""}</span>`;
+}
+
+async function reportGeneratedQuestion(item) {
+  const note = window.prompt("O que está errado nesta questão? (ela sai do treino)", "");
+  if (note === null) return;
+  try {
+    await api(`/api/questions/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.number)}/report`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }),
+    });
+    toast("Obrigado! A questão saiu do treino.");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+const LADDER_LEVELS = { 1: "fácil", 2: "média", 3: "difícil", 4: "FUVEST" };
+
+function ladderMessage(state) {
+  if (!state) return "";
+  const name = escapeHtml(state.name);
+  const text = {
+    started: `Abrimos uma trilha de <b>${name}</b>: começa no nível fácil e sobe a cada 2 acertos seguidos.`,
+    up: `Trilha de ${name}: subiu para o nível ${state.level} (${LADDER_LEVELS[state.level]}).`,
+    down: `Trilha de ${name}: voltou para o nível ${state.level} (${LADDER_LEVELS[state.level]}) para consolidar.`,
+    done: `Trilha de ${name} concluída 🎉`,
+  }[state.change] || "";
+  const plural = { 1: "fáceis", 2: "médias", 3: "difíceis" }[state.level];
+  const generating = state.generating && plural ? ` Gerando questões ${plural} com a IA para os próximos passos…` : "";
+  return text || generating ? `<br>${text}${generating}` : "";
 }
 
 function followupMessage(result) {
@@ -2076,7 +2238,9 @@ async function submitStudyAnswer(item, answer, reason = null, extras = {}) {
       return renderToday();
     }
     currentStudy.submitting = false;
-    if (result.followups?.length) {
+    if (result.ladder?.generating) requestLadderQuestions(result.ladder);
+    if (result.ladder) refreshLadders();
+    if (result.followups?.length || result.ladder?.inserted?.length) {
       // As questões de prática entraram na sessão no servidor: recarrega a lista de itens.
       const refreshed = await api(`/api/study/today?courseId=${encodeURIComponent(currentStudy.session.courseId)}`);
       if (refreshed.id === currentStudy.session.id) {
@@ -2096,8 +2260,8 @@ async function submitStudyAnswer(item, answer, reason = null, extras = {}) {
       updateTrainingCounters(currentStudy.session);
     }
     renderToday();
-    // Erro ou chute: a tela espera, com a resolução aberta; acerto segue sozinho.
-    if (!result.correct || result.confidence === "guess") return;
+    // Erro, chute ou mudança na trilha: a tela espera; acerto simples segue sozinho.
+    if (!result.correct || result.confidence === "guess" || result.ladder?.change) return;
     window.setTimeout(() => {
       if (currentStudy?.lastAnswer !== result) return;
       currentStudy.lastAnswer = null;
@@ -2220,6 +2384,7 @@ function bindEvents() {
   $("#refresh-diagnostics").addEventListener("click", refreshDiagnostics);
   $("#refresh-today").addEventListener("click", refreshToday);
   bindErrorNotebook();
+  bindLadders();
   $("#training-course").addEventListener("change", () => {
     try { localStorage.setItem("studai-today-course", $("#training-course").value); } catch {}
     renderTrainingSubjects();
@@ -2228,6 +2393,11 @@ function bindEvents() {
   $("#add-training-block").addEventListener("click", appendTrainingBlock);
   $("#reset-learning-context").addEventListener("click", resetLearningContext);
   $("#pdf-file").addEventListener("change", event => { $("#file-label").textContent = event.target.files[0]?.name || "Escolher PDF"; });
+  $("#process-origin-type").addEventListener("change", event => {
+    const fuvest = event.target.value === "fuvest";
+    $("#process-origin-name-row").classList.toggle("hidden", fuvest);
+    $("#key-pdf-file").required = fuvest;
+  });
   $("#key-pdf-file").addEventListener("change", event => { $("#key-file-label").textContent = event.target.files[0]?.name || "Escolher PDF do gabarito"; });
   $("#drop-zone").addEventListener("dragover", event => { event.preventDefault(); event.currentTarget.classList.add("dragover"); });
   $("#drop-zone").addEventListener("dragleave", event => event.currentTarget.classList.remove("dragover"));

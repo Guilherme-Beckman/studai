@@ -31,11 +31,14 @@ from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_
 from studai.features.diagnostics import service as diagnostics
 from studai.features.explanations import service as explanations
 from studai.features.explanations import summaries as content_summaries
+from studai.features.questions import generated as generated_questions
+from studai.features.questions import origin as question_origin
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
 from studai.features.reports import simulado
 from studai.features.study import calendar as study_calendar
 from studai.features.study import error_notebook
+from studai.features.study import ladder as study_ladder
 from studai.features.study import proficiency as study_proficiency
 from studai.features.study import readings
 from studai.features.study import service as study
@@ -581,7 +584,7 @@ def _exam_files() -> list[tuple[dict, Path]]:
         source_id = diagnostics.source_id_for(data, path)
         has_errors = bool((data.get("classificacao") or {}).get("erros"))
         exam_name = Path(str(data.get("arquivo_origem") or path.parent.name)).stem
-        exams.append(({"id": source_id, "name": exam_name,
+        exams.append(({"id": source_id, "name": exam_name, "origin": question_origin.exam_origin(data),
                        "totalQuestions": len(data["questoes"]),
                        "classified": "classificado" in path.name and not has_errors,
                        "subjects": sorted({q.get("materia") or (q.get("classificacao") or {}).get("materia")
@@ -666,6 +669,8 @@ def _review_values(question: dict, body: dict, exam_dir: Path) -> dict:
         values.update(subject=None, topic=None)
     if "edits" in body:
         values["edits"] = question_review.validate_edits(question, body["edits"], exam_dir)
+    if "difficulty" in body:
+        values["difficulty"] = question_origin.validate_difficulty(body["difficulty"])
     return values
 
 
@@ -1013,6 +1018,9 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
     clean_name = Path(filename).name
     if not clean_name.lower().endswith(".pdf") or not content.startswith(b"%PDF"):
         raise ValueError("envie um arquivo PDF válido")
+    # Origem informada no envio (outra prova, lista); sem ela a prova é FUVEST.
+    origin = (question_origin.validate_origin({"tipo": payload.get("originType"), "nome": payload.get("originName")})
+              if payload.get("originType") else None)
     provider = (_shared_pool_provider(payload) if str(payload.get("provider") or "") == "pool"
                 else _provider(payload))
     workers = provider.worker_count if isinstance(provider, RotatingPoolProvider) else int(payload.get("workers") or 2)
@@ -1081,6 +1089,8 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         extracted_data["arquivo_origem"] = clean_name
         extracted_data["arquivo_sha256"] = pdf_hash
         extracted_path.write_text(json.dumps(extracted_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if origin:
+        question_origin.write_exam_origin(extracted_path, origin)
     question_review.preserve_reviews(PROCESSED_ROOT, stable_exam_id, extracted_path)
     _import_embedded_key(source, extracted_path)
     classified_path = output_dir / "questoes.classificado.json"
@@ -1100,6 +1110,8 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         except (OSError, json.JSONDecodeError):
             cached_meta = {}
         if cached_meta.get("signature") == cache_signature and classified_path.is_file():
+            if origin:
+                question_origin.write_exam_origin(classified_path, origin)
             cached_result = json.loads(classified_path.read_text(encoding="utf-8"))
             if job_id:
                 _set_job(job_id, stage="classifying", message="Este simulado já foi classificado · reutilizando resultado", progress=99,
@@ -1135,6 +1147,8 @@ def _process_exam(filename: str, content: bytes, payload: dict, job_id: str | No
         )
         if cancelled():
             raise JobCancelled()
+        if origin:
+            result["origem"] = origin
         classified_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         cache_info = result.get("processamento_cache", {})
         classification_errors = result.get("classificacao", {}).get("erros", {})
@@ -1337,6 +1351,31 @@ def _start_summary_job(content_id: str) -> str:
         return job_id
 
 
+def start_generation_job(content_id: str, level: int, count: int = 3) -> str:
+    """Gera questões da IA para o nó e o nível em segundo plano (uma tarefa por nó e nível)."""
+    key = ("generate", content_id, int(level))
+    with EXPLANATION_LOCK:
+        running = _explanation_job_running(key)
+        if running:
+            return running
+
+        def task(cancelled, job_id):
+            db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+            try:
+                _set_job(job_id, stage="generating", message="Gerando questões de treino com a IA")
+                numbers = generated_questions.generate_questions(PROCESSED_ROOT, db, content_id, int(level), count,
+                                                                 _explanations_provider())
+            finally:
+                db.close()
+            with POOL_CACHE_LOCK:
+                POOL_CACHE.clear()
+            return {"contentId": content_id, "level": int(level), "numbers": numbers}
+
+        job_id = _submit_job(f"Questões da IA {content_id} nível {level}", task)
+        EXPLANATION_JOBS[key] = job_id
+        return job_id
+
+
 def _summary_get(content_id: str) -> tuple[int, dict]:
     db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
     try:
@@ -1504,6 +1543,12 @@ class Handler(BaseHTTPRequestHandler):
             if match:
                 status, payload = _summary_get(unquote(match.group(1)))
                 return self._json(status, payload)
+            if path == "/api/study/ladders":
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_ladder.listing(db, _report_course_id(parse_qs(parsed.query))))
+                finally:
+                    db.close()
             if path == "/api/study/errors":
                 query = parse_qs(parsed.query)
                 value = lambda name: (query.get(name) or [None])[0] or None
@@ -1682,6 +1727,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_PATCH(self):
         path = unquote(urlsplit(self.path).path)
         try:
+            match = re.fullmatch(r"/api/exams/([^/]+)/origin", path)
+            if match:
+                _, exam_json = _find_exam(match.group(1))
+                origin = question_origin.write_exam_origin(exam_json, question_origin.validate_origin(self._read_json()))
+                with POOL_CACHE_LOCK:
+                    POOL_CACHE.clear()
+                return self._json(200, origin)
             match = re.fullmatch(r"/api/readings/([^/]+)", path)
             if match:
                 body = self._read_json()
@@ -1993,8 +2045,61 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(201, _calendar_add_exam(self._read_json()))
             if path == "/api/study/training/next":
                 return self._json(200, _study_training_next(self._read_json()))
+            if path == "/api/study/ladders/fill":
+                # Trilhas ativas sem questões no nível atual: pede à IA (o frontend chama ao abrir o Treinamento).
+                body = self._read_json()
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id({}, body)
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    missing = study_ladder.missing_levels(db, _study_pool(db, config, course_id), course_id,
+                                                          datetime.now(timezone.utc))
+                finally:
+                    db.close()
+                return self._json(202, {"jobIds": [start_generation_job(content_id, level)
+                                                   for content_id, level in missing]})
+            match = re.fullmatch(r"/api/study/ladders/([^/]+)/(close|train)", path)
+            if match:
+                body = self._read_json()
+                content_id, action = unquote(match.group(1)), match.group(2)
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    now = datetime.now(timezone.utc)
+                    if action == "close":
+                        with db:
+                            return self._json(200, study_ladder.close(db, _report_course_id({}, body), content_id, now))
+                    row = db.execute("SELECT course_id FROM study_sessions WHERE id=?",
+                                     (str(body.get("sessionId") or ""),)).fetchone()
+                    if row is None:
+                        raise ValueError("sessão de estudo não encontrada")
+                    config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                    return self._json(200, study.append_ladder_block(
+                        db, str(body["sessionId"]), _study_pool(db, config, row["course_id"]), content_id, now))
+                finally:
+                    db.close()
             if path == "/api/study/explanations/prefetch":
                 return self._json(202, _prefetch_explanations(self._read_json()))
+            match = re.fullmatch(r"/api/contents/([^/]+)/generate", path)
+            if match:
+                body = self._read_json()
+                level = question_origin.validate_difficulty(body.get("level")) or 1
+                try:
+                    count = int(body.get("count") or 3)
+                except (TypeError, ValueError):
+                    raise ValueError("count deve ser um número de 1 a 5") from None
+                if not 1 <= count <= generated_questions.MAX_COUNT:
+                    raise ValueError("gere de 1 a 5 questões por vez")
+                generated_questions._node(unquote(match.group(1)))  # valida antes de abrir a tarefa
+                return self._json(202, {"jobId": start_generation_job(unquote(match.group(1)), level, count)})
+            match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/report", path)
+            if match:
+                if unquote(match.group(1)) != generated_questions.SOURCE_ID:
+                    raise ValueError("questões do acervo se corrigem na revisão da prova")
+                record = generated_questions.report_question(PROCESSED_ROOT, int(match.group(2)),
+                                                             self._read_json().get("note"))
+                with POOL_CACHE_LOCK:
+                    POOL_CACHE.clear()
+                return self._json(200, {"status": record.get("status")})
             match = re.fullmatch(r"/api/contents/([^/]+)/summary/review", path)
             if match:
                 return self._json(200, _summary_review(unquote(match.group(1)), self._read_json()))

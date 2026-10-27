@@ -35,7 +35,7 @@ def estimate_correct(responses: list[dict], weights_f1: dict[str, float], now: d
 
 
 def simulado_points(db: sqlite3.Connection, course_id: str) -> list[dict]:
-    """Provas e simulados concluídos com pelo menos 30 questões, em acertos de 90."""
+    """Provas e simulados FUVEST concluídos com pelo menos 30 questões, em acertos de 90."""
     points = []
     for row in db.execute("""SELECT a.id, a.created_at, a.plan_json, COUNT(*) AS total,
             SUM(COALESCE(aq.is_correct, 0)) AS correct, MAX(aq.answered_at) AS last_answer
@@ -45,6 +45,8 @@ def simulado_points(db: sqlite3.Connection, course_id: str) -> list[dict]:
         if row["total"] < MIN_SIMULADO_QUESTIONS:
             continue
         plan = json.loads(row["plan_json"] or "{}") or {}
+        if (plan.get("origin") or "fuvest") != "fuvest":
+            continue
         points.append({"at": row["last_answer"] or row["created_at"], "kind": "simulado" if plan.get("timed") else "exam",
                        "label": plan.get("label"), "correct": int(row["correct"]), "total": int(row["total"]),
                        "value": round(int(row["correct"]) / int(row["total"]) * QUESTIONS, 1)})
