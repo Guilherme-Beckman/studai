@@ -10,12 +10,12 @@
 // (muda => a nova questão entra deslizando). Sem `current`, não há questão na tela.
 (() => {
   const OPTION = "[data-exam-option], [data-today-option], [data-answer]";
-  const SUBMIT = "[data-exam-submit], #today-submit, #diagnostic-submit";
+  const SUBMIT = "[data-exam-submit], [data-today-submit], [data-diagnostic-submit]";
   const CONFIRM = "#confirm-reason, #today-confirm-reason";
   const NEXT = "[data-exam-next], #today-next";
   const PREV = "[data-exam-prev]";
   const FEEDBACK = ".exam-answer-feedback, .exam-reason-prompt, .reason-row:not(.hidden)";
-  const HINT = "A–E escolher · Enter confirmar · ←/→ navegar · Esc sair";
+  const HINT = "A–E escolher · 1/2/3 certeza/dúvida/chute · Enter confirmar · ←/→ navegar · Esc sair";
 
   const state = {
     workspace: null, overlay: null, stage: null, placeholder: null, observer: null,
@@ -219,6 +219,11 @@
     if (typing) return;
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       const action = find(event.key === "ArrowRight" ? NEXT : PREV);
+      if (action) { event.preventDefault(); action.click(); }
+      return;
+    }
+    if (/^[1-9]$/.test(event.key)) {
+      const action = find(`[data-confidence-key="${event.key}"]`);
       if (action) { event.preventDefault(); action.click(); }
       return;
     }

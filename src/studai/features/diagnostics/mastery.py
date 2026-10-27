@@ -65,10 +65,12 @@ def response_from_row(row: dict) -> dict:
     """Converte uma linha de ``attempt_questions`` (já respondida) em resposta."""
     question = json.loads(row["question_json"]) if isinstance(row.get("question_json"), str) else (row.get("question_json") or {})
     classification = question.get("classificacao") or {}
-    return {"correct": bool(row.get("is_correct")), "subject": row["subject"],
+    # Acerto no chute não é evidência de domínio; na nota da prova ele continua valendo.
+    return {"correct": bool(row.get("is_correct")) and row.get("confidence") != "guess", "subject": row["subject"],
             "principal_id": classification.get("conteudo_principal_id"),
             "related_ids": [value for value in (classification.get("conteudos_relacionados_ids") or []) if value],
-            "answered_at": row.get("answered_at")}
+            "answered_at": row.get("answered_at"), "is_correct": bool(row.get("is_correct")),
+            "confidence": row.get("confidence"), "elapsed_ms": row.get("elapsed_ms")}
 
 
 def evidence_weights(response: dict) -> dict[str, float]:

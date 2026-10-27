@@ -1280,6 +1280,40 @@ textarea {
   transform: none;
   background: var(--line-strong);
 }
+.exam-quiz-actions { gap: 12px; flex-wrap: wrap; }
+
+/* Responder com confiança: certeza / dúvida / chutei, com o atalho do modo foco */
+.confidence-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.confidence-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+.confidence-buttons kbd {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 11px/1.5 var(--font-ui);
+  opacity: .7;
+}
+
+/* Cronômetro da questão; passa a avisar quando estoura o ritmo da prova */
+.question-clock {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.question-clock::before { content: "◷ "; }
+.question-clock.over-pace {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
 .exam-final-summary {
   margin: 22px 0;
   padding: 20px;
@@ -2747,6 +2781,59 @@ textarea {
 }
 .rp-col-label {
   display: none;
+}
+/* confiança e ritmo por matéria */
+.rp-conf-head,
+.rp-conf-row {
+  display: grid;
+  grid-template-columns: minmax(120px,1fr) minmax(160px,2fr) 130px 120px;
+  gap: 12px;
+  align-items: center;
+}
+.rp-conf-head {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+.rp-conf-row {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rp-conf-row small { color: var(--muted); }
+.rp-conf-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--sunken);
+}
+.rp-conf-bar i,
+.rp-conf-legend i {
+  display: block;
+  height: 100%;
+}
+.rp-conf-sure { background: var(--ok); }
+.rp-conf-doubt { background: var(--accent-line); }
+.rp-conf-guess { background: var(--hl); }
+.rp-conf-wrong { background: var(--bad); }
+.rp-conf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.rp-conf-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.rp-conf-legend i { width: 10px; height: 10px; border-radius: 2px; }
+.rp-over-pace { color: var(--warn-ink); font-weight: 700; }
+@media (max-width: 760px) {
+  .rp-conf-head { display: none; }
+  .rp-conf-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .rp-conf-bar { grid-column: 1 / -1; order: 2; }
+  .rp-conf-row .rp-col-label { display: inline; font-weight: 400; color: var(--muted); }
 }
 /* árvore + detalhe */
 .rp-explorer {

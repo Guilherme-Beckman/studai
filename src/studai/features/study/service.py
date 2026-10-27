@@ -16,7 +16,7 @@ from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
 from studai.features.study import scheduler
 
-STUDY_SCHEMA_VERSION = 2
+STUDY_SCHEMA_VERSION = 3
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 GAP_ACCURACY = 0.7
 HALF_LIFE_DAYS = 30
@@ -67,6 +67,7 @@ def connect_db(path: Path) -> sqlite3.Connection:
             PRIMARY KEY(local_date, course_id)
         );
     """)
+    diagnostics.add_missing_columns(db, "study_answers", diagnostics.ANSWER_EXTRA_COLUMNS)
     old = db.execute("SELECT value FROM metadata WHERE key='study_schema_version'").fetchone()
     if old and int(old[0]) > STUDY_SCHEMA_VERSION:
         db.close()
@@ -119,13 +120,13 @@ def _card(db: sqlite3.Connection, kind: str, content_id: str, subject: str, now:
 
 
 def _review(db: sqlite3.Connection, row: sqlite3.Row, correct: bool, at: datetime,
-            origin: str, source_ref: str) -> bool:
+            origin: str, source_ref: str, **grade) -> bool:
     """Aplica uma revisão uma única vez por `source_ref`; devolve False se já existia."""
     if db.execute("SELECT 1 FROM review_logs WHERE source_ref=?", (source_ref,)).fetchone():
         return False
     if row["last_review_at"] and at < _parse(row["last_review_at"]):
         at = _parse(row["last_review_at"])
-    card, log = scheduler.review(json.loads(row["card_json"]), correct, at)
+    card, log = scheduler.review(json.loads(row["card_json"]), correct, at, **grade)
     db.execute("UPDATE review_cards SET card_json=?,due_at=?,last_review_at=? WHERE id=?",
                (json.dumps(card), _iso(scheduler.due_at(card)), _iso(at), row["id"]))
     db.execute("INSERT INTO review_logs(card_id,rating,reviewed_at,origin,source_ref,log_json) "
@@ -135,24 +136,27 @@ def _review(db: sqlite3.Connection, row: sqlite3.Row, correct: bool, at: datetim
 
 
 def _apply_answer(db: sqlite3.Connection, *, content_id: str, subject: str, source_id: str,
-                  number: int, correct: bool, at: datetime, origin: str, ref: str) -> sqlite3.Row:
-    """Revisa o cartão do conteúdo; erro cria (ou revisa) também o cartão da questão."""
+                  number: int, correct: bool, at: datetime, origin: str, ref: str,
+                  confidence: str | None = None, elapsed_ms: int | None = None,
+                  hints_used: int = 0) -> sqlite3.Row:
+    """Revisa o cartão do conteúdo; erro ou chute cria (ou revisa) também o cartão da questão."""
+    grade = {"confidence": confidence, "elapsed_ms": elapsed_ms, "hints_used": hints_used or 0}
     content_card = _card(db, "content", content_id, subject, at)
-    _review(db, content_card, correct, at, origin, ref)
+    _review(db, content_card, correct, at, origin, ref, **grade)
     question_card = db.execute("SELECT * FROM review_cards WHERE kind='question' AND content_id=? "
                                "AND source_id=? AND question_number=?",
                                (content_id, source_id, number)).fetchone()
-    if question_card is None and not correct:
+    if question_card is None and (not correct or confidence == "guess"):
         question_card = _card(db, "question", content_id, subject, at, source_id, number)
     if question_card is not None:
-        _review(db, question_card, correct, at, origin, ref + ":q")
+        _review(db, question_card, correct, at, origin, ref + ":q", **grade)
     return db.execute("SELECT * FROM review_cards WHERE id=?", (content_card["id"],)).fetchone()
 
 
 def sync_diagnostic_answers(db: sqlite3.Connection) -> int:
     """Importa as respostas dos diagnósticos para o agendamento; seguro para repetir."""
     rows = db.execute("""SELECT attempt_id,ordinal,source_id,question_number,subject,question_json,
-        is_correct,answered_at FROM attempt_questions WHERE answered_at IS NOT NULL
+        is_correct,answered_at,confidence,elapsed_ms,hints_used FROM attempt_questions WHERE answered_at IS NOT NULL
         ORDER BY answered_at, attempt_id, ordinal""").fetchall()
     imported = 0
     with db:
@@ -165,7 +169,9 @@ def sync_diagnostic_answers(db: sqlite3.Connection) -> int:
                 continue
             _apply_answer(db, content_id=content_id, subject=row["subject"], source_id=row["source_id"],
                           number=int(row["question_number"]), correct=bool(row["is_correct"]),
-                          at=_parse(row["answered_at"]), origin="diagnostic", ref=ref)
+                          at=_parse(row["answered_at"]), origin="diagnostic", ref=ref,
+                          confidence=row["confidence"], elapsed_ms=row["elapsed_ms"],
+                          hints_used=row["hints_used"] or 0)
             imported += 1
     return imported
 
@@ -210,15 +216,18 @@ def course_responses(db: sqlite3.Connection, course_id: str) -> list[dict]:
                           "kind": "exam" if row["attempt_mode"] == "exam" else "diagnostic",
                           "source_id": row["source_id"], "number": int(row["question_number"]),
                           "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
-                          "reason": row["error_reason"]})
+                          "reason": row["error_reason"], "note": row["note"]})
     for row in db.execute("""SELECT sa.* FROM study_answers sa JOIN study_sessions s ON s.id = sa.session_id
             WHERE s.course_id = ?""", (course_id,)):
-        responses.append({"correct": bool(row["is_correct"]), "subject": row["subject"],
+        # Como em ``mastery.response_from_row``: acerto no chute não conta como domínio.
+        responses.append({"correct": bool(row["is_correct"]) and row["confidence"] != "guess",
+                          "is_correct": bool(row["is_correct"]), "subject": row["subject"],
                           "principal_id": live_id(row["content_id"]), "related_ids": [],
                           "answered_at": row["answered_at"], "kind": "daily",
                           "source_id": row["source_id"], "number": int(row["question_number"]),
                           "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
-                          "reason": row["error_reason"]})
+                          "reason": row["error_reason"], "confidence": row["confidence"],
+                          "elapsed_ms": row["elapsed_ms"], "note": row["note"]})
     responses.sort(key=lambda response: response["answered_at"] or "")
     return responses
 
@@ -463,7 +472,9 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
         entry.update(question=question, answered=answer is not None)
         if answer:
             entry.update(selectedAnswer=answer["selected_answer"], correct=bool(answer["is_correct"]),
-                         correctAnswer=answer["correct_answer"], errorReason=answer["error_reason"])
+                         correctAnswer=answer["correct_answer"], errorReason=answer["error_reason"],
+                         confidence=answer["confidence"], elapsedMs=answer["elapsed_ms"],
+                         hintsUsed=answer["hints_used"], note=answer["note"])
         payload_items.append(entry)
     counts = Counter(item["reason"] for item in items)
     return {"id": row["id"], "date": row["local_date"], "courseId": row["course_id"],
@@ -473,8 +484,13 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
 
 
 def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, answer: str | None,
-                        reason: str | None, now: datetime, pool: list[dict] | None = None) -> dict:
-    """Registra a resposta do estudo diário e realimenta os cartões."""
+                        reason: str | None, now: datetime, pool: list[dict] | None = None, *,
+                        confidence: str | None = None, elapsed_ms: object = None, hints_used: object = 0,
+                        note: str | None = None) -> dict:
+    """Registra a resposta do estudo diário e realimenta os cartões.
+
+    ``confidence``/``elapsed_ms``/``hints_used`` definem a nota do FSRS (``scheduler.rating_for``).
+    """
     _, items = _session(db, session_id, pool)
     item = next((i for i in items if i["id"] == item_id), None)
     if item is None:
@@ -486,16 +502,23 @@ def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, a
     if normalized and normalized != item["correctAnswer"] and not reason:
         return {"requiresReason": True}
     answer, correct, reason = diagnostics.grade_answer(answer, alternatives, item["correctAnswer"], reason)
+    extras = diagnostics.answer_extras(confidence if answer else None, elapsed_ms, hints_used, note)
     with db:
         db.execute("""INSERT INTO study_answers(session_id,item_id,source_id,question_number,subject,content_id,
-            selected_answer,correct_answer,is_correct,error_reason,answered_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            selected_answer,correct_answer,is_correct,error_reason,answered_at,confidence,elapsed_ms,hints_used,note)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                    (session_id, item_id, item["sourceId"], item["number"], item["subject"], item["contentId"],
-                    answer, item["correctAnswer"], int(correct), reason, _iso(now)))
+                    answer, item["correctAnswer"], int(correct), reason, _iso(now), extras["confidence"],
+                    extras["elapsed_ms"], extras["hints_used"], extras["note"]))
         card = _apply_answer(db, content_id=item["contentId"], subject=item["subject"],
                              source_id=item["sourceId"], number=int(item["number"]), correct=correct,
-                             at=now, origin="daily", ref=f"daily:{session_id}:{item_id}")
+                             at=now, origin="daily", ref=f"daily:{session_id}:{item_id}",
+                             confidence=extras["confidence"], elapsed_ms=extras["elapsed_ms"],
+                             hints_used=extras["hints_used"])
+    rating = scheduler.rating_for(correct, extras["confidence"], extras["elapsed_ms"], extras["hints_used"])
     return {"itemId": item_id, "answer": answer, "correct": correct, "reason": reason,
-            "correctAnswer": item["correctAnswer"], "nextReview": card["due_at"]}
+            "correctAnswer": item["correctAnswer"], "nextReview": card["due_at"],
+            "confidence": extras["confidence"], "rating": scheduler.rating_label(rating)}
 
 
 def progress(db: sqlite3.Connection, now: datetime, *, days: int = 7) -> dict:
@@ -548,7 +571,8 @@ def reset_learning_context(db: sqlite3.Connection) -> dict:
         db.execute("DELETE FROM attempts WHERE mode!='exam'")
         # Mantém a tentativa e as questões da prova, removendo apenas respostas e métricas pessoais.
         db.execute("""UPDATE attempt_questions SET selected_answer=NULL,error_reason=NULL,
-            is_correct=NULL,answered_at=NULL WHERE attempt_id IN
+            is_correct=NULL,answered_at=NULL,confidence=NULL,elapsed_ms=NULL,hints_used=0,note=NULL
+            WHERE attempt_id IN
             (SELECT id FROM attempts WHERE mode='exam')""")
         db.execute("""UPDATE attempts SET status='in_progress',metrics_json=NULL,analysis_json=NULL,
             analysis_status=NULL,analysis_error=NULL WHERE mode='exam'""")

@@ -32,6 +32,7 @@ from studai.features.diagnostics import service as diagnostics
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
 from studai.features.study import calendar as study_calendar
+from studai.features.study import proficiency as study_proficiency
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import manual_crop, source_pdf
@@ -918,6 +919,12 @@ def _study_today(course_id: str) -> dict:
         db.close()
 
 
+def _answer_extras(body: dict) -> dict:
+    """Campos extras da resposta no corpo HTTP (``diagnostics.answer_extras`` valida)."""
+    return {"confidence": body.get("confidence"), "elapsed_ms": body.get("elapsedMs"),
+            "hints_used": body.get("hintsUsed") or 0, "note": body.get("note")}
+
+
 def _study_answer(body: dict) -> dict:
     session_id = str(body.get("sessionId") or "")
     db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
@@ -929,7 +936,8 @@ def _study_answer(body: dict) -> dict:
             config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
             pool = _study_pool(db, config, row["course_id"])
         return study.record_study_answer(db, session_id, str(body.get("itemId") or ""), body.get("answer"),
-                                         body.get("reason"), datetime.now(timezone.utc), pool)
+                                         body.get("reason"), datetime.now(timezone.utc), pool,
+                                         **_answer_extras(body))
     finally:
         db.close()
 
@@ -1220,6 +1228,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        # Aplicação local: o navegador revalida a cada carga para não ficar com JS/CSS antigos.
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
 
@@ -1309,6 +1319,14 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     study.sync_diagnostic_answers(db)
                     return self._json(200, study.progress(db, datetime.now(timezone.utc)))
+                finally:
+                    db.close()
+            if path == "/api/study/proficiency":
+                course_id = _report_course_id(parse_qs(parsed.query))
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_proficiency.subject_proficiency(
+                        study.course_responses(db, course_id)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/jobs/([a-f0-9]+)", path)
@@ -1500,7 +1518,8 @@ class Handler(BaseHTTPRequestHandler):
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
                     return self._json(200, reports.answer_exam_question(
-                        db, match.group(1), ordinal, body.get("answer"), body.get("reason")))
+                        db, match.group(1), ordinal, body.get("answer"), body.get("reason"),
+                        **_answer_extras(body)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/exam-sessions/([^/]+)/finish", path)
@@ -1728,7 +1747,8 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError(f"questão {ordinal} não pertence ao diagnóstico")
                     if answer and str(answer).upper() != row["correct_answer"] and not reason:
                         return self._json(200, {"requiresReason": True})
-                    return self._json(200, diagnostics.record_response(db, attempt_id, ordinal, answer, reason))
+                    return self._json(200, diagnostics.record_response(db, attempt_id, ordinal, answer, reason,
+                                                                       **_answer_extras(body)))
                 finally:
                     db.close()
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/finalize", path)

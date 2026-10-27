@@ -35,7 +35,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
-| 11 | Experiência de estudo (1ª fase) | em andamento | 1/7 |
+| 11 | Experiência de estudo (1ª fase) | em andamento | 3/8 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -198,8 +198,10 @@ Base: `src/studai/features/study/calendar.py`, aba “Calendário” (`frontend/
 Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a prova em si. Foco atual: 1ª fase de Eng. Computação São Carlos (prova cadastrada para 01/11/2027); 2ª fase e redação ficam fora por enquanto.
 - [x] Prioridade da 1ª fase: com a próxima prova em `fase1`, "Hoje", Treinamento e Calendário usam só o componente F1 dos pesos (cada questão vale 1 ponto). Antes, Matemática e Física pesavam ~25% cada por causa da 2ª fase; agora ~12% cada, e Geografia/Química/Biologia/História sobem de ~4% para ~10% (`courses.resolve_weights(..., phase)`, `study.target_phase`) (2026-10-27)
   - [ ] O diagnóstico adaptativo e os Relatórios ainda usam a nota final completa (não conhecem a prova-alvo)
-- [ ] Confiança antes do gabarito ("certeza / dúvida / chutei"), virando `Hard`/`Good`/`Easy` no FSRS; acerto no chute não conta como domínio
-- [ ] Tempo por questão (ritmo de ~3,3 min na 1ª fase): registrar, mostrar onde passa do ritmo
+- [x] Confiança ao responder ("Certeza / Dúvida / Chutei", teclas 1/2/3 no modo foco) nos três fluxos; vira a nota do FSRS (erro ou chute → Again, dúvida ou dica → Hard, certeza → Good, certeza dentro do ritmo → Easy); acerto no chute conta na nota, mas não no domínio (`scheduler.rating_for`, `diagnostics.answer_extras`, colunas `confidence/elapsed_ms/hints_used/note` em `study_answers` e `attempt_questions`) (2026-10-27)
+- [x] Tempo por questão: cronômetro discreto em cada questão (fica âmbar acima de 3:20), enviado como `elapsedMs` (2026-10-27)
+- [x] Painel "Confiança e ritmo por matéria" em Relatórios: acerto com certeza / dúvida / chute / erro, certeza confirmada (calibração) e tempo médio (`study/proficiency.py`, `GET /api/study/proficiency`) (2026-10-27)
+  - [ ] Relatórios ainda não contam as respostas do Treinamento na linha do tempo nem nos KPIs (só diagnósticos e provas)
 - [ ] Resolução comentada após responder (passo a passo + por que cada alternativa errada está errada), gerada uma vez, cacheada e revisável
 - [ ] Motivo do erro decide o próximo passo: conteúdo → mini-resumo + questão mais fácil do mesmo subconteúdo; cálculo → questão parecida; interpretação → a mesma questão volta em poucos dias
 - [ ] Simulado de 90 questões cronometrado com acertos estimados contra o corte da 1ª fase (corte cadastrado junto da data da prova)
@@ -264,3 +266,4 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 | 2026-10-22 | Claude / `feature/study/exam-calendar` | Fase 10: aba Calendário com datas de prova, prontidão, carga diária automática, plano dia/semana/mês com simulados e integração com o Treinamento | — |
 | 2026-10-22 | Claude / `claude/frontend-ai-improvement-0dd116` | Interface redesenhada com a skill frontend-design: estilo "cartão-resposta", CSS legível e tokenizado, tema escuro só por tokens | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11 adicionada (brainstorm de experiência de estudo); prioridade da 1ª fase usa só o componente F1 | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 1: confiança e tempo por questão alimentam o FSRS; painel de confiança e ritmo; estáticos com `Cache-Control: no-cache` | — |
