@@ -36,7 +36,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
 | 11 | Experiência de estudo (1ª fase) | concluída | 11/11 |
-| 12 | Questões de treino, da IA e trilha por nível | em andamento | 2/4 |
+| 12 | Questões de treino, da IA e trilha por nível | em andamento | 3/4 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -223,7 +223,7 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero com questões fáceis e subir até a FUVEST. O acervo ganha outras fontes (provas e listas em PDF, questões geradas pela IA) com dificuldade, e a trilha usa essas questões por nível. A FUVEST continua sendo a referência de incidência, pesos, simulados, diagnóstico e projeção.
 - [x] Origem e dificuldade de cada questão (`questions/origin.py`): `"origem": {tipo, nome}` no JSON da prova (sem o campo = FUVEST), dificuldade na revisão (ou a estimada pela resolução comentada); só a FUVEST entra na incidência, nos pesos F1, nos simulados, no diagnóstico e na projeção; fora dela a resposta pesa menos no domínio (fácil 0,3 · média 0,6 · difícil 0,8); origem editável na revisão da prova (`PATCH /api/exams/<id>/origin`) e selo na lista (2026-10-27)
 - [x] PDFs de outras provas e listas: "Origem" e "Nome" no envio (gabarito em PDF só é obrigatório na FUVEST), "Colar gabarito" na revisão (`1-C 2-A`, `91 B`); extrator reconhece "QUESTÃO 91" (com numeração que começa no meio) e alternativas "A)" e "A." (2026-10-27)
-- [ ] Questões geradas pela IA por subconteúdo e nível, direto no treino com selo e "Tem erro"
+- [x] Questões geradas pela IA (`questions/generated.py`): por subconteúdo e nível, com 5 alternativas distintas, gabarito e resolução comentada validada; gravadas na prova virtual `treino-ia` (origem `ia`, já aprovadas, com `gabarito.json`), entram direto no pool; selo "Gerada por IA · fácil" no Treinamento e "Esta questão tem erro" (vira `unusable`); `POST /api/contents/<id>/generate`, `POST /api/questions/treino-ia/<n>/report` (2026-10-27)
 - [ ] Trilha por nível depois de "Não sabia o conteúdo": fácil → média → difícil → FUVEST
 
 ## Processamento de provas
@@ -292,3 +292,4 @@ Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero 
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 5: aba Leituras com as obras obrigatórias | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12 adicionada; etapa 1: origem e dificuldade das questões, FUVEST como referência | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12, etapa 2: envio de outras provas e listas, extrator com "QUESTÃO NN" e "A)" | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12, etapa 3: questões de treino geradas pela IA | — |

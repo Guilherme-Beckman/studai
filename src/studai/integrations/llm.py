@@ -753,6 +753,17 @@ class DemoProvider(MockProvider):
         return "DemoProvider:offline"
 
     def complete(self, system, user, images=None):
+        if "cria questões inéditas" in system:
+            payload = json.loads(user)
+            start = len(payload.get("enunciados_existentes") or [])
+            return json.dumps({"questions": [{
+                "enunciado": f"Questão de demonstração {start + index + 1} sobre {payload['assunto']}: qual alternativa está certa?",
+                "alternativas": {letter: f"Alternativa {letter} da questão {start + index + 1}" for letter in "ABCDE"},
+                "answer": "C", "key_concept": "Conceito de demonstração.",
+                "steps": ["Identifique o conceito.", "Aplique-o ao enunciado."],
+                "distractors": {letter: "Não atende ao enunciado." for letter in "ABDE"},
+                "hints": ["Releia o enunciado.", "Pense no conceito central.", "Compare as alternativas."],
+                "difficulty": payload["nivel"]} for index in range(payload["quantidade"])]}, ensure_ascii=False)
         if "mini-resumo" in system:
             payload = json.loads(user)
             return json.dumps({"summary": f"Resumo de demonstração sobre {payload['assunto']}.",

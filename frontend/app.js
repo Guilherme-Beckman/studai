@@ -2088,9 +2088,9 @@ function renderToday(workspace = $("#today-workspace")) {
   const explainContext = { sessionId: session.id, itemId: item.id, courseId: session.courseId };
   const reasonPanel = currentStudy.pendingReason ? reasonPickerMarkup("data-today-reason") : "";
   const actions = submitted
-    ? `<div class="exam-quiz-actions"><span></span><button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
+    ? `<div class="exam-quiz-actions">${question._origem === "ia" ? `<button type="button" class="text-button" id="today-report">Esta questão tem erro</button>` : "<span></span>"}<button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
     : `<div class="exam-quiz-actions"><button class="blank-button ${selected === "" ? "selected" : ""}" id="today-blank" aria-pressed="${selected === ""}">Deixar em branco</button>${answerButtonsMarkup({ blank: selected === "", ready: selected != null && !currentStudy.pendingReason, attr: "data-today-submit" })}</div>`;
-  workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span><span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
+  workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span>${originBadge(question)}<span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
     <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
     ${reasonPanel}${feedback}${submitted && result.summaryContentId && window.studaiExplain ? window.studaiExplain.summarySlot(result.summaryContentId) : ""}${explainSlot(item.sourceId, item.number, explainContext, submitted ? { mode: "full", open: !result.correct || result.confidence === "guess" } : { mode: "hints" })}${actions}`;
@@ -2110,11 +2110,33 @@ function renderToday(workspace = $("#today-workspace")) {
   $$("[data-today-reason]", workspace).forEach(button => button.addEventListener("click", () => {
     submitStudyAnswer(item, currentStudy.selected, button.dataset.todayReason, { ...currentStudy.pendingExtras, note: reasonNote(workspace) });
   }));
+  $("#today-report", workspace)?.addEventListener("click", () => reportGeneratedQuestion(item));
   $("#today-next", workspace)?.addEventListener("click", () => {
     currentStudy.lastAnswer = null;
     currentStudy.selected = null;
     renderToday(workspace);
   });
+}
+
+// Selo das questões que não são da FUVEST (treino): a IA, outra prova ou lista.
+function originBadge(question) {
+  const origin = question?._origem;
+  if (!origin || origin === "fuvest") return "";
+  const level = DIFFICULTY_LABELS[question._dificuldade];
+  return `<span class="origin-chip ${origin === "ia" ? "ai" : ""}" title="Questão de treino: conta com peso menor no domínio">${origin === "ia" ? "Gerada por IA" : "Treino"}${level ? ` · ${level.toLowerCase()}` : ""}</span>`;
+}
+
+async function reportGeneratedQuestion(item) {
+  const note = window.prompt("O que está errado nesta questão? (ela sai do treino)", "");
+  if (note === null) return;
+  try {
+    await api(`/api/questions/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.number)}/report`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }),
+    });
+    toast("Obrigado! A questão saiu do treino.");
+  } catch (error) {
+    toast(error.message, true);
+  }
 }
 
 function followupMessage(result) {

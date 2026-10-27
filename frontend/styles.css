@@ -3516,6 +3516,17 @@ textarea {
 
 /* Origem da prova e selos de origem */
 .origin-badge { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-line); }
+.origin-chip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.origin-chip.ai { background: var(--hl-soft); border-color: var(--warn-line); color: var(--warn-ink); }
 .exam-origin {
   display: flex;
   flex-wrap: wrap;

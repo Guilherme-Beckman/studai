@@ -31,6 +31,7 @@ from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_
 from studai.features.diagnostics import service as diagnostics
 from studai.features.explanations import service as explanations
 from studai.features.explanations import summaries as content_summaries
+from studai.features.questions import generated as generated_questions
 from studai.features.questions import origin as question_origin
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
@@ -1349,6 +1350,31 @@ def _start_summary_job(content_id: str) -> str:
         return job_id
 
 
+def start_generation_job(content_id: str, level: int, count: int = 3) -> str:
+    """Gera questões da IA para o nó e o nível em segundo plano (uma tarefa por nó e nível)."""
+    key = ("generate", content_id, int(level))
+    with EXPLANATION_LOCK:
+        running = _explanation_job_running(key)
+        if running:
+            return running
+
+        def task(cancelled, job_id):
+            db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
+            try:
+                _set_job(job_id, stage="generating", message="Gerando questões de treino com a IA")
+                numbers = generated_questions.generate_questions(PROCESSED_ROOT, db, content_id, int(level), count,
+                                                                 _explanations_provider())
+            finally:
+                db.close()
+            with POOL_CACHE_LOCK:
+                POOL_CACHE.clear()
+            return {"contentId": content_id, "level": int(level), "numbers": numbers}
+
+        job_id = _submit_job(f"Questões da IA {content_id} nível {level}", task)
+        EXPLANATION_JOBS[key] = job_id
+        return job_id
+
+
 def _summary_get(content_id: str) -> tuple[int, dict]:
     db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
     try:
@@ -2014,6 +2040,27 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, _study_training_next(self._read_json()))
             if path == "/api/study/explanations/prefetch":
                 return self._json(202, _prefetch_explanations(self._read_json()))
+            match = re.fullmatch(r"/api/contents/([^/]+)/generate", path)
+            if match:
+                body = self._read_json()
+                level = question_origin.validate_difficulty(body.get("level")) or 1
+                try:
+                    count = int(body.get("count") or 3)
+                except (TypeError, ValueError):
+                    raise ValueError("count deve ser um número de 1 a 5") from None
+                if not 1 <= count <= generated_questions.MAX_COUNT:
+                    raise ValueError("gere de 1 a 5 questões por vez")
+                generated_questions._node(unquote(match.group(1)))  # valida antes de abrir a tarefa
+                return self._json(202, {"jobId": start_generation_job(unquote(match.group(1)), level, count)})
+            match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/report", path)
+            if match:
+                if unquote(match.group(1)) != generated_questions.SOURCE_ID:
+                    raise ValueError("questões do acervo se corrigem na revisão da prova")
+                record = generated_questions.report_question(PROCESSED_ROOT, int(match.group(2)),
+                                                             self._read_json().get("note"))
+                with POOL_CACHE_LOCK:
+                    POOL_CACHE.clear()
+                return self._json(200, {"status": record.get("status")})
             match = re.fullmatch(r"/api/contents/([^/]+)/summary/review", path)
             if match:
                 return self._json(200, _summary_review(unquote(match.group(1)), self._read_json()))
