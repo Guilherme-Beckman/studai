@@ -29,6 +29,7 @@ from studai.features.classification.cache import ClassificationCache
 from studai.features.classification import service as classification
 from studai.features.classification.rag import DEFAULT_EMBEDDING_MODEL, DEFAULT_EXAMPLES, index_examples
 from studai.features.diagnostics import service as diagnostics
+from studai.features.explanations import service as explanations
 from studai.features.reports import knowledge_map
 from studai.features.reports import service as reports
 from studai.features.study import calendar as study_calendar
@@ -1180,6 +1181,129 @@ def _reports_pool(db, config: dict, course_id: str) -> list[dict]:
     return pool
 
 
+# ---- Resoluções comentadas: geradas em segundo plano, uma tarefa por questão.
+EXPLANATION_JOBS: dict[tuple[str, int], str] = {}
+EXPLANATION_PROVIDERS: dict[str, tuple[float, object]] = {}
+EXPLANATION_LOCK = threading.Lock()
+EXPLANATION_MAX_TOKENS = 8000  # o gpt-oss gasta parte disso raciocinando antes do JSON
+
+
+def _explanations_provider():
+    """Provedor das resoluções (``STUDAI_EXPLANATIONS_PROVIDER``; padrão: faixas grátis de nuvem)."""
+    load_dotenv(SERVICE_ROOT / ".env")
+    name = os.environ.get("STUDAI_EXPLANATIONS_PROVIDER", "pool").strip() or "pool"
+    with EXPLANATION_LOCK:
+        cached = EXPLANATION_PROVIDERS.get(name)
+        if cached and time.monotonic() - cached[0] < SHARED_POOL_TTL_SECONDS:
+            return cached[1]
+    if name == "pool":
+        provider = _pool_provider({"useOllama": "false", "useFreeCloud": "true"}, max_tokens=EXPLANATION_MAX_TOKENS)
+    else:
+        provider = _provider({"provider": name}, max_tokens=EXPLANATION_MAX_TOKENS)
+    with EXPLANATION_LOCK:
+        EXPLANATION_PROVIDERS[name] = (time.monotonic(), provider)
+    return provider
+
+
+def _question_entry(db, config: dict, course_id: str, source_id: str, number: int) -> dict:
+    entry = next((item for item in _reports_pool(db, config, course_id)
+                  if item["source_id"] == source_id and int(item["number"]) == int(number)), None)
+    if entry is None:
+        raise reports.NotFound("questão fora do acervo revisado deste curso")
+    return entry
+
+
+def _explanation_job_running(key: tuple[str, int]) -> str | None:
+    job_id = EXPLANATION_JOBS.get(key)
+    with JOBS_LOCK:
+        job = JOBS.get(job_id or "")
+        return job_id if job and job["status"] in ("queued", "running") else None
+
+
+def _start_explanation_job(course_id: str, source_id: str, number: int) -> str:
+    key = (source_id, int(number))
+    with EXPLANATION_LOCK:
+        running = _explanation_job_running(key)
+        if running:
+            return running
+
+        def task(cancelled, job_id):
+            config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+            db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+            try:
+                entry = _question_entry(db, config, course_id, source_id, number)
+                record = explanations.get_explanation(db, source_id, number)
+                feedback = record["feedback"] if record and record["status"] == "rejected" else None
+                _set_job(job_id, stage="generating", message="Gerando a resolução comentada")
+                explanations.generate_explanation(db, entry, _explanations_provider(), feedback=feedback)
+                return {"sourceId": source_id, "number": int(number)}
+            finally:
+                db.close()
+
+        job_id = _submit_job(f"Resolução {source_id} Q{number}", task)
+        EXPLANATION_JOBS[key] = job_id
+        return job_id
+
+
+def _explanation_context(query: dict) -> dict:
+    value = lambda name: (query.get(name) or [None])[0]
+    ordinal = value("ordinal")
+    return {"session_id": value("sessionId"), "item_id": value("itemId"), "attempt_id": value("attemptId"),
+            "ordinal": int(ordinal) if ordinal not in (None, "") else None}
+
+
+def _explanation_get(source_id: str, number: int, query: dict) -> tuple[int, dict]:
+    course_id = _report_course_id(query)
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        record = explanations.get_explanation(db, source_id, number)
+        if explanations.needs_generation(record):
+            return 202, {"status": "generating", "jobId": _start_explanation_job(course_id, source_id, number)}
+        answered = explanations.question_answered(db, source_id, number, **_explanation_context(query))
+        try:
+            hints = int((query.get("hints") or ["0"])[0])
+        except ValueError:
+            raise ValueError("hints deve ser um número de 0 a 3") from None
+        return 200, explanations.public_payload(record, answered=answered, hints=hints)
+    finally:
+        db.close()
+
+
+def _explanation_review(source_id: str, number: int, body: dict) -> dict:
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        if not explanations.question_answered(db, source_id, number):
+            raise ValueError("responda à questão antes de revisar a resolução")
+        record = explanations.review_explanation(db, source_id, number, bool(body.get("approved")),
+                                                 body.get("feedback"))
+    finally:
+        db.close()
+    if record["status"] == "rejected":
+        return {"status": "generating", "jobId": _start_explanation_job(
+            _report_course_id({}, body), source_id, number)}
+    return {"status": record["status"]}
+
+
+def _prefetch_explanations(body: dict) -> dict:
+    """Adianta, em segundo plano, as resoluções das questões ainda sem resposta na sessão do dia."""
+    session_id = str(body.get("sessionId") or "")
+    db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+    try:
+        row = db.execute("SELECT course_id FROM study_sessions WHERE id=?", (session_id,)).fetchone()
+        if row is None:
+            raise ValueError("sessão de estudo não encontrada")
+        course_id = row["course_id"]
+        answered = {r[0] for r in db.execute("SELECT item_id FROM study_answers WHERE session_id=?", (session_id,))}
+        items = json.loads(db.execute("SELECT plan_json FROM study_sessions WHERE id=?",
+                                      (session_id,)).fetchone()[0])["items"]
+        missing = [(item["sourceId"], int(item["number"])) for item in items if item["id"] not in answered
+                   and explanations.needs_generation(explanations.get_explanation(db, item["sourceId"], item["number"]))]
+    finally:
+        db.close()
+    jobs = [_start_explanation_job(course_id, source_id, number) for source_id, number in missing]
+    return {"queued": len(jobs), "jobIds": jobs}
+
+
 def _report_course_id(query: dict, body: dict | None = None) -> str:
     value = (body or {}).get("courseId") or (query.get("courseId") or [""])[0]
     return str(value or reports.DEFAULT_COURSE_ID)
@@ -1240,7 +1364,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 return self._static("index.html")
             if path in ("/app.js", "/focus-mode.js", "/reports.js", "/calendar.js", "/knowledge-map.js", "/crop-editor.js",
-                        "/styles.css"):
+                        "/explanations.js", "/styles.css"):
                 return self._static(path.lstrip("/"))
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "mode": "local"})
@@ -1321,6 +1445,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, study.progress(db, datetime.now(timezone.utc)))
                 finally:
                     db.close()
+            match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/explanation", path)
+            if match:
+                status, payload = _explanation_get(unquote(match.group(1)), int(match.group(2)),
+                                                   parse_qs(parsed.query))
+                return self._json(status, payload)
             if path == "/api/study/proficiency":
                 course_id = _report_course_id(parse_qs(parsed.query))
                 db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
@@ -1731,6 +1860,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(201, _calendar_add_exam(self._read_json()))
             if path == "/api/study/training/next":
                 return self._json(200, _study_training_next(self._read_json()))
+            if path == "/api/study/explanations/prefetch":
+                return self._json(202, _prefetch_explanations(self._read_json()))
+            match = re.fullmatch(r"/api/questions/([^/]+)/(\d+)/explanation/review", path)
+            if match:
+                return self._json(200, _explanation_review(unquote(match.group(1)), int(match.group(2)),
+                                                           self._read_json()))
             match = re.fullmatch(r"/api/diagnostics/([^/]+)/answers", path)
             if match:
                 body = self._read_json()

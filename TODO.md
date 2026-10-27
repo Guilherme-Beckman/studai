@@ -35,7 +35,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 8 | Modo foco (tela cheia) para responder questões | concluída | 6/6 |
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
-| 11 | Experiência de estudo (1ª fase) | em andamento | 3/8 |
+| 11 | Experiência de estudo (1ª fase) | em andamento | 4/8 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -202,7 +202,10 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 - [x] Tempo por questão: cronômetro discreto em cada questão (fica âmbar acima de 3:20), enviado como `elapsedMs` (2026-10-27)
 - [x] Painel "Confiança e ritmo por matéria" em Relatórios: acerto com certeza / dúvida / chute / erro, certeza confirmada (calibração) e tempo médio (`study/proficiency.py`, `GET /api/study/proficiency`) (2026-10-27)
   - [ ] Relatórios ainda não contam as respostas do Treinamento na linha do tempo nem nos KPIs (só diagnósticos e provas)
-- [ ] Resolução comentada após responder (passo a passo + por que cada alternativa errada está errada), gerada uma vez, cacheada e revisável
+- [x] Resolução comentada e dicas graduais (`features/explanations/service.py`): a IA recebe o gabarito e devolve conceito-chave, passos, por que cada alternativa errada está errada, 3 dicas e dificuldade; a resposta só vale se confirmar o gabarito, comentar todas as erradas e não entregar a letra nas dicas. Antes de responder, "Me dá uma dica" (conta como dúvida no FSRS); depois, "Resolução comentada" (abre sozinha no erro ou no chute) com "Está certa ✓" / "Tem erro" (a crítica gera outra). Gerada em segundo plano (`GET /api/questions/<prova>/<n>/explanation`, 202 + tarefa), pré-gerada para a sessão do dia; provedor `STUDAI_EXPLANATIONS_PROVIDER` (padrão: faixas grátis de nuvem). Treinamento e "Responder prova"; o diagnóstico fica sem, para não enviesar a medida (2026-10-27)
+  - [ ] Qualidade medida em 2 questões reais (Groq `gpt-oss-120b`): chega ao gabarito, mas uma afirmação histórica saiu errada; revisar pelo botão "Tem erro" e acompanhar
+  - [ ] Imagens das questões ficam de fora por padrão (as faixas grátis só aceitam texto); `STUDAI_EXPLANATIONS_IMAGES=1` liga para provedores com visão (Gemini)
+  - [ ] OpenRouter: `nemotron-3-super-120b-a12b:free` deixou de ser grátis (404) e os `gemma-4` estão com limite; atualizar `STUDAI_OPENROUTER_MODELS`
 - [ ] Motivo do erro decide o próximo passo: conteúdo → mini-resumo + questão mais fácil do mesmo subconteúdo; cálculo → questão parecida; interpretação → a mesma questão volta em poucos dias
 - [ ] Simulado de 90 questões cronometrado com acertos estimados contra o corte da 1ª fase (corte cadastrado junto da data da prova)
 - [ ] Leituras obrigatórias: lista de obras, progresso de leitura e questões por obra
@@ -267,3 +270,4 @@ Ideia: o app já mede e agenda bem; falta ensinar depois do erro e treinar a pro
 | 2026-10-22 | Claude / `claude/frontend-ai-improvement-0dd116` | Interface redesenhada com a skill frontend-design: estilo "cartão-resposta", CSS legível e tokenizado, tema escuro só por tokens | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11 adicionada (brainstorm de experiência de estudo); prioridade da 1ª fase usa só o componente F1 | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 1: confiança e tempo por questão alimentam o FSRS; painel de confiança e ritmo; estáticos com `Cache-Control: no-cache` | — |
+| 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 11, etapa 2: resolução comentada e dicas graduais por IA, revisáveis pelo aluno | — |

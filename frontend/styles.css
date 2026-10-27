@@ -1303,6 +1303,87 @@ textarea {
   opacity: .7;
 }
 
+/* Dicas graduais e resolução comentada (frontend/explanations.js) */
+.explain-slot:empty { display: none; }
+.explain-slot { margin-top: 14px; }
+.explain-hint-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.explain-note { color: var(--muted); font-size: 12.5px; }
+.explain-hints {
+  margin: 0 0 8px;
+  padding: 10px 14px 10px 30px;
+  border-left: 3px solid var(--hl);
+  background: var(--hl-soft);
+  color: var(--ink);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  font-family: var(--font-read);
+  line-height: 1.55;
+}
+.explain-hints li + li { margin-top: 6px; }
+.explain-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+}
+.explain-panel > summary {
+  cursor: pointer;
+  padding: 11px 14px;
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+.explain-body {
+  padding: 0 16px 14px;
+  font-family: var(--font-read);
+  line-height: 1.6;
+  color: var(--ink);
+}
+.explain-body h4 {
+  margin: 14px 0 6px;
+  font: 700 13px var(--font-ui);
+  color: var(--ink-2);
+}
+.explain-steps,
+.explain-distractors { margin: 0; padding-left: 22px; }
+.explain-steps li + li,
+.explain-distractors li + li { margin-top: 5px; }
+.explain-distractors b { color: var(--bad-ink); margin-right: 4px; }
+.explain-concept { margin: 0; }
+.explain-loading { color: var(--muted); margin: 0; }
+.explain-error { color: var(--bad-ink); font-size: 13.5px; }
+.explain-review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+}
+.explain-feedback {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  font: 600 13px var(--font-ui);
+}
+.explain-feedback textarea {
+  font: 400 14px var(--font-ui);
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+}
+.explain-approved {
+  display: inline-block;
+  margin-top: 14px;
+  color: var(--ok-ink);
+  font: 600 13px var(--font-ui);
+}
+
 /* Cronômetro da questão; passa a avisar quando estoura o ritmo da prova */
 .question-clock {
   white-space: nowrap;

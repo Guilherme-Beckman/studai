@@ -315,7 +315,12 @@ function answerButtonsMarkup({ blank, ready, attr }) {
 }
 
 function answerExtrasBody(extras = {}) {
-  return { confidence: extras.confidence || null, elapsedMs: extras.elapsedMs ?? null };
+  return { confidence: extras.confidence || null, elapsedMs: extras.elapsedMs ?? null, hintsUsed: extras.hintsUsed || 0 };
+}
+
+// Marcador da resolução comentada / dicas (frontend/explanations.js); vazio se o módulo não carregou.
+function explainSlot(sourceId, number, context, options) {
+  return window.studaiExplain ? window.studaiExplain.slot(sourceId, number, context, options) : "";
 }
 
 function renderSourceQuestionImage(examId, paths, { collapsible = false } = {}) {
@@ -997,11 +1002,18 @@ function renderExamQuiz() {
     ? `<div class="exam-reason-prompt" role="group" aria-label="Motivo do erro"><span>Qual foi o principal motivo do erro?</span><div class="exam-reason-options">${EXAM_REASONS.map(([value, label]) => `<button type="button" class="button button-secondary" data-exam-reason="${value}">${label}</button>`).join("")}</div></div>` : "";
   const progress = Math.round(((index + 1) / questions.length) * 100);
   if (!submitted && !awaitingReason) startQuestionClock(`exam:${quiz.examId}:${number}`);
+  // Resolução e dicas só para as questões do acervo revisado (as que têm ordinal na sessão).
+  const ordinal = quiz.session?.ordinals?.[number];
+  const explain = ordinal != null && !quiz.session.offline
+    ? explainSlot(exam.id, question.numero, { attemptId: quiz.session.id, ordinal, courseId: quiz.session.courseId },
+      submitted ? { mode: "full", open: Boolean(key && !key.annulled && saved !== key.answer) } : { mode: "hints" })
+    : "";
   workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">${escapeHtml(exam.name)}</p><h2>Responda à prova</h2><div class="workspace-meta">Questão ${index + 1} de ${questions.length}${question.pagina ? ` · página ${question.pagina}` : ""} · ${examSessionStatus(quiz)}${submitted || awaitingReason ? "" : ` · ${clockMarkup()}`}</div></div><button class="blank-button" data-exam-close>Fechar prova</button></div>
     <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
     ${questionContentMarkup(exam.id, question, sharedText, sharedImages)}
     <div class="exam-options">${optionsMarkup(exam.id, question, { selected, submitted: submitted || awaitingReason, correctAnswer: key && !key.annulled ? key.answer : null, saved, attr: "data-exam-option" })}</div>
-    ${outcome}${reasonPrompt}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 || awaitingReason ? "disabled" : ""}>← Anterior</button><div>${awaitingReason ? `<span class="muted">Escolha o motivo para continuar.</span>` : submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"}</button>` : `<button type="button" class="blank-button ${selected === "" ? "selected" : ""}" data-exam-blank aria-pressed="${selected === ""}">Deixar em branco</button>${answerButtonsMarkup({ blank: selected === "", ready: selected != null, attr: "data-exam-submit" })}`}</div></div>`;
+    ${outcome}${reasonPrompt}${awaitingReason ? "" : explain}<div class="exam-quiz-actions"><button class="blank-button" data-exam-prev ${index === 0 || awaitingReason ? "disabled" : ""}>← Anterior</button><div>${awaitingReason ? `<span class="muted">Escolha o motivo para continuar.</span>` : submitted ? `<button class="button button-primary" data-exam-next>${index === questions.length - 1 ? "Ver resultado" : "Próxima questão"}</button>` : `<button type="button" class="blank-button ${selected === "" ? "selected" : ""}" data-exam-blank aria-pressed="${selected === ""}">Deixar em branco</button>${answerButtonsMarkup({ blank: selected === "", ready: selected != null, attr: "data-exam-submit" })}`}</div></div>`;
+  window.studaiExplain?.mount(workspace);
   window.studaiFocus?.attach(workspace, { current: index + 1, total: questions.length, key: number });
   bindExamQuizActions();
 }
@@ -1024,7 +1036,8 @@ function bindExamQuizActions() {
     flushExamReason(quiz);
     const number = String(quiz.questions[quiz.index].numero);
     const answer = quiz.selected || null;
-    const extras = { confidence: button.dataset.examSubmit || null, elapsedMs: questionElapsedMs(`exam:${quiz.examId}:${number}`) };
+    const extras = { confidence: button.dataset.examSubmit || null, elapsedMs: questionElapsedMs(`exam:${quiz.examId}:${number}`),
+      hintsUsed: window.studaiExplain?.hintsUsed(quiz.exam.id, number) || 0 };
     const key = (quiz.answerKeys || {})[number];
     const wrong = answer != null && key && !key.annulled && key.answer !== "*" && key.answer !== answer;
     if (wrong) {
@@ -1069,6 +1082,9 @@ async function commitExamAnswer(quiz, number, answer, reason = null, extras = {}
   quiz.selected = null;
   await persistExamAnswer(quiz, number, answer, reason, extras);
   if (currentExamQuiz !== quiz) return;
+  // Só avança sozinho no acerto: no erro, a resolução comentada fica na tela.
+  const key = (quiz.answerKeys || {})[number];
+  if (key && !key.annulled && key.answer !== "*" && key.answer !== answer) return;
   window.setTimeout(() => {
     if (currentExamQuiz !== quiz || quiz.index !== answerIndex || quiz.pendingReason || quiz.answers[number] !== answer) return;
     quiz.index++;
@@ -1572,6 +1588,7 @@ async function loadToday() {
     ]);
     currentStudy = { session, selected: null, pendingReason: null, training: true,
       dailyCount: session.items.filter(item => !item.id.startsWith("t")).length };
+    window.studaiExplain?.prefetch(session.id);
     $("#today-date").textContent = formatDay(session.date);
     updateTrainingCounters(session);
     const dailyItems = session.items.filter(item => !item.id.startsWith("t"));
@@ -1648,6 +1665,7 @@ function renderToday(workspace = $("#today-workspace")) {
     ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? (result.confidence === "guess" ? "Acertou no chute: a questão volta para revisão." : "Resposta correta!") : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}${result.rating ? ` (${RATING_LABELS[result.rating]})` : ""}.</div>`
     : "";
   if (!submitted && !currentStudy.pendingReason) startQuestionClock(`today:${session.id}:${item.id}`);
+  const explainContext = { sessionId: session.id, itemId: item.id, courseId: session.courseId };
   const reasonPanel = currentStudy.pendingReason ? `<div class="reason-row"><label>Qual foi o motivo principal?<select id="today-reason"><option value="">Selecione</option><option value="unknown_content">Não sabia o conteúdo</option><option value="calc_error">Errei o cálculo</option><option value="misread">Interpretei errado</option></select></label><button class="button button-primary" id="today-confirm-reason">Registrar resposta</button></div>` : "";
   const actions = submitted
     ? `<div class="exam-quiz-actions"><span></span><button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
@@ -1655,14 +1673,15 @@ function renderToday(workspace = $("#today-workspace")) {
   workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span><span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
     <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
-    ${reasonPanel}${feedback}${actions}`;
+    ${reasonPanel}${feedback}${explainSlot(item.sourceId, item.number, explainContext, submitted ? { mode: "full", open: !result.correct || result.confidence === "guess" } : { mode: "hints" })}${actions}`;
+  window.studaiExplain?.mount(workspace);
   window.studaiFocus?.attach(workspace, { current: items.indexOf(item) + 1, total: items.length, key: item.id });
   $$("[data-today-option]", workspace).forEach(button => button.addEventListener("click", () => {
     currentStudy.selected = button.dataset.todayOption;
     currentStudy.pendingReason = null;
     renderToday(workspace);
   }));
-  $$("[data-today-submit]", workspace).forEach(button => button.addEventListener("click", () => submitStudyAnswer(item, currentStudy.selected, null, { confidence: button.dataset.todaySubmit || null, elapsedMs: questionElapsedMs(`today:${session.id}:${item.id}`) })));
+  $$("[data-today-submit]", workspace).forEach(button => button.addEventListener("click", () => submitStudyAnswer(item, currentStudy.selected, null, { confidence: button.dataset.todaySubmit || null, elapsedMs: questionElapsedMs(`today:${session.id}:${item.id}`), hintsUsed: window.studaiExplain?.hintsUsed(item.sourceId, item.number) || 0 })));
   $("#today-blank", workspace)?.addEventListener("click", () => {
     currentStudy.selected = currentStudy.selected === "" ? null : "";
     currentStudy.pendingReason = null;
@@ -1706,6 +1725,8 @@ async function submitStudyAnswer(item, answer, reason = null, extras = {}) {
       updateTrainingCounters(currentStudy.session);
     }
     renderToday();
+    // Erro ou chute: a tela espera, com a resolução aberta; acerto segue sozinho.
+    if (!result.correct || result.confidence === "guess") return;
     window.setTimeout(() => {
       if (currentStudy?.lastAnswer !== result) return;
       currentStudy.lastAnswer = null;
@@ -1736,6 +1757,7 @@ async function appendTrainingBlock() {
     currentStudy.selected = null;
     currentStudy.pendingReason = null;
     updateTrainingCounters(session);
+    window.studaiExplain?.prefetch(session.id);
     const added = session.items.length - previousCount;
     toast(`${added} ${added === 1 ? "questão adicionada" : "questões adicionadas"}. Elas aparecem uma por vez no treino.`);
     renderToday();
