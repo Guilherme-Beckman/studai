@@ -38,6 +38,7 @@ from studai.features.reports import service as reports
 from studai.features.reports import simulado
 from studai.features.study import calendar as study_calendar
 from studai.features.study import error_notebook
+from studai.features.study import ladder as study_ladder
 from studai.features.study import proficiency as study_proficiency
 from studai.features.study import readings
 from studai.features.study import service as study
@@ -1542,6 +1543,12 @@ class Handler(BaseHTTPRequestHandler):
             if match:
                 status, payload = _summary_get(unquote(match.group(1)))
                 return self._json(status, payload)
+            if path == "/api/study/ladders":
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_ladder.listing(db, _report_course_id(parse_qs(parsed.query))))
+                finally:
+                    db.close()
             if path == "/api/study/errors":
                 query = parse_qs(parsed.query)
                 value = lambda name: (query.get(name) or [None])[0] or None
@@ -2038,6 +2045,38 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(201, _calendar_add_exam(self._read_json()))
             if path == "/api/study/training/next":
                 return self._json(200, _study_training_next(self._read_json()))
+            if path == "/api/study/ladders/fill":
+                # Trilhas ativas sem questões no nível atual: pede à IA (o frontend chama ao abrir o Treinamento).
+                body = self._read_json()
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id({}, body)
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    missing = study_ladder.missing_levels(db, _study_pool(db, config, course_id), course_id,
+                                                          datetime.now(timezone.utc))
+                finally:
+                    db.close()
+                return self._json(202, {"jobIds": [start_generation_job(content_id, level)
+                                                   for content_id, level in missing]})
+            match = re.fullmatch(r"/api/study/ladders/([^/]+)/(close|train)", path)
+            if match:
+                body = self._read_json()
+                content_id, action = unquote(match.group(1)), match.group(2)
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    now = datetime.now(timezone.utc)
+                    if action == "close":
+                        with db:
+                            return self._json(200, study_ladder.close(db, _report_course_id({}, body), content_id, now))
+                    row = db.execute("SELECT course_id FROM study_sessions WHERE id=?",
+                                     (str(body.get("sessionId") or ""),)).fetchone()
+                    if row is None:
+                        raise ValueError("sessão de estudo não encontrada")
+                    config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                    return self._json(200, study.append_ladder_block(
+                        db, str(body["sessionId"]), _study_pool(db, config, row["course_id"]), content_id, now))
+                finally:
+                    db.close()
             if path == "/api/study/explanations/prefetch":
                 return self._json(202, _prefetch_explanations(self._read_json()))
             match = re.fullmatch(r"/api/contents/([^/]+)/generate", path)

@@ -54,8 +54,14 @@ class GeneratedQuestionTests(unittest.TestCase):
         return [item for item in diagnostics.load_question_pool(self.root, self.db, ["Matemática"])[0]
                 if item["source_id"] == generated.SOURCE_ID]
 
-    def test_validation(self):
-        self.assertEqual(generated.validate_question(question(), 1)["answer"], "B")
+    def test_validation_and_shuffle(self):
+        valid = generated.validate_question(question(steps=["Pela tabela, a alternativa B vale 1/2."]), 1)
+        # A correta muda de letra, mas continua sendo "1/2", e a resolução acompanha.
+        self.assertEqual(valid["alternativas"][valid["answer"]], "1/2")
+        self.assertEqual(valid["explanation"]["answer"], valid["answer"])
+        self.assertEqual(sorted(valid["explanation"]["distractors"]), sorted(set("ABCDE") - {valid["answer"]}))
+        self.assertIn(f"alternativa {valid['answer']} vale", valid["explanation"]["steps"][0])
+        self.assertEqual(generated.validate_question(question(), 1), generated.validate_question(question(), 1))
         broken = [question(alternativas={"A": "0", "B": "1/2", "C": "1", "D": "2"}),
                   question(alternativas={"A": "0", "B": "1/2", "C": "1/2", "D": "2", "E": "3"}),
                   question(answer="F"), question(enunciado="curta"),
@@ -71,11 +77,12 @@ class GeneratedQuestionTests(unittest.TestCase):
         self.assertEqual(len(pool), 3)
         self.assertEqual({(item["origin"], item["difficulty"], item["question"]["classificacao"]["conteudo_principal_id"])
                           for item in pool}, {("ia", 1, self.leaf)})
-        self.assertEqual(pool[0]["correct_answer"], "C")
+        for item in pool:  # embaralhada: a correta é a alternativa com o texto da "C" original
+            self.assertEqual(item["question"]["alternativas"][item["correct_answer"]]["texto"].split()[1], "C")
         record = explanations.get_explanation(self.db, generated.SOURCE_ID, 1)
         self.assertEqual((record["status"], record["content"]["difficulty"]), ("generated", 1))
         key = json.loads(generated.bank_file(self.root).with_name("gabarito.json").read_text(encoding="utf-8"))
-        self.assertEqual(key["gabarito"], {"1": "C", "2": "C", "3": "C"})
+        self.assertEqual(key["gabarito"], {str(item["number"]): item["correct_answer"] for item in pool})
         # A próxima geração continua a numeração e manda os enunciados existentes no prompt.
         self.assertEqual(generated.generate_questions(self.root, self.db, self.leaf, 2, 1, DemoProvider(model="demo")),
                          [4])

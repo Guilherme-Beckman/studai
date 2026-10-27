@@ -8,8 +8,10 @@ resolução comentada; se o aluno apontar um erro, ela vira ``unusable`` e sai d
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import random
 import re
 import sqlite3
 import threading
@@ -28,7 +30,7 @@ from studai.integrations.ai_cache import cached_ai_result
 SOURCE_ID = "treino-ia"
 BANK_DIR = "treino-ia"
 ORIGIN = {"tipo": "ia", "nome": "Questões geradas pela IA"}
-PROMPT_VERSION = "generated-v1"
+PROMPT_VERSION = "generated-v2"
 MAX_COUNT = 5
 LETTERS = "ABCDE"
 LEVEL_GUIDE = {
@@ -41,6 +43,7 @@ _LOCK = threading.Lock()
 SYSTEM = """Você é professor de cursinho e cria questões inéditas de múltipla escolha para treino da 1ª fase da FUVEST.
 Recebe um assunto da matéria, a descrição do edital, o nível pedido e enunciados que já existem (não os repita).
 Cada questão tem enunciado autossuficiente (sem figura), 5 alternativas (A a E) plausíveis e diferentes entre si, uma só correta.
+Antes de responder, confira cada questão: os dados precisam ser consistentes entre si (sem dado sobrando que leve a outro resultado), a conta precisa dar exatamente a alternativa correta e nenhuma outra alternativa pode ser defensável.
 Escreva em português do Brasil. Para cada questão, inclua também a resolução comentada:
 - key_concept: o conceito cobrado, em uma frase;
 - steps: os passos da resolução, sem numerar, com as contas quando houver;
@@ -100,8 +103,29 @@ def validate_question(obj: dict, level: int) -> dict:
         raise ValueError("answer deve ser uma letra de A a E")
     explanation = explanations.validate_explanation({**obj, "answer": answer, "difficulty": level},
                                                     alternatives, answer)
-    return {"enunciado": stem.strip(), "alternativas": {letter: alternatives[letter].strip() for letter in LETTERS},
-            "answer": answer, "explanation": explanation}
+    return shuffle_alternatives({"enunciado": stem.strip(), "answer": answer, "explanation": explanation,
+                                 "alternativas": {letter: alternatives[letter].strip() for letter in LETTERS}})
+
+
+def shuffle_alternatives(question: dict) -> dict:
+    """Embaralha as alternativas (a IA tende a pôr a correta sempre na mesma letra).
+
+    A ordem sai do hash do enunciado, então é reprodutível; o gabarito, os comentários
+    das erradas e as letras citadas nos passos acompanham a troca.
+    """
+    seed = int(hashlib.sha256(_key(question["enunciado"]).encode()).hexdigest()[:8], 16)
+    order = list(LETTERS)
+    random.Random(seed).shuffle(order)
+    new_letter = dict(zip(order, LETTERS))  # letra antiga -> letra nova
+    explanation = question["explanation"]
+    answer = new_letter[question["answer"]]
+    rename = lambda text: re.sub(r"(?<![A-Za-zÀ-ú])\(?([A-E])\)(?![A-Za-zÀ-ú])|(?<=alternativa )([A-E])\b",
+                                 lambda m: m.group(0).replace(m.group(1) or m.group(2),
+                                                              new_letter[m.group(1) or m.group(2)]), text)
+    return {**question, "answer": answer,
+            "alternativas": {new_letter[old]: text for old, text in question["alternativas"].items()},
+            "explanation": {**explanation, "answer": answer, "steps": [rename(step) for step in explanation["steps"]],
+                            "distractors": {new_letter[old]: text for old, text in explanation["distractors"].items()}}}
 
 
 def _node(content_id: str) -> dict:
@@ -175,7 +199,7 @@ def _store(root: Path, db: sqlite3.Connection, node: dict, level: int, generated
             number += 1
             data["questoes"].append({
                 "numero": number, "pagina": None, "texto_id": None, "enunciado": item["enunciado"], "nota": "",
-                "alternativas": {letter: {"texto": text, "figuras": []} for letter, text in item["alternativas"].items()},
+                "alternativas": {letter: {"texto": item["alternativas"][letter], "figuras": []} for letter in LETTERS},
                 "figuras_enunciado": [], "imagens_completas": [], "revisar": [], "materia": node["subject"],
                 "classificacao": {"materia": node["subject"], "assunto": node["name"],
                                   "conteudo_principal_id": node["id"], "caminho_conteudo": " → ".join(node["path"])},

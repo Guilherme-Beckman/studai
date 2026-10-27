@@ -15,18 +15,19 @@ from studai.features.diagnostics import depth, mastery
 from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
 from studai.features.explanations import service as explanations
-from studai.features.questions.origin import evidence_factor
-from studai.features.study import scheduler
+from studai.features.questions.origin import evidence_factor, is_fuvest
+from studai.features.study import ladder, scheduler
 
 STUDY_SCHEMA_VERSION = 4
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 GAP_ACCURACY = 0.7
 HALF_LIFE_DAYS = 30
-REASONS = ("overdue_question", "due_content", "new_gap", "new_content", "followup_practice")
+REASONS = ("overdue_question", "ladder", "due_content", "new_gap", "new_content", "followup_practice")
 # O motivo do erro decide o próximo passo: em quantos dias a questão volta...
 REVIEW_DELAY_DAYS = {"concept_confusion": 3, "misread": 3, "trap": 7}
 # ...e quantas questões do mesmo subconteúdo entram na sessão, e onde (posições depois da atual).
-FOLLOWUPS = {"unknown_content": (2, 0), "calc_error": (1, 3)}
+# "Não sabia o conteúdo" abre a trilha por nível (``ladder``) em vez disso.
+FOLLOWUPS = {"calc_error": (1, 3)}
 
 
 def connect_db(path: Path) -> sqlite3.Connection:
@@ -78,6 +79,7 @@ def connect_db(path: Path) -> sqlite3.Connection:
     diagnostics.add_missing_columns(db, "study_answers", (("origin", "TEXT"), ("difficulty", "INTEGER")))
     # v3: nota de corte da prova, em número de acertos.
     diagnostics.add_missing_columns(db, "exam_dates", (("cutoff_correct", "INTEGER"),))
+    ladder.ensure_schema(db)
     old = db.execute("SELECT value FROM metadata WHERE key='study_schema_version'").fetchone()
     if old and int(old[0]) > STUDY_SCHEMA_VERSION:
         db.close()
@@ -179,10 +181,11 @@ def _apply_answer(db: sqlite3.Connection, *, content_id: str, subject: str, sour
 
 def sync_diagnostic_answers(db: sqlite3.Connection) -> int:
     """Importa as respostas dos diagnósticos para o agendamento; seguro para repetir."""
-    rows = db.execute("""SELECT attempt_id,ordinal,source_id,question_number,subject,question_json,
-        is_correct,answered_at,confidence,elapsed_ms,hints_used,error_reason FROM attempt_questions
-        WHERE answered_at IS NOT NULL
-        ORDER BY answered_at, attempt_id, ordinal""").fetchall()
+    rows = db.execute("""SELECT aq.attempt_id,aq.ordinal,aq.source_id,aq.question_number,aq.subject,
+        aq.question_json,aq.is_correct,aq.answered_at,aq.confidence,aq.elapsed_ms,aq.hints_used,aq.error_reason,
+        a.course_id FROM attempt_questions aq JOIN attempts a ON a.id = aq.attempt_id
+        WHERE aq.answered_at IS NOT NULL
+        ORDER BY aq.answered_at, aq.attempt_id, aq.ordinal""").fetchall()
     imported = 0
     with db:
         for row in rows:
@@ -197,6 +200,9 @@ def sync_diagnostic_answers(db: sqlite3.Connection) -> int:
                           at=_parse(row["answered_at"]), origin="diagnostic", ref=ref,
                           confidence=row["confidence"], elapsed_ms=row["elapsed_ms"],
                           hints_used=row["hints_used"] or 0, reason=row["error_reason"])
+            if row["error_reason"] == "unknown_content":
+                # Erro de conteúdo num diagnóstico ou prova também abre a trilha (entra no plano seguinte).
+                ladder.start(db, row["course_id"], content_id, _parse(row["answered_at"]))
             imported += 1
     return imported
 
@@ -358,6 +364,8 @@ def build_plan(db: sqlite3.Connection, pool: list[dict], profile: dict, course_i
         candidates = [e for e in by_content.get(content_id, []) if (e["source_id"], e["number"]) not in used]
         fresh = [e for e in candidates if (e["source_id"], e["number"]) not in recent]
         options = fresh or candidates
+        # O plano regular mira a FUVEST; questões de treino entram pelas trilhas e pela prática do erro.
+        options = [e for e in options if is_fuvest(e)] or options
         return rng.choice(options) if options else None
 
     # 1. Questões erradas cujo cartão venceu: refazer a mesma questão.
@@ -367,6 +375,17 @@ def build_plan(db: sqlite3.Connection, pool: list[dict], profile: dict, course_i
         if len(items) < size and entry and (entry["source_id"], entry["number"]) not in used:
             used.add((entry["source_id"], entry["number"]))
             items.append(_item("overdue_question", entry, row["content_id"]))
+
+    # 1b. Trilhas ativas: questões do nível atual de cada uma.
+    for state in ladder.active(db, course_id)[:ladder.MAX_DAILY_LADDERS]:
+        if state["subject"] not in weights:
+            continue
+        chosen, _ = ladder.pick(db, pool, state["contentId"], state["level"], used, ladder.PER_ROUND, now)
+        for entry, content_id in chosen:
+            if len(items) >= size:
+                break
+            used.add((entry["source_id"], entry["number"]))
+            items.append({**_item("ladder", entry, content_id), "ladder": state["contentId"]})
 
     # 2. Conteúdos vencidos: menor retrievability e maior peso da matéria primeiro.
     due_contents = [row for row in db.execute(
@@ -520,6 +539,8 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
     row, items = _session(db, session_id, pool)
     answers = {a["item_id"]: dict(a) for a in db.execute(
         "SELECT * FROM study_answers WHERE session_id=?", (session_id,))}
+    states = ladder.listing(db, row["course_id"])
+    ladders = {state["contentId"]: state for state in states["active"] + states["done"]}
     payload_items = []
     for item in items:
         question = dict(item["question"])
@@ -527,6 +548,8 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
         answer = answers.get(item["id"])
         entry = {key: item[key] for key in ("id", "reason", "sourceId", "number", "subject",
                                              "contentId", "contentPath")}
+        if item.get("ladder"):
+            entry["ladder"] = ladders.get(item["ladder"])
         entry.update(question=question, answered=answer is not None)
         if answer:
             entry.update(selectedAnswer=answer["selected_answer"], correct=bool(answer["is_correct"]),
@@ -549,7 +572,7 @@ def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, a
 
     ``confidence``/``elapsed_ms``/``hints_used`` definem a nota do FSRS (``scheduler.rating_for``).
     """
-    _, items = _session(db, session_id, pool)
+    session_row, items = _session(db, session_id, pool)
     item = next((i for i in items if i["id"] == item_id), None)
     if item is None:
         raise ValueError(f"item {item_id} não pertence à sessão")
@@ -575,6 +598,8 @@ def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, a
                              confidence=extras["confidence"], elapsed_ms=extras["elapsed_ms"],
                              hints_used=extras["hints_used"], reason=reason)
         followups = _insert_followups(db, session_id, items, item, reason, pool, now) if not correct else []
+        ladder_result = _update_ladder(db, session_row["course_id"], session_id, item, reason,
+                                       correct and extras["confidence"] != "guess", pool, now)
     rating = scheduler.rating_for(correct, extras["confidence"], extras["elapsed_ms"], extras["hints_used"])
     question_card = db.execute("SELECT due_at FROM review_cards WHERE kind='question' AND content_id=? "
                                "AND source_id=? AND question_number=?",
@@ -583,8 +608,72 @@ def record_study_answer(db: sqlite3.Connection, session_id: str, item_id: str, a
             "correctAnswer": item["correctAnswer"], "nextReview": card["due_at"],
             "questionReview": question_card["due_at"] if question_card else None,
             "confidence": extras["confidence"], "rating": scheduler.rating_label(rating),
-            "followups": followups,
+            "followups": followups, "ladder": ladder_result,
             "summaryContentId": item["contentId"] if reason == "unknown_content" else None}
+
+
+def _update_ladder(db: sqlite3.Connection, course_id: str, session_id: str, item: dict, reason: str | None,
+                   success: bool, pool: list[dict] | None, now: datetime) -> dict | None:
+    """Abre a trilha no erro de conteúdo, aplica a resposta à trilha ativa e põe as próximas questões.
+
+    ``generating``: faltou questão no nível de treino atual; quem chama pede mais à IA.
+    """
+    ladder_id = item.get("ladder") or item["contentId"]
+    if reason == "unknown_content":
+        state = {**ladder.start(db, course_id, item["contentId"], now), "change": "started"}
+        ladder_id = item["contentId"]
+    else:
+        state = ladder.record(db, course_id, ladder_id, success, now)
+    if state is None:
+        return None
+    inserted, missing = [], False
+    if state["status"] == "active":
+        inserted, missing = _insert_ladder_items(db, session_id, item, ladder_id, state["level"], pool, now)
+    return {**state, "inserted": inserted, "generating": missing and state["level"] < ladder.TOP_LEVEL}
+
+
+def append_ladder_block(db: sqlite3.Connection, session_id: str, pool: list[dict], content_id: str,
+                        now: datetime, count: int = 2 * ladder.PER_ROUND) -> dict:
+    """"Treinar agora": acrescenta ao fim da sessão questões do nível atual da trilha."""
+    row, _ = _session(db, session_id, pool)
+    state = ladder.get(db, row["course_id"], content_id)
+    if state is None or state["status"] != "active":
+        raise ValueError("a trilha não está ativa")
+    plan = json.loads(row["plan_json"])
+    used = {(entry["sourceId"], int(entry["number"])) for entry in plan["items"]}
+    chosen, _ = ladder.pick(db, pool, content_id, state["level"], used, count, now)
+    if not chosen:
+        raise ValueError("ainda não há questões novas para este nível; as da IA estão sendo geradas")
+    taken = sum(1 for entry in plan["items"] if entry["id"].startswith("tl"))
+    plan["items"] += [{**_item("ladder", entry, node_id), "ladder": content_id, "id": f"tl{taken + index}"}
+                      for index, (entry, node_id) in enumerate(chosen, 1)]
+    with db:
+        db.execute("UPDATE study_sessions SET plan_json=? WHERE id=?", (json.dumps(plan, ensure_ascii=False), session_id))
+    return session_payload(db, session_id, pool)
+
+
+def _insert_ladder_items(db: sqlite3.Connection, session_id: str, item: dict, ladder_id: str, level: int,
+                         pool: list[dict] | None, now: datetime) -> tuple[list[str], bool]:
+    """Põe as próximas questões da trilha logo depois da atual, quando não há outras pendentes."""
+    if not pool:
+        return [], False
+    plan = json.loads(db.execute("SELECT plan_json FROM study_sessions WHERE id=?", (session_id,)).fetchone()[0])
+    answered = {row[0] for row in db.execute("SELECT item_id FROM study_answers WHERE session_id=?", (session_id,))}
+    own = [entry for entry in plan["items"] if entry.get("ladder") == ladder_id]
+    if any(entry["id"] not in answered for entry in own) or len(own) >= ladder.MAX_PER_SESSION:
+        return [], False
+    used = {(entry["sourceId"], int(entry["number"])) for entry in plan["items"]}
+    chosen, missing = ladder.pick(db, pool, ladder_id, level, used, ladder.PER_ROUND, now)
+    taken = sum(1 for entry in plan["items"] if entry["id"].startswith("tl"))
+    # Prefixo "t": como os blocos de treino, não conta na tarefa diária.
+    new_items = [{**_item("ladder", entry, content_id), "ladder": ladder_id, "id": f"tl{taken + index}"}
+                 for index, (entry, content_id) in enumerate(chosen, 1)]
+    if new_items:
+        position = next(index for index, entry in enumerate(plan["items"]) if entry["id"] == item["id"]) + 1
+        plan["items"][position:position] = new_items
+        db.execute("UPDATE study_sessions SET plan_json=? WHERE id=?",
+                   (json.dumps(plan, ensure_ascii=False), session_id))
+    return [entry["id"] for entry in new_items], missing
 
 
 def _followup_entries(db: sqlite3.Connection, pool: list[dict], item: dict, used: set[tuple[str, int]],
@@ -687,6 +776,7 @@ def reset_learning_context(db: sqlite3.Connection) -> dict:
     with db:
         db.execute("DELETE FROM study_sessions")
         db.execute("DELETE FROM review_cards")
+        db.execute("DELETE FROM ladders")
         # O dia congelado do calendário reflete o progresso apagado; as datas das provas ficam.
         db.execute("DELETE FROM calendar_days")
         db.execute("DELETE FROM attempts WHERE mode!='exam'")

@@ -47,18 +47,21 @@ class FollowupTests(unittest.TestCase):
     def answer(self, session, item, reason):
         return study.record_study_answer(self.db, session["id"], item["id"], "B", reason, T0, self.pool)
 
-    def test_unknown_content_inserts_practice_of_the_same_subcontent_right_after(self):
+    def test_unknown_content_opens_the_ladder_with_questions_right_after(self):
         session = self.session()
         item = self.first_on_leaf(session)
         result = self.answer(session, item, "unknown_content")
-        self.assertEqual(len(result["followups"]), 2)
+        self.assertEqual(result["followups"], [])
+        self.assertEqual((result["ladder"]["change"], result["ladder"]["level"]), ("started", 1))
+        # Sem questões fáceis no acervo: usa as mais próximas e pede à IA as do nível.
+        self.assertTrue(result["ladder"]["generating"])
         self.assertEqual(result["summaryContentId"], self.math[0])
         items = study.session_payload(self.db, session["id"])["items"]
         position = [entry["id"] for entry in items].index(item["id"])
         inserted = items[position + 1:position + 3]
-        self.assertEqual([entry["id"] for entry in inserted], result["followups"])
-        self.assertTrue(all(entry["reason"] == "followup_practice" and entry["contentId"] == self.math[0]
-                            for entry in inserted))
+        self.assertEqual([entry["id"] for entry in inserted], result["ladder"]["inserted"])
+        self.assertTrue(all(entry["reason"] == "ladder" and entry["contentId"] == self.math[0]
+                            and entry["ladder"]["level"] == 1 for entry in inserted))
         self.assertNotIn((item["sourceId"], item["number"]), {(e["sourceId"], e["number"]) for e in inserted})
 
     def test_calc_error_inserts_one_question_three_positions_later(self):

@@ -489,7 +489,7 @@ function renderExamReview() {
   reviewSelection = new Set([...reviewSelection].filter(number => known.has(number)));
   const cards = questions.map(question => renderReviewQuestion(exam.id, question, sharedTexts)).join("");
   const counter = (key, label, cls = "") => `<span class="review-count ${cls}"><strong>${reviewProgress[key] ?? 0}</strong>${label}</span>`;
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div>${originEditorMarkup(exam)}</div><div class="review-header-actions"><button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="button button-secondary" data-start-simulado="${escapeHtml(exam.id)}" title="Prova completa com cronômetro e correção só no fim">Simulado cronometrado</button><button class="blank-button" data-close-exam-review>Fechar</button></div></div>
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Prova e gabarito</p><h2>${escapeHtml(exam.name)}</h2><div class="workspace-meta">${questions.length} questões · ${exam.importedAnswers ?? 0} respostas importadas · ${reviewProgress.reviewedQuestions ?? 0}/${reviewProgress.reviewRequired ?? 0} sinalizadas pela IA já decididas</div>${originEditorMarkup(exam)}</div><div class="review-header-actions">${["lista", "ia"].includes(exam.origin?.tipo) ? `<span class="muted">Estas questões entram pelo Treinamento e pelas trilhas.</span>` : `<button class="button button-primary" data-start-quiz="${escapeHtml(exam.id)}">Responder prova</button><button class="button button-secondary" data-start-simulado="${escapeHtml(exam.id)}" title="Prova completa com cronômetro e correção só no fim">Simulado cronometrado</button>`}<button class="blank-button" data-close-exam-review>Fechar</button></div></div>
     <div class="exam-review-progress"><div class="progress-label"><strong>Revisão da prova</strong><span>${progress}%</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><div class="review-counts">${counter("approved", "aprovadas", "is-approved")}${counter("pending", "pendentes", "is-pending")}${counter("unusable", "inutilizáveis")}${counter("badCrop", "recorte ruim", "is-bad-crop")}</div><div class="workspace-meta">${escapeHtml(ragLabel)} · só questões aprovadas entram no RAG</div>${ragStatus.status === "pending" ? `<button class="text-button" data-retry-rag="${escapeHtml(exam.id)}">Tentar indexar novamente</button>` : ""}</div>
     ${questions.length ? reviewFilterBar(questions) : ""}
     <div class="exam-review-list">${cards || `<div class="loading-card">Esta prova não contém questões extraídas.</div>`}</div>`;
@@ -1882,7 +1882,7 @@ async function finalizeDiagnostic(id) {
 const STUDY_REASONS = {
   overdue_question: "Questão errada", due_content: "Revisão vencida",
   new_gap: "Lacuna do diagnóstico", new_content: "Conteúdo novo", practice: "Prática",
-  followup_practice: "Prática do erro", redo: "Caderno de erros",
+  followup_practice: "Prática do erro", redo: "Caderno de erros", ladder: "Trilha",
 };
 
 function formatDay(isoDate) {
@@ -1901,7 +1901,65 @@ function updateTrainingCounters(session) {
 function refreshToday() {
   todayRequest = loadToday();
   refreshErrorNotebook();
+  refreshLadders();
   return todayRequest;
+}
+
+// ---- Trilhas por nível: fácil → média → difícil → FUVEST, abertas por "Não sabia o conteúdo".
+function requestLadderQuestions(state) {
+  api(`/api/contents/${encodeURIComponent(state.contentId)}/generate`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: state.level, count: 3 }),
+  }).catch(() => { /* sem provedor de IA: a trilha usa as questões mais próximas do nível */ });
+}
+
+function fillLadders(courseId) {
+  api("/api/study/ladders/fill", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseId }),
+  }).catch(() => {});
+}
+
+async function refreshLadders() {
+  const root = $("#ladders");
+  const courseId = $("#training-course")?.value;
+  if (!root || !courseId) return;
+  try {
+    const data = await api(`/api/study/ladders?courseId=${encodeURIComponent(courseId)}`);
+    const row = state => `<div class="ladder-row ${state.status}"><div class="ladder-main"><strong>${escapeHtml(state.name)}</strong><span>${escapeHtml(state.path)}</span><div class="ladder-steps" role="img" aria-label="Nível ${state.level} de 4">${[1, 2, 3, 4].map(level => `<i class="${level < state.level || state.status === "done" ? "done" : level === state.level ? "current" : ""}" title="${LADDER_LEVELS[level]}">${LADDER_LEVELS[level]}</i>`).join("")}</div></div>${state.status === "active" ? `<div class="ladder-actions"><button type="button" class="button button-secondary" data-ladder-train="${escapeHtml(state.contentId)}">Treinar agora</button><button type="button" class="text-button" data-ladder-close="${escapeHtml(state.contentId)}">Encerrar</button></div>` : `<span class="ladder-done">Concluída</span>`}</div>`;
+    root.innerHTML = data.active.length || data.done.length
+      ? `${data.active.map(row).join("")}${data.done.slice(0, 5).map(row).join("")}`
+      : `<div class="empty-state"><div class="empty-icon">⛰</div><strong>Nenhuma trilha aberta</strong><p>Quando você marcar "Não sabia o conteúdo", o assunto ganha uma trilha que começa em questões fáceis e sobe até o nível FUVEST.</p></div>`;
+  } catch (error) {
+    root.innerHTML = `<div class="inline-result error">Não foi possível carregar as trilhas: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function bindLadders() {
+  $("#ladders")?.addEventListener("click", async event => {
+    const train = event.target.closest("[data-ladder-train]");
+    const close = event.target.closest("[data-ladder-close]");
+    if (!train && !close) return;
+    try {
+      if (close) {
+        if (!window.confirm("Encerrar esta trilha? Ela volta a abrir se você errar o conteúdo de novo.")) return;
+        await api(`/api/study/ladders/${encodeURIComponent(close.dataset.ladderClose)}/close`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ courseId: $("#training-course").value }),
+        });
+        return refreshLadders();
+      }
+      if (!currentStudy?.session) return toast("Aguarde o carregamento da tarefa diária.", true);
+      const previous = new Set(currentStudy.session.items.map(item => item.id));
+      const session = await api(`/api/study/ladders/${encodeURIComponent(train.dataset.ladderTrain)}/train`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: currentStudy.session.id }),
+      });
+      const focusIds = new Set(session.items.filter(item => !previous.has(item.id)).map(item => item.id));
+      Object.assign(currentStudy, { session, focusIds, lastAnswer: null, selected: null, pendingReason: null });
+      updateTrainingCounters(session);
+      renderToday();
+      $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      toast(error.message, true);
+    }
+  });
 }
 
 // ---- Caderno de erros: filtros por matéria, motivo e situação; "Refazer" vira um bloco de treino.
@@ -2009,6 +2067,7 @@ async function loadToday() {
     currentStudy = { session, selected: null, pendingReason: null, training: true,
       dailyCount: session.items.filter(item => !item.id.startsWith("t")).length };
     window.studaiExplain?.prefetch(session.id);
+    fillLadders(courseId);
     $("#today-date").textContent = formatDay(session.date);
     updateTrainingCounters(session);
     const dailyItems = session.items.filter(item => !item.id.startsWith("t"));
@@ -2082,7 +2141,7 @@ function renderToday(workspace = $("#today-workspace")) {
   const result = currentStudy.lastAnswer;
   const submitted = Boolean(result);
   const feedback = submitted
-    ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? (result.confidence === "guess" ? "Acertou no chute: a questão volta para revisão." : "Resposta correta!") : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}${result.rating ? ` (${RATING_LABELS[result.rating]})` : ""}.${followupMessage(result)}</div>`
+    ? `<div class="exam-answer-feedback ${result.correct ? "correct" : "incorrect"}">${result.correct ? (result.confidence === "guess" ? "Acertou no chute: a questão volta para revisão." : "Resposta correta!") : `${result.answer ? "Resposta incorreta" : "Em branco"}. Gabarito: ${escapeHtml(result.correctAnswer)}.`} Próxima revisão deste conteúdo: ${new Date(result.nextReview).toLocaleDateString("pt-BR")}${result.rating ? ` (${RATING_LABELS[result.rating]})` : ""}.${followupMessage(result)}${ladderMessage(result.ladder)}</div>`
     : "";
   if (!submitted && !currentStudy.pendingReason) startQuestionClock(`today:${session.id}:${item.id}`);
   const explainContext = { sessionId: session.id, itemId: item.id, courseId: session.courseId };
@@ -2090,7 +2149,7 @@ function renderToday(workspace = $("#today-workspace")) {
   const actions = submitted
     ? `<div class="exam-quiz-actions">${question._origem === "ia" ? `<button type="button" class="text-button" id="today-report">Esta questão tem erro</button>` : "<span></span>"}<button class="button button-primary" id="today-next">${answered === items.length ? "Ver resumo" : "Próxima questão"}</button></div>`
     : `<div class="exam-quiz-actions"><button class="blank-button ${selected === "" ? "selected" : ""}" id="today-blank" aria-pressed="${selected === ""}">Deixar em branco</button>${answerButtonsMarkup({ blank: selected === "", ready: selected != null && !currentStudy.pendingReason, attr: "data-today-submit" })}</div>`;
-  workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span>${originBadge(question)}<span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
+  workspace.innerHTML = `${top}<div class="question-top"><span><span class="today-reason ${item.reason}">${STUDY_REASONS[item.reason]}</span>${originBadge(question)}${item.ladder ? `<span class="ladder-chip" title="Trilha de ${escapeHtml(item.ladder.name)}">nível ${item.ladder.level}/4 · ${escapeHtml(item.ladder.levelLabel)}</span>` : ""}<span class="question-subject">${escapeHtml(item.contentPath)}</span></span><span>Questão ${items.indexOf(item) + 1} de ${items.length}${submitted || currentStudy.pendingReason ? "" : ` · ${clockMarkup()}`}</span></div>
     ${questionContentMarkup(item.sourceId, question, question._texto_compartilhado)}
     <div class="exam-options">${optionsMarkup(item.sourceId, question, { selected: submitted ? result.answer : selected, submitted, correctAnswer: submitted ? result.correctAnswer : null, saved: submitted ? result.answer : null, attr: "data-today-option" })}</div>
     ${reasonPanel}${feedback}${submitted && result.summaryContentId && window.studaiExplain ? window.studaiExplain.summarySlot(result.summaryContentId) : ""}${explainSlot(item.sourceId, item.number, explainContext, submitted ? { mode: "full", open: !result.correct || result.confidence === "guess" } : { mode: "hints" })}${actions}`;
@@ -2139,6 +2198,22 @@ async function reportGeneratedQuestion(item) {
   }
 }
 
+const LADDER_LEVELS = { 1: "fácil", 2: "média", 3: "difícil", 4: "FUVEST" };
+
+function ladderMessage(state) {
+  if (!state) return "";
+  const name = escapeHtml(state.name);
+  const text = {
+    started: `Abrimos uma trilha de <b>${name}</b>: começa no nível fácil e sobe a cada 2 acertos seguidos.`,
+    up: `Trilha de ${name}: subiu para o nível ${state.level} (${LADDER_LEVELS[state.level]}).`,
+    down: `Trilha de ${name}: voltou para o nível ${state.level} (${LADDER_LEVELS[state.level]}) para consolidar.`,
+    done: `Trilha de ${name} concluída 🎉`,
+  }[state.change] || "";
+  const plural = { 1: "fáceis", 2: "médias", 3: "difíceis" }[state.level];
+  const generating = state.generating && plural ? ` Gerando questões ${plural} com a IA para os próximos passos…` : "";
+  return text || generating ? `<br>${text}${generating}` : "";
+}
+
 function followupMessage(result) {
   const parts = [];
   const count = result.followups?.length || 0;
@@ -2163,7 +2238,9 @@ async function submitStudyAnswer(item, answer, reason = null, extras = {}) {
       return renderToday();
     }
     currentStudy.submitting = false;
-    if (result.followups?.length) {
+    if (result.ladder?.generating) requestLadderQuestions(result.ladder);
+    if (result.ladder) refreshLadders();
+    if (result.followups?.length || result.ladder?.inserted?.length) {
       // As questões de prática entraram na sessão no servidor: recarrega a lista de itens.
       const refreshed = await api(`/api/study/today?courseId=${encodeURIComponent(currentStudy.session.courseId)}`);
       if (refreshed.id === currentStudy.session.id) {
@@ -2183,8 +2260,8 @@ async function submitStudyAnswer(item, answer, reason = null, extras = {}) {
       updateTrainingCounters(currentStudy.session);
     }
     renderToday();
-    // Erro ou chute: a tela espera, com a resolução aberta; acerto segue sozinho.
-    if (!result.correct || result.confidence === "guess") return;
+    // Erro, chute ou mudança na trilha: a tela espera; acerto simples segue sozinho.
+    if (!result.correct || result.confidence === "guess" || result.ladder?.change) return;
     window.setTimeout(() => {
       if (currentStudy?.lastAnswer !== result) return;
       currentStudy.lastAnswer = null;
@@ -2307,6 +2384,7 @@ function bindEvents() {
   $("#refresh-diagnostics").addEventListener("click", refreshDiagnostics);
   $("#refresh-today").addEventListener("click", refreshToday);
   bindErrorNotebook();
+  bindLadders();
   $("#training-course").addEventListener("change", () => {
     try { localStorage.setItem("studai-today-course", $("#training-course").value); } catch {}
     renderTrainingSubjects();

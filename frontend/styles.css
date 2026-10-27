@@ -1638,6 +1638,10 @@ textarea {
     align-items: flex-end;
     flex-direction: column;
   }
+  /* Com "Simulado cronometrado" os botões não cabem ao lado do título: descem para baixo dele. */
+  #exam-question-workspace .workspace-top { flex-wrap: wrap; }
+  #exam-question-workspace .workspace-top > div:first-child { flex: 1 1 100%; min-width: 0; }
+  #exam-question-workspace .review-header-actions { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .exam-review-question-top {
     flex-direction: column;
   }
@@ -3551,6 +3555,44 @@ textarea {
   background: var(--paper);
   color: var(--ink);
 }
+
+/* Trilhas por nível */
+.ladders-panel { margin-top: 18px; }
+.ladder-chip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ladder-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.ladder-row.done { opacity: .7; }
+.ladder-main { display: grid; gap: 4px; min-width: 0; }
+.ladder-main span { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.ladder-steps { display: flex; gap: 4px; margin-top: 4px; }
+.ladder-steps i {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--sunken);
+  color: var(--muted);
+  font: 600 11.5px var(--font-ui);
+  font-style: normal;
+}
+.ladder-steps i.done { background: var(--ok-soft); color: var(--ok-ink); }
+.ladder-steps i.current { background: var(--accent-soft); color: var(--accent-ink); outline: 1px solid var(--accent-line); }
+.ladder-actions { display: flex; gap: 10px; align-items: center; }
+.ladder-done { color: var(--ok-ink); font-weight: 700; font-size: 13px; }
 
 /* Caderno de erros */
 .notebook-filters {
