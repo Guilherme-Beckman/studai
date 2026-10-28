@@ -5,7 +5,7 @@
 > Este arquivo é o **roadmap do produto** e serve para o usuário acompanhar o progresso.
 > Coordenação de quem está trabalhando em quê agora → [`WORK_STATUS.md`](WORK_STATUS.md). Regras gerais → [`AGENTS.md`](AGENTS.md).
 >
-> **Última atualização:** 2026-10-27
+> **Última atualização:** 2026-10-28
 
 ---
 
@@ -36,7 +36,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 9 | Treinamento contínuo | concluída | 6/6 |
 | 10 | Calendário de preparação | concluída | 6/6 |
 | 11 | Experiência de estudo (1ª fase) | concluída | 11/11 |
-| 12 | Questões de treino, da IA e trilha por nível | concluída | 4/4 |
+| 12 | Questões de treino, da IA e trilha por nível | concluída | 5/5 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -228,6 +228,7 @@ Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero 
   - [x] O plano regular prefere questões FUVEST; as de treino entram pelas trilhas e pela prática do erro
   - [x] Questões da IA: as alternativas são embaralhadas (o modelo punha a correta sempre na mesma letra) e o prompt pede para conferir a consistência dos dados. Teste real (Groq `gpt-oss-120b`, Lei dos senos, nível fácil): 5 de 6 corretas; a errada tinha dados contraditórios, antes do ajuste do prompt
   - [x] Listas e o banco da IA não mostram "Responder prova" nem "Simulado"; o cabeçalho da revisão da prova cabe no celular
+- [x] Treinamento em três abas, cada uma com a sua fila: "Tarefa do dia" (plano e blocos do calendário), "Trilhas" e "Treino livre" (blocos por matéria e caderno de erros). Cada questão da sessão tem `group` (`daily`/`ladder`/`free`; sessões antigas deduzem pelo motivo e pelo id); a prática do erro fica na frente da questão que a gerou; o erro de conteúdo na tarefa do dia mostra "Ir para a trilha" (2026-10-28)
 
 ## Processamento de provas
 
@@ -297,3 +298,4 @@ Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero 
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12, etapa 2: envio de outras provas e listas, extrator com "QUESTÃO NN" e "A)" | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12, etapa 3: questões de treino geradas pela IA | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12, etapa 4: trilha por nível (fácil → média → difícil → FUVEST) | — |
+| 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Treinamento separado em abas: tarefa do dia, trilhas e treino livre | — |

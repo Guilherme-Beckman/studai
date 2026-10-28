@@ -115,3 +115,44 @@ class LadderFlowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TrainingGroupTests(unittest.TestCase):
+    """Tarefa do dia, trilhas e treino livre ficam em grupos separados na sessão."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.db = study.connect_db(Path(self.temp.name) / "h.sqlite3")
+        self.math = leaves("Matemática", 3)
+        self.pool = [entry("fuvest", n + 1, "Matemática", leaf) for n, leaf in enumerate(self.math)]
+        self.pool += [practice("ia", n, self.math[0], 1) for n in range(1, 5)]
+        self.config = {"version": 1, "cursos": {"curso": {"nome": "x", "pesos": {"Matemática": 1}}}}
+
+    def tearDown(self):
+        self.db.close()
+        self.temp.cleanup()
+
+    def test_each_source_of_questions_has_its_group(self):
+        ladder.start(self.db, "curso", self.math[0], T0)
+        session = study.plan_today(self.db, self.pool, self.config, "curso", T0, new_per_day=2)
+        groups = {item["reason"]: item["group"] for item in session["items"]}
+        self.assertEqual(groups.pop("ladder"), "ladder")
+        self.assertEqual(set(groups.values()), {"daily"})
+        free = study.append_training_item(self.db, session["id"], self.pool, self.config, T0, count=2)
+        added = free["items"][len(session["items"]):]
+        self.assertTrue(added and all(item["group"] == "free" and item["reason"] != "ladder" for item in added))
+        calendar_block = study.append_training_item(self.db, session["id"], self.pool, self.config, T0, count=1,
+                                                    group="daily")
+        self.assertEqual(calendar_block["items"][-1]["group"], "daily")
+        redo = study.append_training_item(self.db, session["id"], self.pool, self.config, T0,
+                                          question_refs=[("fuvest", 1)])
+        self.assertEqual(redo["items"][-1]["group"], "free")
+        self.assertEqual(sum(summary["total"] for summary in redo["groups"].values()), len(redo["items"]))
+        with self.assertRaises(ValueError):
+            study.append_training_item(self.db, session["id"], self.pool, self.config, T0, group="ladder")
+
+    def test_old_items_without_group_are_derived(self):
+        self.assertEqual(study.item_group({"id": "i3", "reason": "new_content"}), "daily")
+        self.assertEqual(study.item_group({"id": "i4", "reason": "ladder"}), "ladder")
+        self.assertEqual(study.item_group({"id": "t2", "reason": "practice"}), "free")
+        self.assertEqual(study.item_group({"id": "t2", "reason": "practice", "group": "daily"}), "daily")
