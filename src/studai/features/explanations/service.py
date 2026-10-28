@@ -248,7 +248,12 @@ def public_payload(record: dict | None, *, answered: bool, hints: int = 0) -> di
     """O que a tela pode mostrar: antes de responder, só as dicas pedidas; depois, tudo."""
     if record is None:
         return {"status": "missing"}
-    content = record["content"]
+    # Resoluções gravadas antes da limpeza do LaTeX também saem em texto simples.
+    content = {**record["content"],
+               "key_concept": plain_math(record["content"]["key_concept"]),
+               "steps": [plain_math(step) for step in record["content"]["steps"]],
+               "hints": [plain_math(hint) for hint in record["content"]["hints"]],
+               "distractors": {letter: plain_math(text) for letter, text in record["content"]["distractors"].items()}}
     if not answered:
         count = max(0, min(int(hints), HINTS))
         return {"status": record["status"], "hints": content["hints"][:count], "hintsAvailable": HINTS}
