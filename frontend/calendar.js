@@ -176,8 +176,15 @@
     return `<div class="panel cal-readiness"><div class="panel-heading"><span class="step-number step-green">✓</span><div><h2>Quão preparado você está</h2><p>Profundidade por matéria nas questões que já respondeu, ponderada pelo peso no curso.</p></div></div>
       <div class="cal-ready-top"><div class="cal-ring" style="--p:${Math.round(r.overall * 100)}"><span>${pct(r.overall)}</span></div>
       <div>${data.target ? `<strong>${esc(data.target.name)}</strong><p class="muted">${data.target.daysLeft === 0 ? "A prova é hoje." : `Faltam ${plural(data.target.daysLeft, "dia", "dias")}.`}</p>` : `<p class="muted">Cadastre uma prova para ver o ritmo necessário.</p>`}${loadNote}</div></div>
-      ${projectionBlock(data.projection)}
+      ${projectionBlock(data.projection)}${readingsLine(data.readings)}
       <div class="cal-ready-list">${rows}</div></div>`;
+  }
+
+  // Leituras obrigatórias: quantas já foram lidas e a próxima obra do plano.
+  function readingsLine(info) {
+    if (!info) return "";
+    const next = info.plan?.next;
+    return `<p class="cal-readings">Leituras: <b>${info.read}/${info.total}</b> obras lidas${next ? ` · próxima: ${esc(next.name)} até ${esc(fmt(next.deadline, { day: "2-digit", month: "short" }))}` : ""} · <button type="button" class="text-button" data-go-readings>ver leituras</button></p>`;
   }
 
   // Acertos estimados na 1ª fase: hoje, contra o corte e no ritmo atual até a prova.
@@ -328,6 +335,7 @@
       if (!target) return;
       if (target.dataset.calRemove) return removeExam(target.dataset.calRemove, target.dataset.name);
       if ("calAvailabilityClear" in target.dataset) return saveAvailability(null);
+      if ("goReadings" in target.dataset) return showView("readings");
       if (target.dataset.calCutoff) return editCutoff(target.dataset.calCutoff, target.dataset.value);
       if (target.dataset.calTrain) return train(target);
       if (target.dataset.calSimulado) return simulado(target.dataset.calSimulado);

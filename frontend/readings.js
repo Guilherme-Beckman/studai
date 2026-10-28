@@ -53,6 +53,7 @@
       <p class="reading-desc">${esc(work.description || "")}</p>
       <div class="reading-statuses" role="group" aria-label="Status de leitura">${statuses}</div>
       <p class="reading-stats">${work.questions} ${work.questions === 1 ? "questão" : "questões"} no acervo · ${accuracy}</p>
+      ${work.deadline ? `<p class="reading-deadline">Ler até <b>${esc(new Date(`${work.deadline}T12:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }))}</b></p>` : ""}
       ${note}
       ${work.questions ? `<button type="button" class="button button-secondary" data-reading-train>Treinar esta obra</button>` : ""}
     </article>`;
@@ -62,7 +63,11 @@
     const root = document.getElementById("readings-root");
     const data = state.data;
     const share = data.total ? Math.round(data.read / data.total * 100) : 0;
-    root.innerHTML = `<div class="panel readings-summary"><div><strong>${data.read} de ${data.total} obras lidas</strong><p class="muted">Lista da FUVEST para a 1ª fase. As questões de Literatura sobre cada obra entram no treino pelo botão de cada cartão.</p></div><div class="readings-bar" role="img" aria-label="${share}% da lista lida"><i style="width:${share}%"></i></div></div>
+    const plan = data.plan;
+    const planText = !plan ? "Cadastre a data da prova no Calendário para receber um prazo de leitura para cada obra."
+      : plan.next ? `Plano: terminar as obras até ${new Date(`${plan.until}T12:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} (≈ ${plan.daysPerWork} dias por obra), para sobrar tempo de treinar as questões.`
+        : "Todas as obras lidas: agora é treinar as questões de cada uma.";
+    root.innerHTML = `<div class="panel readings-summary"><div><strong>${data.read} de ${data.total} obras lidas</strong><p class="muted">Lista da FUVEST para a 1ª fase. ${planText}</p></div><div class="readings-bar" role="img" aria-label="${share}% da lista lida"><i style="width:${share}%"></i></div></div>
       <div class="readings-grid">${data.works.map(card).join("")}</div>`;
   }
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from studai.features.classification.taxonomy import CONTENT_INDEX, live_id
 from studai.features.study import service as study
@@ -18,6 +18,31 @@ AREA_ID = "literatura.area.leituras-obrigatorias-fuvest"
 OVERVIEW_ID = "literatura.content.conteudo-de-leitura-obrigatoria"
 STATUSES = {"not_started": "Não comecei", "reading": "Lendo", "read": "Li", "reviewed": "Revisei"}
 MAX_NOTE_LENGTH = 2000
+# Plano de leitura: as obras ainda não lidas se espalham até TRAIN_DAYS antes da prova,
+# para sobrar tempo de treinar as questões sobre elas (prova perto: até a véspera de 2 semanas).
+TRAIN_DAYS = 60
+MIN_TRAIN_DAYS = 14
+DONE = ("read", "reviewed")
+
+
+def reading_plan(works: list[dict], today: date, exam_day: date | None) -> dict | None:
+    """Prazo sugerido para cada obra ainda não lida, em ordem: as que estão em leitura primeiro.
+
+    Sem prova cadastrada (ou prova já passada), não há plano.
+    """
+    if exam_day is None or exam_day <= today:
+        return None
+    left = (exam_day - today).days
+    until = exam_day - timedelta(days=TRAIN_DAYS if left > TRAIN_DAYS + 30 else min(MIN_TRAIN_DAYS, left // 2))
+    pending = [work for work in works if work["status"] not in DONE]
+    pending.sort(key=lambda work: (work["status"] != "reading", works.index(work)))
+    if not pending:
+        return {"until": until.isoformat(), "daysPerWork": None, "deadlines": {}}
+    span = max(1, (until - today).days)
+    step = span / len(pending)
+    deadlines = {work["contentId"]: (today + timedelta(days=round(step * (index + 1)))).isoformat()
+                 for index, work in enumerate(pending)}
+    return {"until": until.isoformat(), "daysPerWork": round(step), "deadlines": deadlines}
 
 
 def ensure_schema(db: sqlite3.Connection) -> None:
@@ -39,8 +64,9 @@ def _work_of(content_id: str | None, ids: set[str]) -> str | None:
     return next((identity for identity in (node or {}).get("path_ids", []) if identity in ids), None)
 
 
-def list_readings(db: sqlite3.Connection, pool: list[dict], course_id: str) -> dict:
-    """Cada obra com status de leitura, anotação, questões no acervo e respostas."""
+def list_readings(db: sqlite3.Connection, pool: list[dict], course_id: str, today: date | None = None,
+                  exam_day: date | None = None) -> dict:
+    """Cada obra com status de leitura, anotação, questões no acervo, respostas e prazo sugerido."""
     ensure_schema(db)
     items = works()
     ids = {node["id"] for node in items}
@@ -60,8 +86,14 @@ def list_readings(db: sqlite3.Connection, pool: list[dict], course_id: str) -> d
                      "status": row["status"] if row else "not_started", "note": row["note"] if row else None,
                      "updatedAt": row["updated_at"] if row else None, "questions": questions.get(node["id"], 0),
                      "answered": answered[node["id"]], "correct": correct[node["id"]]})
-    done = sum(1 for row in rows if row["status"] in ("read", "reviewed"))
-    return {"works": rows, "read": done, "total": len(rows), "statuses": STATUSES}
+    done = sum(1 for row in rows if row["status"] in DONE)
+    plan = reading_plan(rows, today or datetime.now(timezone.utc).date(), exam_day)
+    for row in rows:
+        row["deadline"] = (plan or {}).get("deadlines", {}).get(row["contentId"])
+    following = min((row for row in rows if row["deadline"]), key=lambda row: row["deadline"], default=None)
+    return {"works": rows, "read": done, "total": len(rows), "statuses": STATUSES,
+            "plan": {**plan, "next": {"name": following["name"], "deadline": following["deadline"]} if following else None}
+            if plan else None}
 
 
 def set_reading(db: sqlite3.Connection, content_id: str, status: str | None = None, note: str | None = None) -> dict:
