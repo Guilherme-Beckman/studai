@@ -42,6 +42,7 @@ from studai.features.study import ladder as study_ladder
 from studai.features.study import proficiency as study_proficiency
 from studai.features.study import readings
 from studai.features.study import summary as study_summary
+from studai.features.study import setup as study_setup
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import manual_crop, source_pdf
@@ -1544,6 +1545,13 @@ class Handler(BaseHTTPRequestHandler):
             if match:
                 status, payload = _summary_get(unquote(match.group(1)))
                 return self._json(status, payload)
+            if path == "/api/study/setup":
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_setup.setup_steps(db, _report_course_id(parse_qs(parsed.query)),
+                                                                   datetime.now(timezone.utc)))
+                finally:
+                    db.close()
             if path == "/api/study/summary":
                 query = parse_qs(parsed.query)
                 config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
