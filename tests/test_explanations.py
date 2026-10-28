@@ -62,6 +62,14 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(result["steps"], ["Monte a regra.", "resolva."])
         self.assertEqual(result["hints"], ["Olhe.", "Monte.", "Compare."])
 
+    def test_latex_becomes_plain_text(self):
+        obj = valid(steps=[r"Trecho: $\sqrt{30^2 + 30^2} = 30\sqrt{2}\text{ m}$", r"Arco: $2\pi r$ e $90^\circ$"],
+                    key_concept=r"Área $\frac{b \cdot h}{2}$")
+        result = explanations.validate_explanation(obj, ALTERNATIVES, "C")
+        self.assertEqual(result["steps"], ["Trecho: √(30² + 30²) = 30√2 m", "Arco: 2π r e 90°"])
+        self.assertEqual(result["key_concept"], "Área (b · h)/(2)")
+        self.assertEqual(explanations.plain_math(r"$\left(x \le 2\right) \leq 3$"), "(x ≤ 2) ≤ 3")
+
     def test_lowercase_letter_in_a_hint_is_not_a_leak(self):
         obj = valid("A", hints=["Pense na resposta a partir das unidades.", "Monte a conta.", "Compare."])
         self.assertEqual(explanations.validate_explanation(obj, ALTERNATIVES, "A")["answer"], "A")
@@ -132,6 +140,53 @@ class UseCaseTests(unittest.TestCase):
         study.record_study_answer(self.db, session["id"], item["id"], self.correct, None, now)
         self.assertTrue(explanations.question_answered(self.db, source, number, **context))
         self.assertTrue(explanations.question_answered(self.db, source, number))
+
+
+class VisionProviderTests(unittest.TestCase):
+    """Questão com figura: o provedor com visão recebe a imagem; se falhar, vale só o texto."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        processed, _, db_path = build(Path(self.temp.name))
+        self.db = study.connect_db(db_path)
+        self.entry = load_pool(self.db, processed)[0]
+
+    def tearDown(self):
+        self.db.close()
+        self.temp.cleanup()
+
+    def test_figure_goes_to_vision_and_falls_back_to_text(self):
+        class Vision:
+            def __init__(self, fail):
+                self.fail, self.images = fail, None
+
+            def complete(self, system, user, images=None):
+                self.images = images
+                if self.fail:
+                    raise RuntimeError("cota esgotada")
+                return json.dumps(valid(self.correct))
+
+        ok = Vision(fail=False)
+        ok.correct = self.entry["correct_answer"]
+        with patch.object(explanations, "question_images", return_value=[b"png"]), \
+             patch.object(server, "_explanations_vision_provider", return_value=ok), \
+             patch.object(server, "_explanations_provider", side_effect=AssertionError("não devia usar o texto")):
+            record = server._generate_explanation(self.db, self.entry, None)
+        self.assertEqual((ok.images, record["status"]), ([b"png"], "generated"))
+        broken = Vision(fail=True)
+        text = ScriptedProvider(valid(self.entry["correct_answer"], key_concept="Só texto"))
+        with patch.object(explanations, "question_images", return_value=[b"png"]), \
+             patch.object(server, "_explanations_vision_provider", return_value=broken), \
+             patch.object(server, "_explanations_provider", return_value=text), \
+             self.assertWarns(RuntimeWarning):
+            record = server._generate_explanation(self.db, self.entry, None)
+        self.assertEqual(record["content"]["key_concept"], "Só texto")
+
+    def test_no_vision_without_figures_or_in_demo(self):
+        with patch.dict(os.environ, {"STUDAI_EXPLANATIONS_PROVIDER": "demo"}):
+            self.assertIsNone(server._explanations_vision_provider())
+        with patch.dict(os.environ, {"STUDAI_EXPLANATIONS_VISION": "off"}):
+            self.assertIsNone(server._explanations_vision_provider())
 
 
 class ExplanationApiTests(unittest.TestCase):

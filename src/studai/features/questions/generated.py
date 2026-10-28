@@ -43,6 +43,7 @@ _LOCK = threading.Lock()
 SYSTEM = """Você é professor de cursinho e cria questões inéditas de múltipla escolha para treino da 1ª fase da FUVEST.
 Recebe um assunto da matéria, a descrição do edital, o nível pedido e enunciados que já existem (não os repita).
 Cada questão tem enunciado autossuficiente (sem figura), 5 alternativas (A a E) plausíveis e diferentes entre si, uma só correta.
+Fórmulas em texto simples com símbolos (√, ², π, °, ·, ≤), sem LaTeX e sem $.
 Antes de responder, confira cada questão: os dados precisam ser consistentes entre si (sem dado sobrando que leve a outro resultado), a conta precisa dar exatamente a alternativa correta e nenhuma outra alternativa pode ser defensável.
 Escreva em português do Brasil. Para cada questão, inclua também a resolução comentada:
 - key_concept: o conceito cobrado, em uma frase;
@@ -103,8 +104,10 @@ def validate_question(obj: dict, level: int) -> dict:
         raise ValueError("answer deve ser uma letra de A a E")
     explanation = explanations.validate_explanation({**obj, "answer": answer, "difficulty": level},
                                                     alternatives, answer)
-    return shuffle_alternatives({"enunciado": stem.strip(), "answer": answer, "explanation": explanation,
-                                 "alternativas": {letter: alternatives[letter].strip() for letter in LETTERS}})
+    return shuffle_alternatives({"enunciado": explanations.plain_math(stem.strip()), "answer": answer,
+                                 "explanation": explanation,
+                                 "alternativas": {letter: explanations.plain_math(alternatives[letter].strip())
+                                                  for letter in LETTERS}})
 
 
 def shuffle_alternatives(question: dict) -> dict:

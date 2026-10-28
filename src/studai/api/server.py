@@ -1238,6 +1238,36 @@ def _explanations_provider():
     return provider
 
 
+def _explanations_vision_provider():
+    """Provedor com visão para questões com figura: Gemini, quando há chave e o provedor
+    padrão é o pool (``STUDAI_EXPLANATIONS_VISION=off`` desliga)."""
+    load_dotenv(SERVICE_ROOT / ".env")
+    if (os.environ.get("STUDAI_EXPLANATIONS_VISION", "gemini") != "gemini"
+            or os.environ.get("STUDAI_EXPLANATIONS_PROVIDER", "pool") != "pool" or not _gemini_api_keys()):
+        return None
+    with EXPLANATION_LOCK:
+        cached = EXPLANATION_PROVIDERS.get("vision")
+        if cached and time.monotonic() - cached[0] < SHARED_POOL_TTL_SECONDS:
+            return cached[1]
+    provider = _provider({"provider": "gemini"}, max_tokens=EXPLANATION_MAX_TOKENS)
+    with EXPLANATION_LOCK:
+        EXPLANATION_PROVIDERS["vision"] = (time.monotonic(), provider)
+    return provider
+
+
+def _generate_explanation(db, entry: dict, feedback: str | None) -> dict:
+    """Questão com figura vai com a imagem para o provedor com visão; se ele falhar (cota,
+    erro), a resolução sai só do texto, pelo provedor padrão."""
+    images = explanations.question_images(entry)
+    vision = _explanations_vision_provider() if images else None
+    if vision is not None:
+        try:
+            return explanations.generate_explanation(db, entry, vision, feedback=feedback, images=images)
+        except Exception as error:  # noqa: BLE001 - qualquer falha do Gemini cai no texto
+            warnings.warn(f"resolução com imagem falhou ({error}); usando só o texto", RuntimeWarning)
+    return explanations.generate_explanation(db, entry, _explanations_provider(), feedback=feedback)
+
+
 def _question_entry(db, config: dict, course_id: str, source_id: str, number: int) -> dict:
     entry = next((item for item in _reports_pool(db, config, course_id)
                   if item["source_id"] == source_id and int(item["number"]) == int(number)), None)
@@ -1268,7 +1298,7 @@ def _start_explanation_job(course_id: str, source_id: str, number: int) -> str:
                 record = explanations.get_explanation(db, source_id, number)
                 feedback = record["feedback"] if record and record["status"] == "rejected" else None
                 _set_job(job_id, stage="generating", message="Gerando a resolução comentada")
-                explanations.generate_explanation(db, entry, _explanations_provider(), feedback=feedback)
+                _generate_explanation(db, entry, feedback)
                 return {"sourceId": source_id, "number": int(number)}
             finally:
                 db.close()
