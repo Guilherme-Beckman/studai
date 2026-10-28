@@ -1956,7 +1956,7 @@ async function refreshLadders() {
   if (!root || !courseId) return;
   try {
     const data = await api(`/api/study/ladders?courseId=${encodeURIComponent(courseId)}`);
-    const row = state => `<div class="ladder-row ${state.status}"><div class="ladder-main"><strong>${escapeHtml(state.name)}</strong><span>${escapeHtml(state.path)}</span><div class="ladder-steps" role="img" aria-label="Nível ${state.level} de 4">${[1, 2, 3, 4].map(level => `<i class="${level < state.level || state.status === "done" ? "done" : level === state.level ? "current" : ""}" title="${LADDER_LEVELS[level]}">${LADDER_LEVELS[level]}</i>`).join("")}</div></div>${state.status === "active" ? `<div class="ladder-actions"><button type="button" class="button button-secondary" data-ladder-train="${escapeHtml(state.contentId)}">Treinar agora</button><button type="button" class="text-button" data-ladder-close="${escapeHtml(state.contentId)}">Encerrar</button></div>` : `<span class="ladder-done">Concluída</span>`}</div>`;
+    const row = state => `<div class="ladder-row ${state.status}"><div class="ladder-main"><strong>${escapeHtml(state.name)}</strong><span>${escapeHtml(state.path)}</span><div class="ladder-steps" role="img" aria-label="Nível ${state.level} de 4">${[1, 2, 3, 4].map(level => `<i class="${level < state.level || state.status === "done" ? "done" : level === state.level ? "current" : ""}" title="${LADDER_LEVELS[level]}">${LADDER_LEVELS[level]}</i>`).join("")}</div></div>${state.status === "active" ? `<div class="ladder-actions"><button type="button" class="button button-secondary" data-ladder-train="${escapeHtml(state.contentId)}">Treinar agora</button>${state.level < 4 ? `<button type="button" class="text-button" data-ladder-generate="${escapeHtml(state.contentId)}" data-level="${state.level}">Mais questões da IA</button>` : ""}<button type="button" class="text-button" data-ladder-close="${escapeHtml(state.contentId)}">Encerrar</button></div>` : `<span class="ladder-done">Concluída</span>`}${state.status === "active" ? `<details class="ladder-summary" data-ladder-summary="${escapeHtml(state.contentId)}"><summary>Resumo do assunto</summary></details>` : ""}</div>`;
     root.innerHTML = data.active.length || data.done.length
       ? `${data.active.map(row).join("")}${data.done.slice(0, 5).map(row).join("")}`
       : `<div class="empty-state"><div class="empty-icon">⛰</div><strong>Nenhuma trilha aberta</strong><p>Quando você marcar "Não sabia o conteúdo", o assunto ganha uma trilha que começa em questões fáceis e sobe até o nível FUVEST.</p></div>`;
@@ -1966,9 +1966,34 @@ async function refreshLadders() {
 }
 
 function bindLadders() {
+  // O resumo do assunto só é gerado quando o aluno abre o painel.
+  $("#ladders")?.addEventListener("toggle", event => {
+    const details = event.target.closest?.("[data-ladder-summary]");
+    if (!details?.open || details.querySelector("[data-summary-slot]") || !window.studaiExplain) return;
+    details.insertAdjacentHTML("beforeend", window.studaiExplain.summarySlot(details.dataset.ladderSummary));
+    window.studaiExplain.mount(details);
+  }, true);
   $("#ladders")?.addEventListener("click", async event => {
     const train = event.target.closest("[data-ladder-train]");
     const close = event.target.closest("[data-ladder-close]");
+    const generate = event.target.closest("[data-ladder-generate]");
+    if (generate) {
+      generate.disabled = true;
+      generate.textContent = "Gerando…";
+      try {
+        const { jobId } = await api(`/api/contents/${encodeURIComponent(generate.dataset.ladderGenerate)}/generate`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ level: Number(generate.dataset.level), count: 3 }),
+        });
+        await pollJob(jobId);
+        toast("Questões novas prontas: use \"Treinar agora\" para praticar.");
+      } catch (error) {
+        toast(`Não foi possível gerar questões: ${error.message}`, true);
+      } finally {
+        generate.disabled = false;
+        generate.textContent = "Mais questões da IA";
+      }
+      return;
+    }
     if (!train && !close) return;
     try {
       if (close) {
