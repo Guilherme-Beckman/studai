@@ -3699,6 +3699,36 @@ textarea {
 .ladder-actions { display: flex; gap: 10px; align-items: center; }
 .ladder-done { color: var(--ok-ink); font-weight: 700; font-size: 13px; }
 
+/* Primeiros passos (Visão geral) */
+.setup-panel { margin: 18px 0; }
+.setup-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.setup-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.setup-step p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.setup-step small { color: var(--muted); font-weight: 600; }
+.setup-check {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+.setup-step.done { opacity: .6; }
+.setup-step.done .setup-check { background: var(--ok); border-color: var(--ok); color: var(--on-solid); }
+@media (max-width: 560px) {
+  .setup-step { grid-template-columns: 26px minmax(0, 1fr); }
+  .setup-step .button { grid-column: 2; justify-self: start; }
+}
+
 /* Caderno de erros */
 .notebook-filters {
   display: flex;

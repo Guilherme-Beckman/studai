@@ -109,6 +109,7 @@ function showView(name) {
   $$(".view").forEach(view => view.classList.toggle("active", view.id === `view-${name}`));
   $$(".nav-item").forEach(button => button.classList.toggle("active", button.dataset.view === name));
   if (name === "exams") refreshExams();
+  if (name === "overview") refreshSetup();
   if (name === "diagnostics") refreshDiagnostics();
   if (name === "reports") window.refreshReports?.();
   if (name === "map") window.refreshKnowledgeMap?.();
@@ -1413,6 +1414,20 @@ function bindSimulado() {
   }));
 }
 
+// ---- Primeiros passos (Visão geral): o que falta configurar para o plano ficar bom.
+async function refreshSetup() {
+  const root = $("#setup-steps");
+  const courseId = $("#training-course")?.value;
+  if (!root || !courseId) return;
+  try {
+    const data = await api(`/api/study/setup?courseId=${encodeURIComponent(courseId)}`);
+    if (data.done === data.total) { root.innerHTML = ""; return; }
+    const steps = data.steps.map(step => `<li class="setup-step ${step.done ? "done" : ""}"><span class="setup-check" aria-hidden="true">${step.done ? "✓" : ""}</span><div><strong>${escapeHtml(step.title)}${step.goal && !step.done ? ` <small>(${step.progress}/${step.goal})</small>` : ""}</strong><p>${escapeHtml(step.hint)}</p></div>${step.done ? "" : `<button type="button" class="button button-secondary" data-go="${escapeHtml(step.view)}">Fazer agora</button>`}</li>`).join("");
+    root.innerHTML = `<section class="panel setup-panel" aria-labelledby="setup-title"><div class="panel-heading"><span class="step-number step-green">✓</span><div><h2 id="setup-title">Primeiros passos · ${data.done} de ${data.total}</h2><p>Com isso o app monta o plano até a prova do jeito certo para você.</p></div></div><ol class="setup-steps">${steps}</ol></section>`;
+    $$("[data-go]", root).forEach(button => button.addEventListener("click", () => showView(button.dataset.go)));
+  } catch { root.innerHTML = ""; }
+}
+
 async function refreshCourses() {
   try {
     courses = await api("/api/courses");
@@ -1420,6 +1435,7 @@ async function refreshCourses() {
     $("#training-course").innerHTML = courses.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.name)}</option>`).join("");
     try { const saved = localStorage.getItem("studai-today-course"); if (saved && courses.some(course => course.id === saved)) $("#training-course").value = saved; } catch {}
     renderTrainingSubjects();
+    refreshSetup();
   } catch (error) {
     $("#course-select").innerHTML = `<option value="">Não foi possível carregar os cursos</option>`;
     toast(error.message, true);

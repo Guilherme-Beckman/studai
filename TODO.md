@@ -37,7 +37,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 10 | Calendário de preparação | concluída | 6/6 |
 | 11 | Experiência de estudo (1ª fase) | concluída | 11/11 |
 | 12 | Questões de treino, da IA e trilha por nível | concluída | 5/5 |
-| 13 | Rotina de estudo: resumos e disponibilidade | concluída | 3/3 |
+| 13 | Rotina de estudo: resumos e disponibilidade | concluída | 4/4 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -236,6 +236,7 @@ Ideia: dar começo, meio e fim ao estudo — o aluno vê o que fez na semana e n
 - [x] Resumo do período (`study/summary.py`, `GET /api/study/summary?period=week|day`): questões, acerto, tempo, dias com estudo e sequência, conteúdos consolidados e os que mais avançaram, prontidão e acertos estimados comparados com o começo do período, erros mais comuns, trilhas. "Resumo da semana" no topo de Relatórios e "Fechamento do dia" quando a tarefa do dia acaba, com o que vence amanhã (2026-10-28)
 - [x] Tempo livre por dia da semana no Calendário (`study_availability`, `POST /api/calendar/availability`): dia sem tempo vira folga, simulado só em dia com 3 h livres, e a carga de cada dia segue o tempo dele (~4 min por questão), sem passar do que cabe; "Sem limite" volta à distribuição por igual (2026-10-28)
 - [x] Plano de leitura das obras obrigatórias (`readings.reading_plan`): as obras ainda não lidas ganham prazo sugerido, espalhado até 60 dias antes da prova (prova perto: até 2 semanas antes), a que está em leitura primeiro; prazo em cada cartão da aba Leituras e "Leituras: X/11 · próxima obra até dd/mm" no Calendário (2026-10-28)
+- [x] "Primeiros passos" na Visão geral (`study/setup.py`, `GET /api/study/setup`): prova cadastrada, nota de corte, tempo por dia, diagnóstico, 30 respostas (com o progresso) e leituras; cada passo pendente tem "Fazer agora" para a aba certa, e o cartão some quando tudo está feito (2026-10-28)
 
 ## Processamento de provas
 
@@ -310,3 +311,4 @@ Ideia: dar começo, meio e fim ao estudo — o aluno vê o que fez na semana e n
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Fase 13 adicionada; resumo da semana e fechamento do dia | — |
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Fase 13: tempo livre por dia da semana no Calendário | — |
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Fase 13: plano de leitura das obras obrigatórias | — |
+| 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Fase 13: primeiros passos na Visão geral | — |
