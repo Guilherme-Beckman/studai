@@ -15,7 +15,7 @@
   const NEXT = "[data-exam-next], #today-next, [data-sim-next]";
   const PREV = "[data-exam-prev], [data-sim-prev]";
   const FEEDBACK = ".exam-answer-feedback, .exam-reason-prompt, .reason-row:not(.hidden)";
-  const HINT = "A–E escolher · 1/2/3 certeza/dúvida/chute · 1–6 motivo do erro · Enter confirmar · ←/→ navegar · Esc sair";
+  const HINT = "A–E escolher · 1/2/3 certeza/dúvida/chute · 1–6 motivo do erro · H dica · R resolução · Enter confirmar · ←/→ navegar · Esc sair";
 
   const state = {
     workspace: null, overlay: null, stage: null, placeholder: null, observer: null,
@@ -221,6 +221,17 @@
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       const action = find(event.key === "ArrowRight" ? NEXT : PREV);
       if (action) { event.preventDefault(); action.click(); }
+      return;
+    }
+    // H: mais uma dica; R: abre ou fecha a resolução comentada.
+    if (event.key === "h" || event.key === "H") {
+      const hint = find("[data-explain-hint]");
+      if (hint) { event.preventDefault(); hint.click(); }
+      return;
+    }
+    if (event.key === "r" || event.key === "R") {
+      const panel = state.workspace.querySelector(".explain-panel");
+      if (panel) { event.preventDefault(); panel.open = !panel.open; } // o "toggle" nativo carrega a resolução
       return;
     }
     if (/^[1-9]$/.test(event.key)) {
