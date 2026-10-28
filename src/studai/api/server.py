@@ -895,14 +895,19 @@ def _diagnostic_payload(db, attempt_id: str) -> dict:
     attempt = diagnostics.get_attempt(db, attempt_id)
     rows = diagnostics.list_questions_for_attempt(db, attempt_id)
     questions = []
+    # O gabarito só aparece depois que o diagnóstico é concluído: antes, ele enviesaria a medida.
+    finished = attempt.get("metrics") is not None
     for row in rows:
         question = json.loads(row["question_json"])
         # Internal source paths are only needed by the CLI for local image display.
         question.pop("_source_dir", None)
-        questions.append({"ordinal": row["ordinal"], "source_id": row["source_id"],
-                          "subject": row["subject"], "topic": row["topic"],
-                          "question": question, "selectedAnswer": row["selected_answer"],
-                          "errorReason": row["error_reason"], "answered": row["answered_at"] is not None})
+        entry = {"ordinal": row["ordinal"], "source_id": row["source_id"], "number": row["question_number"],
+                 "subject": row["subject"], "topic": row["topic"],
+                 "question": question, "selectedAnswer": row["selected_answer"],
+                 "errorReason": row["error_reason"], "answered": row["answered_at"] is not None}
+        if finished:
+            entry.update(correctAnswer=row["correct_answer"], correct=bool(row["is_correct"]))
+        questions.append(entry)
     return {
         "id": attempt["id"], "course": attempt["course_name"], "status": attempt["status"],
         "mode": attempt.get("mode") or "static",

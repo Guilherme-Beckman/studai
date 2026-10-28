@@ -1783,7 +1783,7 @@ function renderDiagnostic(workspace, data) {
     : (data.total ? Math.round(answered / data.total * 100) : 0);
   let body = "";
   if (data.metrics) {
-    body = `${renderMetrics(data.metrics)}${renderAnalysis(data.analysis, data.analysisError)}`;
+    body = `${renderMetrics(data.metrics)}${renderAnalysis(data.analysis, data.analysisError)}${diagnosticReviewMarkup(data)}`;
   } else if (pending && !(adaptive && finished)) {
     const item = pending;
     const question = item.question || {};
@@ -1812,6 +1812,7 @@ function renderDiagnostic(workspace, data) {
   window.studaiFocus?.attach(workspace, pending && !data.metrics && !(adaptive && finished)
     ? { current: answered + 1, total: adaptive ? data.requested : data.total, key: pending.ordinal }
     : { key: data.metrics ? "metrics" : "finished", label: "Diagnóstico concluído" });
+  if (data.metrics) window.studaiExplain?.mount(workspace);
   $("#close-diagnostic", workspace).addEventListener("click", () => { workspace.classList.add("hidden"); currentDiagnostic = null; });
   if (pending && !data.metrics && !(adaptive && finished)) {
     $$("[data-answer]", workspace).forEach(button => button.addEventListener("click", () => {
@@ -1834,6 +1835,21 @@ function renderDiagnostic(workspace, data) {
     }));
   }
   $("#finalize-diagnostic", workspace)?.addEventListener("click", () => finalizeDiagnostic(data.id));
+}
+
+// Depois de concluído, o diagnóstico mostra os erros com o gabarito e a resolução comentada.
+function diagnosticReviewMarkup(data) {
+  const wrong = (data.questions || []).filter(item => item.answered && item.correct === false);
+  if (!wrong.length) return "";
+  const items = wrong.map(item => {
+    const question = item.question || {};
+    const answer = item.selectedAnswer ? `marcou ${escapeHtml(item.selectedAnswer)}` : "em branco";
+    const reason = item.errorReason && item.errorReason !== "blank" ? ` · ${escapeHtml(ERROR_REASON_LABELS[item.errorReason] || item.errorReason)}` : "";
+    return `<details class="sim-error"><summary><b>${escapeHtml(item.subject)}</b> · ${answer}, gabarito ${escapeHtml(item.correctAnswer)}${reason}</summary>
+      ${questionContentMarkup(item.source_id, question, question._texto_compartilhado, question._figuras_compartilhadas || [])}
+      ${explainSlot(item.source_id, item.number, { attemptId: data.id, ordinal: item.ordinal }, { mode: "full" })}</details>`;
+  }).join("");
+  return `<section class="diagnostic-review"><h3>Revise seus erros (${wrong.length})</h3><p class="help-copy">Agora que o diagnóstico acabou, o gabarito e a resolução comentada ficam abertos. As questões erradas também voltam para revisão no Treinamento.</p><div class="sim-errors">${items}</div></section>`;
 }
 
 function stopReasonLabel(reason) {
