@@ -2029,9 +2029,11 @@ class Handler(BaseHTTPRequestHandler):
                                                                          list(profile["pesos"]))
                         if not pool:
                             raise ValueError(diagnostics.empty_pool_message(excluded))
+                        # O diagnóstico mede a prova-alvo: na 1ª fase, pesos só da 1ª fase.
                         result = diagnostics.create_attempt(
                             db, config, course_id, pool, total=total, seed=seed,
-                            provider=_provider(body), excluded=excluded, mode=mode)
+                            provider=_provider(body), excluded=excluded, mode=mode,
+                            phase=study.target_phase(db, course_id, datetime.now(timezone.utc)))
                         result["seed"] = seed
                         return result
                     finally:

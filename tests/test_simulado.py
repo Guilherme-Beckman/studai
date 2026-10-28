@@ -121,6 +121,15 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(result["cutoff"], 60)
         self.assertEqual(result["weekly"][-1]["value"], result["current"])
 
+    def test_subject_without_answers_counts_as_chance(self):
+        leaf = CONTENTS["Matemática"][0]
+        responses = [{"subject": "Matemática", "principal_id": leaf, "related_ids": [], "correct": True,
+                      "answered_at": NOW.isoformat()} for _ in range(40)]
+        value, coverage = projection.estimate(responses, {"Matemática": 0.5, "Física": 0.5}, NOW)
+        self.assertEqual(coverage, 0.5)
+        mastery_math = projection.estimate(responses, {"Matemática": 1.0}, NOW)[0] / 90
+        self.assertAlmostEqual(value, round(90 * (0.5 * mastery_math + 0.5 * projection.CHANCE), 1), places=0)
+
     def test_few_responses_give_no_estimate(self):
         self.assertIsNone(projection.estimate_correct([], {"Matemática": 1.0}, NOW))
 

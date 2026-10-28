@@ -1910,6 +1910,13 @@ textarea {
   opacity: .65;
   cursor: wait;
 }
+@media (max-width: 700px) {
+  /* No celular, os selos descem para baixo do nome em vez de empurrar a linha para fora da tela. */
+  .exam-item-row { min-width: 0; }
+  .exam-item-row .exam-open-button { flex-wrap: wrap; }
+  .exam-item-row .exam-item-main { flex: 1 1 150px; }
+  .exam-item-row .exam-open-arrow { display: none; }
+}
 .cloud-lanes {
   margin: 14px 0 0;
   padding: 0;

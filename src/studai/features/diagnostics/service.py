@@ -402,9 +402,12 @@ def select_questions(pool: list[dict], weights: dict[str, float], total: int,
                       "excluded": {}}
 
 
-def effective_weights(profile: dict, pool: list[dict]) -> dict:
-    """Pesos efetivos do curso (``courses.resolve_weights``): fórmula FUVEST ou ``pesos`` manuais."""
-    return courses.resolve_weights(profile, pool)
+def effective_weights(profile: dict, pool: list[dict], phase: str | None = None) -> dict:
+    """Pesos efetivos do curso (``courses.resolve_weights``): fórmula FUVEST ou ``pesos`` manuais.
+
+    ``phase="fase1"``: só o componente da 1ª fase (cada questão vale 1 ponto).
+    """
+    return courses.resolve_weights(profile, pool, phase)
 
 
 def selection_weights(profile: dict, weights_result: dict) -> dict[str, float]:
@@ -570,7 +573,7 @@ def _insert_question(db: sqlite3.Connection, attempt_id: str, ordinal: int, item
 def create_attempt(db: sqlite3.Connection, config: dict, course_id: str, pool: list[dict],
                    *, total: int | None = None, seed: int, provider=None, planner_topics: dict | None = None,
                    planner_meta: dict | None = None, excluded: dict | None = None,
-                   mode: str = "adaptive") -> dict:
+                   mode: str = "adaptive", phase: str | None = None) -> dict:
     """Cria uma tentativa de diagnóstico.
 
     ``mode="static"`` sorteia todas as questões de uma vez (comportamento
@@ -587,7 +590,7 @@ def create_attempt(db: sqlite3.Connection, config: dict, course_id: str, pool: l
     subjects = list(profile["pesos"])
     # O diagnóstico mede a FUVEST: questões de outras origens ficam de fora.
     course_pool = [item for item in pool if item["subject"] in profile["pesos"] and question_origin.is_fuvest(item)]
-    weights_result = effective_weights(profile, course_pool)
+    weights_result = effective_weights(profile, course_pool, phase)
     weights = selection_weights(profile, weights_result)
     incidence = mastery.node_incidence(course_pool)
     if mode == "adaptive":

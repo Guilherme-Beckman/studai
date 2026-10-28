@@ -171,7 +171,9 @@
     const max = Math.max(p.questions, ...points.map(point => point.value));
     const spark = points.length > 1 ? `<div class="cal-proj-spark" role="img" aria-label="Evolução dos acertos estimados">${points.map(point =>
       `<i class="${point.kind}" style="height:${Math.max(4, (point.value / max) * 100)}%" title="${esc(fmt(point.date, { day: "2-digit", month: "2-digit" }))}: ${Math.round(point.value)}${point.kind === "simulado" ? ` (${esc(point.label || "simulado")})` : ""}"></i>`).join("")}${p.cutoff != null ? `<b style="bottom:${(p.cutoff / max) * 100}%"></b>` : ""}</div>` : "";
-    return `<div class="cal-projection"><div><strong>Se a prova fosse hoje: ~${Math.round(p.current)}/${p.questions} acertos</strong> ${cutoffNote}</div>${atExam}${spark}</div>`;
+    const coverage = p.coverage < 0.999
+      ? `<p class="muted">${pct(p.coverage)} da prova já tem respostas suas; nas matérias sem nenhuma, a estimativa conta só o chute (1 em 5).</p>` : "";
+    return `<div class="cal-projection"><div><strong>Se a prova fosse hoje: ~${Math.round(p.current)}/${p.questions} acertos</strong> ${cutoffNote}</div>${coverage}${atExam}${spark}</div>`;
   }
 
   function blockRow(block, entry, { actions = true } = {}) {

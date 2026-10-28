@@ -23,11 +23,11 @@ calculado com `mastery.compute_nodes(..., half_life_days=30, now=<instante do po
 
 ```jsonc
 {
-  "course": {"id", "name", "weights": {matéria: peso normalizado}, "non_assessable": {"Redação": 0.1667},
-             "components": {matéria: {"f1", "d1", "d2"}}, "fase2": {...}},
+  "course": {"id", "name", "weights": {matéria: peso normalizado}, "phase": "fase1"|"fase2"|"outra"|null,
+             "non_assessable": {"Redação": 0.1667}, "components": {matéria: {"f1", "d1", "d2"}}, "fase2": {...}},
   "kpis": {"estimated_score": 0-1, "estimated_score_delta": número|null, "answered": int, "sessions": int,
            "coverage": 0-1, "strong": int, "gaps": int, "last_activity": ISO|null},
-  "timeline": [{"id", "kind": "diagnostic"|"exam", "label", "at": ISO, "answered", "accuracy", "estimated_score"}],
+  "timeline": [{"id", "kind": "diagnostic"|"exam"|"daily", "label", "at": ISO, "answered", "accuracy", "estimated_score"}],
   "roots": [ids de matéria ordenados por peso do curso desc],
   "priorities": [até 10 ids de área/conteúdo/folha por prioridade desc],
   "nodes": {id: Nó + {"delta": número|null (vs. ponto anterior), "series": [mastery|null por ponto da timeline],

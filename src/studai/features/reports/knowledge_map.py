@@ -23,7 +23,7 @@ PUBLIC_FIELDS = ("id", "name", "level", "parent_id", "subject", "attempts", "cor
 
 
 def _state(db: sqlite3.Connection, config: dict, course_id: str, pool: list[dict], now: datetime | None) -> dict:
-    profile, resolved = _course(config, course_id, pool)
+    profile, resolved = _course(config, course_id, pool, study.target_phase(db, course_id, datetime.now(timezone.utc)))
     course_pool = [item for item in pool if item.get("subject") in profile["pesos"]]
     responses = [depth.live_response(response) for response in study.course_responses(db, course_id)]
     nodes = depth.compute_depth(responses, subject_weights=resolved["weights"],

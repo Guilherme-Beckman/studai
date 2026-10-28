@@ -19,7 +19,7 @@
     untested: { label: "Não testado", icon: "–" },
   };
   const LEVEL_LABEL = { subject: "matéria", area: "área", content: "conteúdo", leaf: "subtópico" };
-  const KIND_LABEL = { diagnostic: "Diagnóstico", exam: "Prova completa" };
+  const KIND_LABEL = { diagnostic: "Diagnóstico", exam: "Prova completa", daily: "Treinamento" };
   const REASONS = { unknown_content: "Não sabia o conteúdo", concept_confusion: "Confundiu um detalhe", calc_error: "Erro de cálculo", misread: "Interpretação", trap: "Pegadinha", time_pressure: "Faltou tempo", blank: "Em branco" };
   const STATUS_FILTERS = [["all", "Todos"], ["gap", "Lacunas"], ["uncertain", "Incertos"], ["strong", "Fortes"], ["untested", "Não testados"]];
   const SORTS = [["priority", "Prioridade"], ["mastery", "Domínio (menor primeiro)"], ["weight", "Peso no curso"]];
@@ -377,13 +377,15 @@
   // ---------------------------------------------------------------- overview sections
   function weightsNote(course) {
     const weights = Object.entries(course?.weights || {}).filter(([, value]) => isNum(value)).sort((a, b) => b[1] - a[1]);
-    const na = Object.entries(course?.non_assessable || {}).filter(([, value]) => isNum(value));
+    // Na 1ª fase cada questão vale 1 ponto e a redação não entra: o peso é só o da prova objetiva.
+    const firstPhase = course?.phase === "fase1";
+    const na = firstPhase ? [] : Object.entries(course?.non_assessable || {}).filter(([, value]) => isNum(value));
     if (!weights.length && !na.length) return "";
     const top = weights.slice(0, 2).map(([name, value]) => `${esc(name)} ${pct(value)}`);
     const naText = na.map(([name, value]) => `${esc(name)} ${pct(value)} (fora do banco)`);
     const all = weights.map(([name, value]) => `<li><span>${esc(name)}</span><span>${pct(value, 1)}</span></li>`).join("");
     const naAll = na.map(([name, value]) => `<li><span>${esc(name)} <small>fora do banco</small></span><span>${pct(value, 1)}</span></li>`).join("");
-    return `<div class="rp-weights"><p><span class="rp-weights-label">Peso na nota final:</span> ${top.concat(naText).join(" · ")}</p>${weights.length > 2 ? `<details><summary>Ver todos os pesos</summary><ul class="rp-weights-list">${all}${naAll}</ul></details>` : ""}</div>`;
+    return `<div class="rp-weights"><p><span class="rp-weights-label">${firstPhase ? "Peso na 1ª fase" : "Peso na nota final"}:</span> ${top.concat(naText).join(" · ")}</p>${weights.length > 2 ? `<details><summary>Ver todos os pesos</summary><ul class="rp-weights-list">${all}${naAll}</ul></details>` : ""}</div>`;
   }
 
   function kpiRow(kpis, timeline) {
@@ -639,7 +641,7 @@
 
   // ---------------------------------------------------------------- page render
   function emptyHtml(overview) {
-    return `${weightsNote(overview?.course)}<div class="panel rp-panel"><div class="empty-state rp-empty"><div class="empty-icon">↗</div><strong>Ainda não há respostas para este curso</strong><p>O relatório acompanha seu domínio por conteúdo a partir das suas respostas. Faça um diagnóstico ou responda a uma prova do acervo: cada sessão vira um ponto na linha do tempo.</p><div class="rp-empty-actions"><button type="button" class="button button-primary" data-rp-go="diagnostics">Fazer um diagnóstico</button><button type="button" class="button button-secondary" data-rp-go="exams">Responder uma prova</button></div></div></div>`;
+    return `${weightsNote(overview?.course)}<div class="panel rp-panel"><div class="empty-state rp-empty"><div class="empty-icon">↗</div><strong>Ainda não há respostas para este curso</strong><p>O relatório acompanha seu domínio por conteúdo a partir das suas respostas. Treine, faça um diagnóstico ou responda a uma prova do acervo: cada dia de Treinamento e cada sessão viram um ponto na linha do tempo.</p><div class="rp-empty-actions"><button type="button" class="button button-primary" data-rp-go="diagnostics">Fazer um diagnóstico</button><button type="button" class="button button-secondary" data-rp-go="exams">Responder uma prova</button></div></div></div>`;
   }
 
   function renderPage() {
