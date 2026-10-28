@@ -2110,6 +2110,29 @@ function renderTodayProgress(progress) {
     : `<div class="empty-state"><div class="empty-icon">◷</div><strong>Nenhum conteúdo em revisão ainda</strong><p>Responda o estudo de hoje ou um diagnóstico para começar o agendamento.</p></div>`;
 }
 
+// ---- Fechamento do dia: quando a tarefa do dia acaba, o que foi feito, o que melhorou e o que vem amanhã.
+async function loadDayClosing(courseId) {
+  if (!currentStudy || currentStudy.dayClosingLoading) return;
+  currentStudy.dayClosingLoading = true;
+  try {
+    currentStudy.dayClosing = await api(`/api/study/summary?period=day&courseId=${encodeURIComponent(courseId)}`);
+    const box = $("#day-closing");
+    if (box) box.innerHTML = dayClosingMarkup(currentStudy.dayClosing);
+  } catch { /* o fechamento é um extra: sem ele, fica o resumo do bloco */ }
+}
+
+function dayClosingMarkup(day) {
+  if (!day) return `<p class="muted">Montando o fechamento do dia…</p>`;
+  const minutes = Math.round((day.studySeconds || 0) / 60);
+  const improved = (day.improved || []).slice(0, 3).map(item => `<li><b>${escapeHtml(item.name)}</b> ${Math.round(item.from * 100)}% → ${Math.round(item.to * 100)}%</li>`).join("");
+  const ladders = day.ladders?.active || [];
+  const next = [
+    day.dueTomorrow ? `${day.dueTomorrow} ${day.dueTomorrow === 1 ? "revisão vence" : "revisões vencem"} amanhã.` : "Nenhuma revisão vence amanhã.",
+    ladders.length ? `${ladders.length} ${ladders.length === 1 ? "trilha continua" : "trilhas continuam"} na aba Trilhas.` : "",
+  ].filter(Boolean).join(" ");
+  return `<h3>Fechamento do dia</h3><p>${day.answered} ${day.answered === 1 ? "questão" : "questões"} hoje${day.accuracy == null ? "" : ` · ${Math.round(day.accuracy * 100)}% de acerto`}${minutes ? ` · ${minutes} min de estudo` : ""}${day.streak > 1 ? ` · ${day.streak} dias seguidos` : ""}.</p>${improved ? `<p>O que mais avançou hoje:</p><ul>${improved}</ul>` : ""}${day.consolidated?.length ? `<p>Consolidou: ${day.consolidated.map(item => escapeHtml(item.name)).join(", ")}.</p>` : ""}<p class="muted">${next}</p>`;
+}
+
 // ---- Três frentes do Treinamento, cada uma com a sua fila: tarefa do dia, trilhas e treino livre.
 const TRAINING_GROUPS = {
   daily: { label: "Tarefa do dia", eyebrow: "Tarefa do dia",
@@ -2183,8 +2206,9 @@ function renderToday(workspace = $("#today-workspace")) {
   const item = currentStudy.lastAnswer ? items.find(entry => entry.id === currentStudy.lastAnswer.itemId)
     : items.find(entry => pending(entry) && currentStudy.focusIds?.has(entry.id)) || items.find(pending);
   if (!item) {
+    if (currentStudy.group === "daily") loadDayClosing(session.courseId);
     const list = items.map(entry => `<tr><td><span class="today-reason ${entry.reason}">${STUDY_REASONS[entry.reason]}</span></td><td>${escapeHtml(entry.contentPath)}</td><td>${entry.selectedAnswer ? escapeHtml(entry.selectedAnswer) : "Branco"} / ${escapeHtml(entry.correctAnswer)}</td><td>${entry.correct ? "✓" : "✗"}</td></tr>`).join("");
-    workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>${meta.done}: ${correctCount} acertos</strong><p>As revisões foram atualizadas. ${currentStudy.group === "free" ? "Ajuste matérias e quantidade acima para adicionar mais questões quando quiser." : "Continue em outra aba quando quiser."}</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
+    workspace.innerHTML = `${top}${currentStudy.group === "daily" ? `<div id="day-closing" class="day-closing">${dayClosingMarkup(currentStudy.dayClosing)}</div>` : ""}<div class="exam-final-summary"><strong>${meta.done}: ${correctCount} acertos</strong><p>As revisões foram atualizadas. ${currentStudy.group === "free" ? "Ajuste matérias e quantidade acima para adicionar mais questões quando quiser." : "Continue em outra aba quando quiser."}</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
     window.studaiFocus?.attach(workspace, { key: "summary", label: "Bloco concluído" });
     return;
   }

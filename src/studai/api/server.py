@@ -41,6 +41,7 @@ from studai.features.study import error_notebook
 from studai.features.study import ladder as study_ladder
 from studai.features.study import proficiency as study_proficiency
 from studai.features.study import readings
+from studai.features.study import summary as study_summary
 from studai.features.study import service as study
 from studai.features.questions.extractor import CORRUPT_GLYPH_RE, extract_pdf
 from studai.features.questions import manual_crop, source_pdf
@@ -1543,6 +1544,17 @@ class Handler(BaseHTTPRequestHandler):
             if match:
                 status, payload = _summary_get(unquote(match.group(1)))
                 return self._json(status, payload)
+            if path == "/api/study/summary":
+                query = parse_qs(parsed.query)
+                config = diagnostics.load_course_config(DEFAULT_COURSE_CONFIG)
+                course_id = _report_course_id(query)
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    return self._json(200, study_summary.period_summary(
+                        db, _reports_pool(db, config, course_id), config, course_id, datetime.now(timezone.utc),
+                        (query.get("period") or ["week"])[0]))
+                finally:
+                    db.close()
             if path == "/api/study/ladders":
                 db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
@@ -2047,6 +2059,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(201, _calendar_add_exam(self._read_json()))
             if path == "/api/study/training/next":
                 return self._json(200, _study_training_next(self._read_json()))
+            if path == "/api/calendar/availability":
+                body = self._read_json()
+                course_id = _report_course_id({}, body)
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    saved = study_calendar.set_availability(db, course_id, body.get("minutes"))
+                    # O dia de hoje fica como estava; os próximos se recalculam com o novo tempo.
+                    return self._json(200, {"availability": saved})
+                finally:
+                    db.close()
             if path == "/api/study/ladders/fill":
                 # Trilhas ativas sem questões no nível atual: pede à IA (o frontend chama ao abrir o Treinamento).
                 body = self._read_json()

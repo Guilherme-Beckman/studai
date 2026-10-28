@@ -332,3 +332,64 @@ class CalendarApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AvailabilityTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.db = study.connect_db(Path(self.temp.name) / "h.sqlite3")
+
+    def tearDown(self):
+        self.db.close()
+        self.temp.cleanup()
+
+    def demand(self):
+        return [demand_item(f"m{i}", "Matemática", 6, 1 - i / 100) for i in range(30)]
+
+    def schedule(self, availability, days=27):
+        review = {"Matemática": [{"id": "m0", "name": "m0"}]}
+        simulados = [{"sourceId": "p1", "label": "Prova 1", "questions": 90, "answered": False}]
+        return calendar.build_schedule(TODAY, TODAY + timedelta(days=days), self.demand(), {"Matemática": 1.0},
+                                       review, simulados, availability)
+
+    def test_days_follow_the_time_available(self):
+        # Seg–sex 1 h (15 questões), sábado 2 h (30), domingo livre 4 h: simulado.
+        availability = {0: 60, 1: 60, 2: 60, 3: 60, 4: 60, 5: 120, 6: 240}
+        days, load = self.schedule(availability)
+        construction = [d for d in days if d["phase"] == "construcao"]
+        for entry in construction:
+            weekday = date.fromisoformat(entry["date"]).weekday()
+            if weekday == 6:
+                self.assertEqual(entry["kind"], "simulado")
+            else:
+                self.assertEqual(entry["kind"], "study")
+                self.assertLessEqual(entry["target"], availability[weekday] // calendar.QUESTION_MINUTES)
+        saturdays = [d["target"] for d in construction if date.fromisoformat(d["date"]).weekday() == 5]
+        weekdays = [d["target"] for d in construction if date.fromisoformat(d["date"]).weekday() == 0]
+        self.assertGreater(saturdays[0], weekdays[0])
+        self.assertTrue(load["byAvailability"])
+
+    def test_day_without_time_is_rest_and_short_sunday_has_no_simulado(self):
+        days, load = self.schedule({0: 0, 1: 60, 2: 60, 3: 60, 4: 60, 5: 60, 6: 60})
+        construction = [d for d in days if d["phase"] == "construcao"]
+        mondays = [d for d in construction if date.fromisoformat(d["date"]).weekday() == 0]
+        sundays = [d for d in construction if date.fromisoformat(d["date"]).weekday() == 6]
+        self.assertTrue(all(d["kind"] == "rest" and d["target"] == 0 for d in mondays))
+        self.assertTrue(all(d["kind"] == "study" for d in sundays))
+        self.assertTrue(load["feasible"])
+        # Com 10 dias e 1 h por dia (15 questões), 30 conteúdos × 6 questões não cabem.
+        _, short = self.schedule({0: 0, 1: 60, 2: 60, 3: 60, 4: 60, 5: 60, 6: 60}, days=10)
+        self.assertFalse(short["feasible"])
+        rest = calendar.attach_progress(dict(mondays[0]), {"subjects": {}, "exam": 0, "total": 0}, TODAY)
+        self.assertEqual(rest["status"], "rest")
+
+    def test_store_and_validate(self):
+        self.assertIsNone(calendar.get_availability(self.db, "curso"))
+        saved = calendar.set_availability(self.db, "curso", {"0": 60, "6": "240"})
+        self.assertEqual(saved, {0: 60, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 240})
+        self.assertEqual(calendar.get_availability(self.db, "curso"), saved)
+        for value in ({}, {"0": -1}, {"0": 800}, {"0": "x"}, "60"):
+            with self.assertRaises(ValueError):
+                calendar.set_availability(self.db, "curso", value)
+        self.assertIsNone(calendar.set_availability(self.db, "curso", None))
+        self.assertIsNone(calendar.get_availability(self.db, "curso"))

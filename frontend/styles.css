@@ -2874,6 +2874,50 @@ textarea {
 .rp-col-label {
   display: none;
 }
+/* Resumo da semana */
+.rp-week-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.rp-week-tile {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+}
+.rp-week-tile span, .rp-week-tile small { color: var(--muted); font-size: 12px; }
+.rp-week-tile strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.rp-week-up { color: var(--ok-ink); }
+.rp-week-down { color: var(--bad-ink); }
+.rp-week-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+.rp-week-cols h3 { margin: 0 0 6px; font: 700 13px var(--font-ui); color: var(--ink-2); }
+.rp-week-cols ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
+.rp-week-cols li + li { margin-top: 4px; }
+.rp-week-cols small { color: var(--muted); }
+.rp-week-extras { margin-top: 12px; font-size: 13.5px; color: var(--ink-2); }
+.rp-week-extras p { margin: 4px 0 0; }
+/* Fechamento do dia no Treinamento */
+.day-closing {
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--ok-line);
+  border-radius: var(--radius-panel);
+  background: var(--ok-soft);
+  color: var(--ink);
+  font-size: 14px;
+}
+.day-closing h3 { margin: 0 0 6px; font-size: 15px; color: var(--ok-ink); }
+.day-closing p { margin: 4px 0; }
+.day-closing ul { margin: 4px 0; padding-left: 18px; }
+
 /* confiança e ritmo por matéria */
 .rp-conf-head,
 .rp-conf-row {
@@ -3440,6 +3484,20 @@ textarea {
 .sim-error > summary { cursor: pointer; font-size: 14px; }
 .sim-pending { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn-ink); font-size: 12px; }
 .sim-reason { color: var(--ink-2); font-size: 13.5px; }
+
+/* Tempo livre por dia da semana */
+.cal-availability { margin-top: 14px; font-size: 13.5px; }
+.cal-availability summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; }
+.cal-availability-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+.cal-availability-days label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); text-align: center; }
+.cal-availability-days input { width: 100%; min-width: 0; text-align: center; }
+.cal-availability-actions { display: flex; gap: 10px; align-items: center; }
+@media (max-width: 520px) { .cal-availability-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 /* Acertos estimados e tendência no Calendário */
 .cal-projection {

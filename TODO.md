@@ -37,6 +37,7 @@ Legenda: `[ ]` pendente · `[~]` em andamento · `[x]` concluído
 | 10 | Calendário de preparação | concluída | 6/6 |
 | 11 | Experiência de estudo (1ª fase) | concluída | 11/11 |
 | 12 | Questões de treino, da IA e trilha por nível | concluída | 5/5 |
+| 13 | Rotina de estudo: resumos e disponibilidade | concluída | 2/2 |
 | — | Expansão do acervo/RAG | bloqueada (depende das fases 1–3) | 0/3 |
 
 ---
@@ -230,6 +231,11 @@ Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero 
   - [x] Listas e o banco da IA não mostram "Responder prova" nem "Simulado"; o cabeçalho da revisão da prova cabe no celular
 - [x] Treinamento em três abas, cada uma com a sua fila: "Tarefa do dia" (plano e blocos do calendário), "Trilhas" e "Treino livre" (blocos por matéria e caderno de erros). Cada questão da sessão tem `group` (`daily`/`ladder`/`free`; sessões antigas deduzem pelo motivo e pelo id); a prática do erro fica na frente da questão que a gerou; o erro de conteúdo na tarefa do dia mostra "Ir para a trilha" (2026-10-28)
 
+## Fase 13 — Rotina de estudo: resumos e disponibilidade
+Ideia: dar começo, meio e fim ao estudo — o aluno vê o que fez na semana e no dia, e o calendário respeita o tempo que ele tem.
+- [x] Resumo do período (`study/summary.py`, `GET /api/study/summary?period=week|day`): questões, acerto, tempo, dias com estudo e sequência, conteúdos consolidados e os que mais avançaram, prontidão e acertos estimados comparados com o começo do período, erros mais comuns, trilhas. "Resumo da semana" no topo de Relatórios e "Fechamento do dia" quando a tarefa do dia acaba, com o que vence amanhã (2026-10-28)
+- [x] Tempo livre por dia da semana no Calendário (`study_availability`, `POST /api/calendar/availability`): dia sem tempo vira folga, simulado só em dia com 3 h livres, e a carga de cada dia segue o tempo dele (~4 min por questão), sem passar do que cabe; "Sem limite" volta à distribuição por igual (2026-10-28)
+
 ## Processamento de provas
 
 - [x] Mostrar etapas do processamento com progresso granular por página no OCR, por questão nos recortes e na classificação; incluir estado atual e tarefas ativas
@@ -301,3 +307,5 @@ Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero 
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Treinamento separado em abas: tarefa do dia, trilhas e treino livre | — |
 | 2026-10-28 | Claude / `claude/docker-compose-backup-routine-ebdc40` | Docker Compose para rodar a app localmente, com backup automático (`studai.tools.backup`) | — |
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Pendências da Fase 11: Relatórios com o Treinamento, pesos da 1ª fase no diagnóstico/Relatórios/Mapa, projeção sem a priori de 50%, lista de provas no celular | — |
+| 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Fase 13 adicionada; resumo da semana e fechamento do dia | — |
+| 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Fase 13: tempo livre por dia da semana no Calendário | — |
