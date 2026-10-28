@@ -3700,6 +3700,8 @@ textarea {
 .ladder-steps i.current { background: var(--accent-soft); color: var(--accent-ink); outline: 1px solid var(--accent-line); }
 .ladder-actions { display: flex; gap: 10px; align-items: center; }
 .ladder-done { color: var(--ok-ink); font-weight: 700; font-size: 13px; }
+.ladder-summary { flex-basis: 100%; font-size: 13.5px; }
+.ladder-summary > summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; }
 
 /* Primeiros passos (Visão geral) */
 .setup-panel { margin: 18px 0; }

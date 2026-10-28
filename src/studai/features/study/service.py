@@ -198,9 +198,16 @@ def sync_diagnostic_answers(db: sqlite3.Connection) -> int:
         a.course_id FROM attempt_questions aq JOIN attempts a ON a.id = aq.attempt_id
         WHERE aq.answered_at IS NOT NULL
         ORDER BY aq.answered_at, aq.attempt_id, aq.ordinal""").fetchall()
+    pending = [row for row in rows if not db.execute("SELECT 1 FROM review_logs WHERE source_ref=?",
+                                                     (f"attempt:{row['attempt_id']}:{row['ordinal']}",)).fetchone()]
+    if not pending:
+        return 0
     imported = 0
     with db:
-        for row in rows:
+        # Várias rotas sincronizam ao abrir a tela (Hoje, Calendário, progresso): a trava de
+        # escrita vem antes da leitura, senão duas conexões criam o mesmo cartão ao mesmo tempo.
+        db.execute("BEGIN IMMEDIATE")
+        for row in pending:
             ref = f"attempt:{row['attempt_id']}:{row['ordinal']}"
             if db.execute("SELECT 1 FROM review_logs WHERE source_ref=?", (ref,)).fetchone():
                 continue
@@ -455,9 +462,11 @@ def plan_today(db: sqlite3.Connection, pool: list[dict], config: dict, course_id
         items = build_plan(db, pool, profile, course_id, now, size=size, new_per_day=new_per_day)
         session_id = uuid.uuid4().hex[:12]
         with db:
-            db.execute("INSERT INTO study_sessions(id,local_date,course_id,plan_json,created_at) VALUES(?,?,?,?,?)",
+            # Duas aberturas ao mesmo tempo montam o plano; vale a primeira que gravar.
+            db.execute("INSERT OR IGNORE INTO study_sessions(id,local_date,course_id,plan_json,created_at) "
+                       "VALUES(?,?,?,?,?)",
                        (session_id, day, course_id, json.dumps({"items": items}, ensure_ascii=False), _iso(now)))
-        row = db.execute("SELECT * FROM study_sessions WHERE id=?", (session_id,)).fetchone()
+        row = db.execute("SELECT * FROM study_sessions WHERE local_date=? AND course_id=?", (day, course_id)).fetchone()
     return session_payload(db, row["id"], pool)
 
 
