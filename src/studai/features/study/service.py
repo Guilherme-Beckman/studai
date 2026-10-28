@@ -260,22 +260,33 @@ def course_responses(db: sqlite3.Connection, course_id: str) -> list[dict]:
                           "source_id": row["source_id"], "number": int(row["question_number"]),
                           "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
                           "reason": row["error_reason"], "note": row["note"]})
-    for row in db.execute("""SELECT sa.* FROM study_answers sa JOIN study_sessions s ON s.id = sa.session_id
-            WHERE s.course_id = ?""", (course_id,)):
-        # Como em ``mastery.response_from_row``: acerto no chute não conta como domínio,
-        # e questões fora da FUVEST pesam menos.
-        responses.append({"correct": bool(row["is_correct"]) and row["confidence"] != "guess",
-                          "origin": row["origin"], "difficulty": row["difficulty"],
-                          "evidence_factor": evidence_factor(row["origin"], row["difficulty"]),
-                          "is_correct": bool(row["is_correct"]), "subject": row["subject"],
-                          "principal_id": live_id(row["content_id"]), "related_ids": [],
-                          "answered_at": row["answered_at"], "kind": "daily",
-                          "source_id": row["source_id"], "number": int(row["question_number"]),
-                          "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
-                          "reason": row["error_reason"], "confidence": row["confidence"],
-                          "elapsed_ms": row["elapsed_ms"], "note": row["note"]})
+    responses += [daily_response(row) for row in daily_rows(db, course_id)]
     responses.sort(key=lambda response: response["answered_at"] or "")
     return responses
+
+
+def daily_rows(db: sqlite3.Connection, course_id: str) -> list[sqlite3.Row]:
+    """Respostas do Treinamento do curso, na ordem em que foram dadas (com a data da sessão)."""
+    return db.execute("""SELECT sa.*, s.local_date FROM study_answers sa JOIN study_sessions s ON s.id = sa.session_id
+        WHERE s.course_id = ? ORDER BY sa.answered_at""", (course_id,)).fetchall()
+
+
+def daily_response(row: sqlite3.Row) -> dict:
+    """Resposta do Treinamento no formato de ``mastery``.
+
+    Como em ``mastery.response_from_row``: acerto no chute não conta como domínio, e
+    questões fora da FUVEST pesam menos.
+    """
+    return {"correct": bool(row["is_correct"]) and row["confidence"] != "guess",
+            "origin": row["origin"], "difficulty": row["difficulty"],
+            "evidence_factor": evidence_factor(row["origin"], row["difficulty"]),
+            "is_correct": bool(row["is_correct"]), "subject": row["subject"],
+            "principal_id": live_id(row["content_id"]), "related_ids": [],
+            "answered_at": row["answered_at"], "kind": "daily",
+            "source_id": row["source_id"], "number": int(row["question_number"]),
+            "selected": row["selected_answer"], "correct_answer": row["correct_answer"],
+            "reason": row["error_reason"], "confidence": row["confidence"],
+            "elapsed_ms": row["elapsed_ms"], "note": row["note"]}
 
 
 def _new_leaves(db: sqlite3.Connection, pool: list[dict], fresh: list[str], weights: dict[str, float],
@@ -343,9 +354,15 @@ def _item(reason: str, entry: dict, content_id: str) -> dict:
 
 
 def target_phase(db: sqlite3.Connection, course_id: str, now: datetime) -> str | None:
-    """Fase da próxima prova cadastrada do curso (hoje conta), ou ``None`` sem prova."""
-    row = db.execute("SELECT phase FROM exam_dates WHERE course_id=? AND exam_date>=? "
-                     "ORDER BY exam_date, created_at LIMIT 1", (course_id, local_date(now).isoformat())).fetchone()
+    """Fase da próxima prova cadastrada do curso (hoje conta), ou ``None`` sem prova.
+
+    Banco aberto só com as tabelas do diagnóstico (sem ``exam_dates``) também dá ``None``.
+    """
+    try:
+        row = db.execute("SELECT phase FROM exam_dates WHERE course_id=? AND exam_date>=? "
+                         "ORDER BY exam_date, created_at LIMIT 1", (course_id, local_date(now).isoformat())).fetchone()
+    except sqlite3.OperationalError:
+        return None
     return row["phase"] if row else None
 
 

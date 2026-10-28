@@ -1,7 +1,9 @@
 """Acertos estimados na 1ª fase e para onde eles vão até a prova.
 
 Estimativa de hoje: 90 × Σ (peso F1 da matéria × domínio da matéria), com o domínio do
-``mastery`` (respostas mais antigas valem menos). A tendência combina essa estimativa,
+``mastery`` (respostas mais antigas valem menos). Matéria ainda sem nenhuma resposta conta
+como chute (1 em 5), não como 50%: assim a estimativa não sobe sem dado; ``coverage``
+diz quanto da prova já tem respostas. A tendência combina essa estimativa,
 recalculada no fim de cada uma das últimas semanas, com os resultados reais dos
 simulados; uma reta pelos pontos das últimas 6 semanas dá o valor na data da prova.
 """
@@ -11,6 +13,7 @@ import json
 import sqlite3
 from datetime import date, datetime, time, timedelta
 
+from studai.features.classification.taxonomy import DEFAULT_SUBJECT_IDS
 from studai.features.diagnostics import mastery
 from studai.features.study import service as study
 
@@ -19,19 +22,34 @@ MIN_RESPONSES = 30  # menos que isso, a estimativa ainda é quase só a priori
 HISTORY_WEEKS = 6
 MIN_SPAN_DAYS = 14
 MIN_SIMULADO_QUESTIONS = 30
+CHANCE = 0.2  # acerto no chute com 5 alternativas
 
 
 def _parse(value: str) -> datetime:
     return study._parse(value)
 
 
-def estimate_correct(responses: list[dict], weights_f1: dict[str, float], now: datetime) -> float | None:
-    """Acertos esperados em 90 questões; ``None`` com poucas respostas."""
+def estimate(responses: list[dict], weights_f1: dict[str, float], now: datetime) -> tuple[float, float] | None:
+    """(acertos esperados em 90 questões, fração da prova com respostas); ``None`` com poucas respostas."""
     if len(responses) < MIN_RESPONSES:
         return None
     nodes = mastery.compute_nodes(responses, subject_weights=weights_f1, half_life_days=study.HALF_LIFE_DAYS,
                                   now=now)
-    return round(QUESTIONS * mastery.weighted_score(nodes, weights_f1), 1)
+    score = coverage = 0.0
+    for subject, weight in mastery.normalize_weights(weights_f1).items():
+        node = nodes.get(DEFAULT_SUBJECT_IDS.get(subject, ""))
+        if node and node["attempts"] > 0:
+            score += weight * node["mastery"]
+            coverage += weight
+        else:
+            score += weight * CHANCE
+    return round(QUESTIONS * score, 1), round(coverage, 4)
+
+
+def estimate_correct(responses: list[dict], weights_f1: dict[str, float], now: datetime) -> float | None:
+    """Acertos esperados em 90 questões; ``None`` com poucas respostas."""
+    result = estimate(responses, weights_f1, now)
+    return result[0] if result else None
 
 
 def simulado_points(db: sqlite3.Connection, course_id: str) -> list[dict]:
@@ -71,7 +89,8 @@ def project(db: sqlite3.Connection, course_id: str, weights_f1: dict[str, float]
     """Estimativa de hoje, histórico semanal, simulados e valor projetado na prova."""
     responses = study.course_responses(db, course_id)
     today = study.local_date(now)
-    current = estimate_correct(responses, weights_f1, now)
+    result = estimate(responses, weights_f1, now)
+    current, coverage = result if result else (None, 0.0)
     weekly = []
     for weeks in range(HISTORY_WEEKS, 0, -1):
         day = today - timedelta(days=7 * weeks)
@@ -94,4 +113,5 @@ def project(db: sqlite3.Connection, course_id: str, weights_f1: dict[str, float]
         at_exam = round(min(QUESTIONS, max(0.0, intercept + slope * (exam_day - today).days)), 1)
     return {"questions": QUESTIONS, "current": current, "cutoff": cutoff, "atExam": at_exam,
             "slopePerWeek": round(trend[1] * 7, 2) if trend else None, "weekly": weekly,
-            "simulados": simulados, "responses": len(responses), "minResponses": MIN_RESPONSES}
+            "simulados": simulados, "responses": len(responses), "minResponses": MIN_RESPONSES,
+            "coverage": coverage}

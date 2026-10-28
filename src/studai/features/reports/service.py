@@ -16,14 +16,16 @@ import re
 import sqlite3
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from studai.features.answer_keys.service import exam_variant
+from studai.features.classification.taxonomy import CONTENT_INDEX, live_id
 from studai.features.diagnostics import mastery
 from studai.features.diagnostics import service as diagnostics
 from studai.features.diagnostics.courses import resolve_weights
 from studai.features.questions.origin import FULL_EXAM_TYPES
+from studai.features.study import service as study
 
 DEFAULT_COURSE_ID = "eng-comp-sao-carlos"
 HALF_LIFE_DAYS = 30
@@ -103,11 +105,32 @@ def _kind(mode: str | None) -> str:
     return "exam" if mode == "exam" else "diagnostic"
 
 
+def _daily_groups(db: sqlite3.Connection, course_id: str) -> list[tuple[str, str, list[dict]]]:
+    """Respostas do Treinamento agrupadas por dia (um ponto da linha do tempo por sessão).
+
+    Cada resposta vira uma linha no formato de ``attempt_questions`` (para a lista de
+    respostas recentes) com a resposta já normalizada em ``_response``.
+    """
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='study_answers'").fetchone():
+        return []
+    groups: dict[str, list[dict]] = {}
+    for row in study.daily_rows(db, course_id):
+        node = CONTENT_INDEX.get(live_id(row["content_id"])) or {}
+        groups.setdefault(row["session_id"], []).append({
+            "attempt_id": row["session_id"], "local_date": row["local_date"], "answered_at": row["answered_at"],
+            "source_id": row["source_id"], "question_number": row["question_number"], "is_correct": row["is_correct"],
+            "selected_answer": row["selected_answer"], "correct_answer": row["correct_answer"],
+            "error_reason": row["error_reason"], "topic": " → ".join(node.get("path", [])) or row["content_id"],
+            "_response": study.daily_response(row)})
+    return [(session_id, rows[0]["local_date"], rows) for session_id, rows in groups.items()]
+
+
 # --------------------------------------------------------------------------- histórico
 
 def _history(db: sqlite3.Connection, config: dict, course_id: str, pool: list[dict]) -> dict:
     """Respostas do curso agrupadas por tentativa, com os nós cumulativos por ponto."""
-    profile, resolved = _course(config, course_id, pool)
+    # Pesos da fase da próxima prova (na 1ª fase, cada questão vale 1 ponto), como no Treinamento.
+    profile, resolved = _course(config, course_id, pool, study.target_phase(db, course_id, datetime.now(timezone.utc)))
     weights = resolved["weights"]
     incidence = mastery.node_incidence([item for item in pool if item.get("subject") in profile["pesos"]])
     rows = [dict(row) for row in db.execute(
@@ -118,21 +141,27 @@ def _history(db: sqlite3.Connection, config: dict, course_id: str, pool: list[di
     groups: dict[str, list[dict]] = {}
     for row in rows:
         groups.setdefault(row["attempt_id"], []).append(row)
+    # Diagnósticos, provas e dias de Treinamento entram na linha do tempo pela hora da última resposta.
+    sessions = [(max(r["answered_at"] for r in attempt_rows), attempt_id, attempt_rows[0].get("attempt_mode") or "static",
+                 None, attempt_rows) for attempt_id, attempt_rows in groups.items()]
+    sessions += [(max(r["answered_at"] for r in day_rows), session_id, "daily", local_date, day_rows)
+                 for session_id, local_date, day_rows in _daily_groups(db, course_id)]
+    sessions.sort(key=lambda session: session[0])
     points: list[dict] = []
     cumulative: list[dict] = []
     answers: list[dict] = []
-    for attempt_id, attempt_rows in groups.items():
-        mode = attempt_rows[0].get("attempt_mode") or "static"
-        kind = _kind(mode)
-        at = max(row["answered_at"] for row in attempt_rows)
+    for at, attempt_id, mode, local_date, attempt_rows in sessions:
+        kind = "daily" if mode == "daily" else _kind(mode)
         for row in attempt_rows:
-            response = mastery.response_from_row(row)
+            response = row["_response"] if mode == "daily" else mastery.response_from_row(row)
             cumulative.append(response)
             answers.append({"row": row, "response": response, "kind": kind})
         nodes = mastery.compute_nodes(cumulative, subject_weights=weights, incidence=incidence,
                                       half_life_days=HALF_LIFE_DAYS, now=_parse_time(at))
         correct = sum(1 for row in attempt_rows if row.get("is_correct"))
-        points.append({"id": attempt_id, "kind": kind, "label": _attempt_label(db, attempt_id, mode), "at": at,
+        label = (f"Treinamento {date.fromisoformat(local_date).strftime('%d/%m')}" if mode == "daily"
+                 else _attempt_label(db, attempt_id, mode))
+        points.append({"id": attempt_id, "kind": kind, "label": label, "at": at,
                        "answered": len(attempt_rows), "accuracy": round(correct / len(attempt_rows), 4),
                        "estimated_score": mastery.weighted_score(nodes, weights), "nodes": nodes})
     final = points[-1]["nodes"] if points else mastery.compute_nodes(
@@ -210,7 +239,7 @@ def overview(db: sqlite3.Connection, config: dict, course_id: str, pool: list[di
     else:
         kpis = {"estimated_score": 0.0, "estimated_score_delta": None, "answered": 0, "sessions": 0,
                 "coverage": 0.0, "strong": 0, "gaps": 0, "last_activity": None}
-    course = {"id": course_id, "name": profile.get("nome", course_id), "weights": weights,
+    course = {"id": course_id, "name": profile.get("nome", course_id), "weights": weights, "phase": resolved.get("phase"),
               "non_assessable": resolved.get("non_assessable") or {},
               "components": resolved.get("components") or {}, "fase2": profile.get("fase2") or {}}
     timeline = [{key: point[key] for key in ("id", "kind", "label", "at", "answered", "accuracy", "estimated_score")}
