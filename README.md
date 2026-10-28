@@ -18,6 +18,42 @@ pip install -r requirements.txt
 
 O Ollama deve estar ativo e ter o modelo configurado no projeto. O padrão atual é `qwen3.5:4b`.
 
+## Rodar com Docker (com backup automático)
+
+Para deixar o StudAI sempre no ar no PC, sem ativar o venv:
+
+```bash
+docker compose up -d --build
+```
+
+A interface fica em http://127.0.0.1:8787. Os containers sobem de novo sozinhos depois de um
+reboot (`restart: unless-stopped`), desde que o serviço do Docker inicie com o sistema
+(`sudo systemctl enable docker`).
+
+- **app**: a API e a interface web, com OCR (Tesseract em português). Usa a rede do host, então
+  o Ollama local em `127.0.0.1:11434` funciona sem configuração extra. Chaves de IA vêm do `.env`.
+- **backup**: a cada 24 h (e ao subir) grava `backups/studai-AAAAMMDD-HHMMSS.tar.gz` com
+  `diagnostico/`, `simulados/processados/`, `simulados/uploads/` e `simulados/cache/`, mantendo
+  os 7 mais recentes. Os bancos SQLite são copiados de forma consistente mesmo com a app gravando.
+
+Os dados continuam nas pastas do repositório; o container só as monta. Ajustes opcionais no `.env`:
+`STUDAI_BACKUP_INTERVAL_HOURS`, `STUDAI_BACKUP_KEEP`, `TZ` e `STUDAI_UID`/`STUDAI_GID` (se o seu
+usuário não for o 1000).
+
+```bash
+docker compose logs -f                               # acompanhar app e backups
+docker compose run --rm backup python -m studai.tools.backup --once   # backup na hora
+docker compose down                                  # parar tudo
+```
+
+Para restaurar, pare a app e extraia o backup na raiz do repositório (sobrescreve os arquivos atuais):
+
+```bash
+docker compose stop app
+tar -xzf backups/studai-AAAAMMDD-HHMMSS.tar.gz
+docker compose start app
+```
+
 ## Processar todos os PDFs
 
 Coloque os PDFs das provas em `simulados/` e os gabaritos em `docs/gabaritos/`. A ferramenta procura provas também nas subpastas, associa gabaritos automaticamente pelo nome/identidade do simulado e importa as respostas no histórico SQLite. Em gabaritos com várias versões, escolhe a versão indicada no nome da prova (por exemplo, `prova-V1` ou `prova-S1`). Itens anulados ficam registrados e não entram no sorteio diagnóstico.
