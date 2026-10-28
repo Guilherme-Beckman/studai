@@ -299,3 +299,4 @@ Ideia: quando o aluno erra por não saber o conteúdo, ele precisa sair do zero 
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12, etapa 3: questões de treino geradas pela IA | — |
 | 2026-10-27 | Claude / `claude/study-experience-improvements-98455f` | Fase 12, etapa 4: trilha por nível (fácil → média → difícil → FUVEST) | — |
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Treinamento separado em abas: tarefa do dia, trilhas e treino livre | — |
+| 2026-10-28 | Claude / `claude/docker-compose-backup-routine-ebdc40` | Docker Compose para rodar a app localmente, com backup automático (`studai.tools.backup`) | — |

@@ -1,0 +1,48 @@
+# StudAI rodando como aplicação local, com backup automático.
+#   docker compose up -d --build   → http://127.0.0.1:8787
+# Os dados continuam nas pastas do repositório (montadas abaixo); os backups vão para ./backups.
+
+x-studai: &studai
+  build: .
+  image: studai:local
+  user: "${STUDAI_UID:-1000}:${STUDAI_GID:-1000}"
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    TZ: ${TZ:-America/Campo_Grande}
+  restart: unless-stopped
+  volumes:
+    - ./simulados:/app/simulados
+    - ./diagnostico:/app/diagnostico
+    - ./docs:/app/docs:ro
+    - ./fuvest_acervo:/app/fuvest_acervo:ro
+
+services:
+  app:
+    <<: *studai
+    # Rede do host: a interface fica em 127.0.0.1:8787 e o Ollama local (127.0.0.1:11434)
+    # continua acessível sem mudar a configuração dele.
+    network_mode: host
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  backup:
+    <<: *studai
+    network_mode: none
+    command:
+      - python
+      - -m
+      - studai.tools.backup
+      - --interval-hours
+      - "${STUDAI_BACKUP_INTERVAL_HOURS:-24}"
+      - --keep
+      - "${STUDAI_BACKUP_KEEP:-7}"
+    volumes:
+      - ./simulados:/app/simulados
+      - ./diagnostico:/app/diagnostico
+      - ./backups:/app/backups

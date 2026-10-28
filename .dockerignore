@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.env.*
+**/__pycache__
+*.py[cod]
+simulados
+diagnostico
+docs
+fuvest_acervo
+backups
+prototypes
+tests

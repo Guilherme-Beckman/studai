@@ -11,3 +11,5 @@ diagnostico/imports-web/
 __pycache__/
 *.py[cod]
 .vscode/settings.json
+backups/*
+!backups/.gitkeep
