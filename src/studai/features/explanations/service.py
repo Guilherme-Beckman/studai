@@ -28,6 +28,7 @@ MAX_FEEDBACK_LENGTH = 1000
 SYSTEM = """Você é professor de cursinho e escreve a resolução comentada de uma questão de múltipla escolha da 1ª fase da FUVEST para um aluno que acabou de respondê-la.
 Recebe a questão e a alternativa correta (o gabarito oficial, que não deve ser contestado).
 Escreva em português do Brasil, com frases curtas e diretas, como numa conversa com o aluno.
+Fórmulas em texto simples com símbolos (√, ², ³, π, °, ·, ≤, ≥, ≠, ×, ÷), sem LaTeX e sem $: a tela não renderiza LaTeX.
 - key_concept: o conceito ou a habilidade que a questão cobra, em uma frase.
 - steps: os passos da resolução, em ordem, sem numerar (a tela numera). Cada passo traz conteúdo da questão: um dado, uma conta, um conceito aplicado. Não encha: nada de "marque a alternativa" ou "revise a resposta"; 2 a 5 passos costumam bastar, no máximo 8. Nas contas, mostre a conta.
 - distractors: para cada alternativa errada, por que ela está errada (o erro que leva a ela, quando houver).
@@ -68,9 +69,34 @@ def _hint_leaks(hint: str, letter: str) -> bool:
                           hint))
 
 
+_LATEX_SYMBOLS = {r"\pi": "π", r"\cdot": "·", r"\times": "×", r"\div": "÷", r"\leq": "≤", r"\le": "≤",
+                  r"\geq": "≥", r"\ge": "≥", r"\neq": "≠", r"\approx": "≈", r"\circ": "°", r"\Delta": "Δ",
+                  r"\alpha": "α", r"\beta": "β", r"\theta": "θ", r"\lambda": "λ", r"\mu": "μ", r"\infty": "∞",
+                  r"\left": "", r"\right": "", r"\%": "%", r"\,": " ", r"\;": " ", r"\!": ""}
+_SUPERSCRIPTS = str.maketrans("0123456789+-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻")
+
+
+def plain_math(text: str) -> str:
+    """LaTeX comum em texto simples: a tela mostra texto puro (``$30\\sqrt{2}$`` → ``30√2``)."""
+    if "\\" not in text and "$" not in text:
+        return text
+    text = re.sub(r"\\text(?:rm|bf)?\{([^{}]*)\}", r"\1", text)
+    text = re.sub(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"(\1)/(\2)", text)
+    text = re.sub(r"\\sqrt\{([^{}]*)\}", lambda m: f"√{m.group(1)}" if re.fullmatch(r"[\w.,]+", m.group(1))
+                  else f"√({m.group(1)})", text)
+    text = re.sub(r"\^\{?\\circ\}?", "°", text)
+    text = re.sub(r"\^\{([0-9+\-]+)\}|\^([0-9])", lambda m: (m.group(1) or m.group(2)).translate(_SUPERSCRIPTS), text)
+    for command, symbol in _LATEX_SYMBOLS.items():
+        # Comando inteiro: "\le" não pode pegar o começo de "\left".
+        boundary = r"(?![A-Za-z])" if command[-1].isalpha() else ""
+        text = re.sub(re.escape(command) + boundary, lambda _: symbol, text)
+    text = text.replace("$", "").replace("{", "").replace("}", "")
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
 def _clean(text: str) -> str:
-    """Tira a numeração que o modelo põe por conta própria ("1. ", "Passo 2:", "Dica 3 -")."""
-    return re.sub(r"^\s*(?:(?:passo|dica)\s*)?\d+\s*[.):\-–]\s*", "", text.strip(), flags=re.I).strip()
+    """Tira a numeração que o modelo põe por conta própria ("1. ", "Passo 2:", "Dica 3 -") e o LaTeX."""
+    return plain_math(re.sub(r"^\s*(?:(?:passo|dica)\s*)?\d+\s*[.):\-–]\s*", "", text.strip(), flags=re.I).strip())
 
 
 def validate_explanation(obj: dict, alternatives: dict, correct: str) -> dict:
@@ -103,9 +129,9 @@ def validate_explanation(obj: dict, alternatives: dict, correct: str) -> dict:
     difficulty = obj["difficulty"]
     if isinstance(difficulty, bool) or difficulty not in (1, 2, 3):
         raise ValueError("difficulty deve ser 1, 2 ou 3")
-    return {"answer": correct, "key_concept": obj["key_concept"].strip(),
+    return {"answer": correct, "key_concept": plain_math(obj["key_concept"].strip()),
             "steps": [_clean(step) for step in steps],
-            "distractors": {letter: distractors[letter].strip() for letter in wrong},
+            "distractors": {letter: plain_math(distractors[letter].strip()) for letter in wrong},
             "hints": [_clean(hint) for hint in hints], "difficulty": difficulty}
 
 
@@ -122,16 +148,21 @@ def build_prompt(entry: dict, *, previous: dict | None = None, feedback: str | N
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _images(entry: dict) -> list[bytes]:
-    """Recortes da questão, só com ``STUDAI_EXPLANATIONS_IMAGES=1``: as faixas grátis de
-    nuvem são modelos só de texto e recusam mensagens com imagem."""
-    if os.environ.get("STUDAI_EXPLANATIONS_IMAGES", "0") != "1":
-        return []
+def question_images(entry: dict) -> list[bytes]:
+    """Figuras da questão (e do texto-base), para um provedor que aceita imagem."""
     question = entry["question"]
     source_dir = question.get("_source_dir")
     if not source_dir:
         return []
     return clf.load_images(Path(source_dir), question, _shared(question), "figuras")
+
+
+def _images(entry: dict) -> list[bytes]:
+    """Recortes para o provedor padrão, só com ``STUDAI_EXPLANATIONS_IMAGES=1``: as faixas
+    grátis de nuvem são modelos só de texto e recusam mensagens com imagem."""
+    if os.environ.get("STUDAI_EXPLANATIONS_IMAGES", "0") != "1":
+        return []
+    return question_images(entry)
 
 
 def _record(row: sqlite3.Row | None) -> dict | None:
@@ -148,15 +179,19 @@ def get_explanation(db: sqlite3.Connection, source_id: str, number: int) -> dict
                               (source_id, int(number))).fetchone())
 
 
-def generate_explanation(db: sqlite3.Connection, entry: dict, provider, *, feedback: str | None = None) -> dict:
-    """Gera (ou regenera, com a crítica do aluno) e grava a resolução da questão do pool."""
+def generate_explanation(db: sqlite3.Connection, entry: dict, provider, *, feedback: str | None = None,
+                         images: list[bytes] | None = None) -> dict:
+    """Gera (ou regenera, com a crítica do aluno) e grava a resolução da questão do pool.
+
+    ``images``: figuras para um provedor com visão; sem elas, vale ``STUDAI_EXPLANATIONS_IMAGES``.
+    """
     ensure_schema(db)
     correct = entry["correct_answer"]
     alternatives = entry["question"].get("alternativas") or {}
     if correct not in alternatives:
         raise ValueError("a questão não tem gabarito válido para resolver")
     previous = get_explanation(db, entry["source_id"], entry["number"])
-    images = _images(entry)
+    images = _images(entry) if images is None else images
     user = build_prompt(entry, previous=previous["content"] if previous and feedback else None, feedback=feedback,
                         has_images=bool(images))
     errors: list[str] = []
