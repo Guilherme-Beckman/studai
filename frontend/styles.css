@@ -3556,6 +3556,44 @@ textarea {
   color: var(--ink);
 }
 
+/* Abas do Treinamento: tarefa do dia, trilhas e treino livre */
+.training-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--sunken);
+}
+.training-tab {
+  flex: 1 1 140px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: calc(var(--radius-panel) - 3px);
+  background: transparent;
+  color: var(--ink-2);
+  font: 650 14px var(--font-ui);
+  cursor: pointer;
+}
+.training-tab:hover { background: var(--paper); }
+.training-tab.active { background: var(--paper); color: var(--accent-ink); box-shadow: var(--shadow); }
+.training-tab-count:empty { display: none; }
+.training-tab-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 12px;
+  line-height: 20px;
+}
+
 /* Trilhas por nível */
 .ladders-panel { margin-top: 18px; }
 .ladder-chip {

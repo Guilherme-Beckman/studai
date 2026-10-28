@@ -983,7 +983,7 @@ def _study_training_next(body: dict) -> dict:
                 raise ValueError("questionRefs deve ser uma lista de {sourceId, number}") from None
         return study.append_training_item(db, session_id, pool, config, datetime.now(timezone.utc),
                                           subjects=subjects, count=count, content_ids=content_ids,
-                                          question_refs=refs)
+                                          question_refs=refs, group=str(body.get("group") or "free"))
     finally:
         db.close()
 

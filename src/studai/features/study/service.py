@@ -23,6 +23,18 @@ LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 GAP_ACCURACY = 0.7
 HALF_LIFE_DAYS = 30
 REASONS = ("overdue_question", "ladder", "due_content", "new_gap", "new_content", "followup_practice")
+# Cada questão da sessão pertence a uma frente do Treinamento, respondida em separado:
+# a tarefa do dia (plano e blocos do calendário), as trilhas e o treino livre.
+GROUPS = ("daily", "ladder", "free")
+
+
+def item_group(item: dict) -> str:
+    """Grupo da questão; sessões antigas, sem o campo, deduzem pelo motivo e pelo id."""
+    if item.get("group") in GROUPS:
+        return item["group"]
+    if item.get("reason") == "ladder":
+        return "ladder"
+    return "daily" if str(item.get("id", "")).startswith("i") else "free"
 # O motivo do erro decide o próximo passo: em quantos dias a questão volta...
 REVIEW_DELAY_DAYS = {"concept_confusion": 3, "misread": 3, "trap": 7}
 # ...e quantas questões do mesmo subconteúdo entram na sessão, e onde (posições depois da atual).
@@ -412,6 +424,7 @@ def build_plan(db: sqlite3.Connection, pool: list[dict], profile: dict, course_i
             items.append(_item(reason, entry, content_id))
     for index, item in enumerate(items, 1):
         item["id"] = f"i{index}"
+        item["group"] = "ladder" if item["reason"] == "ladder" else "daily"
     return items
 
 
@@ -434,13 +447,16 @@ def plan_today(db: sqlite3.Connection, pool: list[dict], config: dict, course_id
 def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dict], config: dict,
                         now: datetime, *, subjects: list[str] | None = None, count: int = 1,
                         content_ids: list[str] | None = None,
-                        question_refs: list[tuple[str, int]] | None = None) -> dict:
+                        question_refs: list[tuple[str, int]] | None = None, group: str = "free") -> dict:
     """Acrescenta um bloco de questões recomendadas à sessão diária.
 
     ``content_ids`` (do calendário) restringe o bloco às questões desses nós da
     taxonomia; sem questões neles, o bloco usa só o filtro por matéria.
     ``question_refs`` (do caderno de erros) acrescenta exatamente essas questões.
+    ``group``: ``free`` (treino livre, padrão) ou ``daily`` (bloco do calendário).
     """
+    if group not in ("daily", "free"):
+        raise ValueError("grupo do bloco deve ser daily ou free")
     if question_refs:
         return _append_questions(db, session_id, pool, question_refs)
     if not 1 <= count <= 100:
@@ -470,8 +486,9 @@ def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dic
     if not eligible:
         raise ValueError("não há questões classificadas e com gabarito para as matérias selecionadas")
     for offset in range(count):
-        candidate = next((item for item in ranked
-                          if (item["sourceId"], int(item["number"])) not in used), None)
+        # As questões de trilha ficam na aba Trilhas; o bloco usa só o resto da fila.
+        candidate = next((item for item in ranked if item["reason"] != "ladder"
+                          and (item["sourceId"], int(item["number"])) not in used), None)
         if candidate is None:
             # Quando a fila priorizada se esgota, mantém treino livre sem repetir até necessário.
             unused = [item for item in eligible if item[0] not in used]
@@ -481,6 +498,7 @@ def append_training_item(db: sqlite3.Connection, session_id: str, pool: list[dic
             candidate = _item("practice", entry, content_id)
         identity = (candidate["sourceId"], int(candidate["number"]))
         candidate["id"] = f"t{len(existing) + offset + 1}"
+        candidate["group"] = group
         used.add(identity)
         plan["items"].append(candidate)
     with db:
@@ -503,7 +521,7 @@ def _append_questions(db: sqlite3.Connection, session_id: str, pool: list[dict],
         content_id = content_id_of(entry["question"]) if entry else None
         if not content_id:
             continue
-        candidate = _item("redo", entry, content_id)
+        candidate = {**_item("redo", entry, content_id), "group": "free"}
         candidate["id"] = f"t{len(existing) + added + 1}"
         plan["items"].append(candidate)
         added += 1
@@ -548,6 +566,7 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
         answer = answers.get(item["id"])
         entry = {key: item[key] for key in ("id", "reason", "sourceId", "number", "subject",
                                              "contentId", "contentPath")}
+        entry["group"] = item_group(item)
         if item.get("ladder"):
             entry["ladder"] = ladders.get(item["ladder"])
         entry.update(question=question, answered=answer is not None)
@@ -558,8 +577,14 @@ def session_payload(db: sqlite3.Connection, session_id: str, pool: list[dict] | 
                          hintsUsed=answer["hints_used"], note=answer["note"])
         payload_items.append(entry)
     counts = Counter(item["reason"] for item in items)
+    groups = {group: {"total": 0, "answered": 0, "correct": 0} for group in GROUPS}
+    for entry in payload_items:
+        summary = groups[entry["group"]]
+        summary["total"] += 1
+        summary["answered"] += int(entry["answered"])
+        summary["correct"] += int(bool(entry.get("correct")))
     return {"id": row["id"], "date": row["local_date"], "courseId": row["course_id"],
-            "counts": {reason: counts.get(reason, 0) for reason in REASONS},
+            "counts": {reason: counts.get(reason, 0) for reason in REASONS}, "groups": groups,
             "answered": len(answers), "correct": sum(int(a["is_correct"]) for a in answers.values()),
             "items": payload_items}
 
@@ -645,7 +670,8 @@ def append_ladder_block(db: sqlite3.Connection, session_id: str, pool: list[dict
     if not chosen:
         raise ValueError("ainda não há questões novas para este nível; as da IA estão sendo geradas")
     taken = sum(1 for entry in plan["items"] if entry["id"].startswith("tl"))
-    plan["items"] += [{**_item("ladder", entry, node_id), "ladder": content_id, "id": f"tl{taken + index}"}
+    plan["items"] += [{**_item("ladder", entry, node_id), "ladder": content_id, "id": f"tl{taken + index}",
+                       "group": "ladder"}
                       for index, (entry, node_id) in enumerate(chosen, 1)]
     with db:
         db.execute("UPDATE study_sessions SET plan_json=? WHERE id=?", (json.dumps(plan, ensure_ascii=False), session_id))
@@ -666,7 +692,7 @@ def _insert_ladder_items(db: sqlite3.Connection, session_id: str, item: dict, la
     chosen, missing = ladder.pick(db, pool, ladder_id, level, used, ladder.PER_ROUND, now)
     taken = sum(1 for entry in plan["items"] if entry["id"].startswith("tl"))
     # Prefixo "t": como os blocos de treino, não conta na tarefa diária.
-    new_items = [{**_item("ladder", entry, content_id), "ladder": ladder_id, "id": f"tl{taken + index}"}
+    new_items = [{**_item("ladder", entry, content_id), "ladder": ladder_id, "id": f"tl{taken + index}", "group": "ladder"}
                  for index, (entry, content_id) in enumerate(chosen, 1)]
     if new_items:
         position = next(index for index, entry in enumerate(plan["items"]) if entry["id"] == item["id"]) + 1
@@ -719,6 +745,7 @@ def _insert_followups(db: sqlite3.Connection, session_id: str, items: list[dict]
     # Prefixo "t": como os blocos de treino, não conta na tarefa diária.
     for index, followup in enumerate(chosen, 1):
         followup["id"] = f"tf{taken + index}"
+        followup["group"] = item_group(item)  # a prática do erro fica na mesma frente da questão
     position = next(index for index, entry in enumerate(plan["items"]) if entry["id"] == item["id"]) + 1
     answered = {row[0] for row in db.execute("SELECT item_id FROM study_answers WHERE session_id=?", (session_id,))}
     # ``offset`` conta só as questões ainda por responder depois da atual.

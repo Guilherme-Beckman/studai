@@ -1891,10 +1891,10 @@ function formatDay(isoDate) {
 
 function updateTrainingCounters(session) {
   $("#training-count").textContent = `${session.answered} questão${session.answered === 1 ? "" : "ões"} respondida${session.answered === 1 ? "" : "s"} hoje`;
-  const extra = session.items.filter(item => item.id.startsWith("t"));
+  const extra = session.items.filter(item => item.group === "free");
   const done = extra.filter(item => item.answered).length;
   $("#training-block-status").textContent = extra.length
-    ? `${extra.length} questões extras enfileiradas · ${done} concluídas`
+    ? `${extra.length} questões no treino livre · ${done} concluídas`
     : "Nenhum bloco extra adicionado ainda.";
 }
 
@@ -1952,7 +1952,7 @@ function bindLadders() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: currentStudy.session.id }),
       });
       const focusIds = new Set(session.items.filter(item => !previous.has(item.id)).map(item => item.id));
-      Object.assign(currentStudy, { session, focusIds, lastAnswer: null, selected: null, pendingReason: null });
+      Object.assign(currentStudy, { session, focusIds, lastAnswer: null, selected: null, pendingReason: null, group: "ladder" });
       updateTrainingCounters(session);
       renderToday();
       $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2015,7 +2015,7 @@ async function redoErrorNotebook() {
       body: JSON.stringify({ sessionId: currentStudy.session.id, questionRefs: refs }),
     });
     const added = new Set(session.items.slice(-refs.length).map(item => item.id));
-    Object.assign(currentStudy, { session, lastAnswer: null, selected: null, pendingReason: null, focusIds: added });
+    Object.assign(currentStudy, { session, lastAnswer: null, selected: null, pendingReason: null, focusIds: added, group: "free" });
     updateTrainingCounters(session);
     errorNotebook.selected.clear();
     renderErrorNotebook();
@@ -2064,13 +2064,17 @@ async function loadToday() {
       api(`/api/study/today?courseId=${encodeURIComponent(courseId)}`),
       api("/api/study/progress"),
     ]);
+    let savedGroup = null;
+    try { savedGroup = localStorage.getItem("studai-training-group"); } catch {}
+    const keepGroup = currentStudy?.session?.id === session.id && currentStudy.group;
     currentStudy = { session, selected: null, pendingReason: null, training: true,
-      dailyCount: session.items.filter(item => !item.id.startsWith("t")).length };
+      group: keepGroup || (savedGroup && session.items.some(item => item.group === savedGroup && !item.answered) ? savedGroup : defaultTrainingGroup(session)),
+      dailyCount: session.items.filter(item => item.group === "daily" && item.id.startsWith("i")).length };
     window.studaiExplain?.prefetch(session.id);
     fillLadders(courseId);
     $("#today-date").textContent = formatDay(session.date);
     updateTrainingCounters(session);
-    const dailyItems = session.items.filter(item => !item.id.startsWith("t"));
+    const dailyItems = session.items.filter(item => item.group === "daily" && item.id.startsWith("i"));
     const dailyDone = dailyItems.filter(item => item.answered).length;
     $("#daily-task-status").textContent = dailyItems.length
       ? dailyDone >= dailyItems.length ? `Tarefa diária concluída · ${dailyDone} de ${dailyItems.length} questões`
@@ -2106,9 +2110,52 @@ function renderTodayProgress(progress) {
     : `<div class="empty-state"><div class="empty-icon">◷</div><strong>Nenhum conteúdo em revisão ainda</strong><p>Responda o estudo de hoje ou um diagnóstico para começar o agendamento.</p></div>`;
 }
 
+// ---- Três frentes do Treinamento, cada uma com a sua fila: tarefa do dia, trilhas e treino livre.
+const TRAINING_GROUPS = {
+  daily: { label: "Tarefa do dia", eyebrow: "Tarefa do dia",
+    empty: ["☀", "Nada pendente na tarefa do dia", "Revisões vencidas, erros e conteúdos novos aparecem aqui. Para continuar, use as trilhas ou o treino livre."],
+    done: "Tarefa do dia concluída" },
+  ladder: { label: "Trilhas", eyebrow: "Trilhas",
+    empty: ["⛰", "Nenhuma questão de trilha pendente", "As trilhas abrem quando você marca \"Não sabia o conteúdo\". Use \"Treinar agora\" numa trilha abaixo para pegar mais questões do nível."],
+    done: "Questões da trilha concluídas" },
+  free: { label: "Treino livre", eyebrow: "Treino livre",
+    empty: ["✦", "Nenhuma questão no treino livre", "Escolha matérias e quantidade acima, ou refaça questões do caderno de erros."],
+    done: "Bloco concluído" },
+};
+
+function groupItems(group = currentStudy?.group) {
+  return (currentStudy?.session.items || []).filter(item => item.group === group);
+}
+
+function defaultTrainingGroup(session) {
+  return ["daily", "ladder", "free"].find(group => session.items.some(item => item.group === group && !item.answered)) || "daily";
+}
+
+function renderTrainingTabs() {
+  if (!currentStudy) return;
+  $$("[data-training-group]").forEach(tab => {
+    const group = tab.dataset.trainingGroup;
+    const active = group === currentStudy.group;
+    const pending = groupItems(group).filter(item => !item.answered).length;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", String(active));
+    tab.querySelector("[data-group-count]").textContent = pending ? String(pending) : "";
+  });
+  $$("[data-group-panel]").forEach(panel => panel.classList.toggle("hidden", panel.dataset.groupPanel !== currentStudy.group));
+}
+
+function switchTrainingGroup(group, { scroll = false } = {}) {
+  if (!currentStudy || !TRAINING_GROUPS[group]) return;
+  Object.assign(currentStudy, { group, lastAnswer: null, selected: null, pendingReason: null });
+  try { localStorage.setItem("studai-training-group", group); } catch {}
+  renderTrainingTabs();
+  renderToday();
+  if (scroll) $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function updateDailyTaskStatus() {
   if (!currentStudy) return;
-  const daily = currentStudy.session.items.filter(item => !item.id.startsWith("t"));
+  const daily = currentStudy.session.items.filter(item => item.group === "daily" && item.id.startsWith("i"));
   const done = daily.filter(item => item.answered).length;
   $("#daily-task-status").textContent = daily.length
     ? done >= daily.length ? `Tarefa diária concluída · ${done} de ${daily.length} questões`
@@ -2118,22 +2165,26 @@ function updateDailyTaskStatus() {
 
 function renderToday(workspace = $("#today-workspace")) {
   const { session, selected } = currentStudy;
-  const items = session.items;
+  const meta = TRAINING_GROUPS[currentStudy.group] || TRAINING_GROUPS.daily;
+  renderTrainingTabs();
+  const items = groupItems();
   if (!items.length) {
-    workspace.innerHTML = `<div class="empty-state"><div class="empty-icon">☀</div><strong>Nada para estudar hoje</strong><p>Não há revisões vencidas nem questões classificadas com gabarito para conteúdos novos.</p></div>`;
-    window.studaiFocus?.attach(workspace, { key: "empty", label: "Nada para estudar hoje" });
+    const [icon, title, text] = meta.empty;
+    workspace.innerHTML = `<div class="empty-state"><div class="empty-icon">${icon}</div><strong>${title}</strong><p>${text}</p></div>`;
+    window.studaiFocus?.attach(workspace, { key: `empty-${currentStudy.group}`, label: title });
     return;
   }
   const answered = items.filter(item => item.answered).length;
+  const correctCount = items.filter(item => item.answered && item.correct).length;
   const progress = Math.round(answered / items.length * 100);
-  const top = `<div class="workspace-top"><div><p class="eyebrow">${currentStudy.training ? "Treinamento contínuo" : `Sessão de ${escapeHtml(formatDay(session.date))}`}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${session.correct} acertos até agora</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
+  const top = `<div class="workspace-top"><div><p class="eyebrow">${meta.eyebrow} · ${escapeHtml(formatDay(session.date))}</p><h2>${answered} de ${items.length} respondidas</h2><div class="workspace-meta">${correctCount} acertos nesta frente</div></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>`;
   // Bloco aberto pelo calendário vem antes das pendências da tarefa diária.
   const pending = entry => !entry.answered;
   const item = currentStudy.lastAnswer ? items.find(entry => entry.id === currentStudy.lastAnswer.itemId)
     : items.find(entry => pending(entry) && currentStudy.focusIds?.has(entry.id)) || items.find(pending);
   if (!item) {
     const list = items.map(entry => `<tr><td><span class="today-reason ${entry.reason}">${STUDY_REASONS[entry.reason]}</span></td><td>${escapeHtml(entry.contentPath)}</td><td>${entry.selectedAnswer ? escapeHtml(entry.selectedAnswer) : "Branco"} / ${escapeHtml(entry.correctAnswer)}</td><td>${entry.correct ? "✓" : "✗"}</td></tr>`).join("");
-    workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>Bloco concluído: ${session.correct} acertos</strong><p>As revisões foram atualizadas. Ajuste matérias e quantidade acima para adicionar mais questões quando quiser.</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
+    workspace.innerHTML = `${top}<div class="exam-final-summary"><strong>${meta.done}: ${correctCount} acertos</strong><p>As revisões foram atualizadas. ${currentStudy.group === "free" ? "Ajuste matérias e quantidade acima para adicionar mais questões quando quiser." : "Continue em outra aba quando quiser."}</p></div><table class="subject-table"><thead><tr><th>Motivo</th><th>Conteúdo</th><th>Sua resposta / gabarito</th><th></th></tr></thead><tbody>${list}</tbody></table>`;
     window.studaiFocus?.attach(workspace, { key: "summary", label: "Bloco concluído" });
     return;
   }
@@ -2170,6 +2221,7 @@ function renderToday(workspace = $("#today-workspace")) {
     submitStudyAnswer(item, currentStudy.selected, button.dataset.todayReason, { ...currentStudy.pendingExtras, note: reasonNote(workspace) });
   }));
   $("#today-report", workspace)?.addEventListener("click", () => reportGeneratedQuestion(item));
+  $("[data-go-ladder]", workspace)?.addEventListener("click", () => switchTrainingGroup("ladder", { scroll: true }));
   $("#today-next", workspace)?.addEventListener("click", () => {
     currentStudy.lastAnswer = null;
     currentStudy.selected = null;
@@ -2211,7 +2263,10 @@ function ladderMessage(state) {
   }[state.change] || "";
   const plural = { 1: "fáceis", 2: "médias", 3: "difíceis" }[state.level];
   const generating = state.generating && plural ? ` Gerando questões ${plural} com a IA para os próximos passos…` : "";
-  return text || generating ? `<br>${text}${generating}` : "";
+  // A trilha tem a sua aba: de outra frente, o aviso leva até ela.
+  const go = state.status === "active" && currentStudy?.group !== "ladder"
+    ? ` <button type="button" class="text-button" data-go-ladder>Ir para a trilha →</button>` : "";
+  return text || generating ? `<br>${text}${generating}${go}` : "";
 }
 
 function followupMessage(result) {
@@ -2285,9 +2340,10 @@ async function appendTrainingBlock() {
     const previousCount = currentStudy.session.items.length;
     const session = await api("/api/study/training/next", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: currentStudy.session.id, subjects, count }),
+      body: JSON.stringify({ sessionId: currentStudy.session.id, subjects, count, group: "free" }),
     });
     currentStudy.session = session;
+    currentStudy.group = "free";
     currentStudy.lastAnswer = null;
     currentStudy.selected = null;
     currentStudy.pendingReason = null;
@@ -2316,11 +2372,11 @@ async function trainCalendarBlock({ courseId, subject, contentIds = [], count })
   // Questões da matéria já na fila (de um clique anterior) contam para a meta do bloco;
   // com conteúdos pedidos (calendário, leituras), só as desses conteúdos.
   const wanted = new Set(contentIds);
-  const queued = currentStudy.session.items.filter(item => !item.answered && item.subject === subject
+  const queued = currentStudy.session.items.filter(item => !item.answered && item.group === "daily" && item.subject === subject
     && (!wanted.size || wanted.has(item.contentId)));
   if (queued.length >= count) {
     currentStudy.focusIds = new Set(queued.map(item => item.id));
-    Object.assign(currentStudy, { lastAnswer: null, selected: null, pendingReason: null });
+    Object.assign(currentStudy, { lastAnswer: null, selected: null, pendingReason: null, group: "daily" });
     renderToday();
     $("#today-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
     return;
@@ -2330,12 +2386,12 @@ async function trainCalendarBlock({ courseId, subject, contentIds = [], count })
     const previous = new Set(currentStudy.session.items.map(item => item.id));
     const session = await api("/api/study/training/next", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: currentStudy.session.id, subjects: [subject], contentIds,
+      body: JSON.stringify({ sessionId: currentStudy.session.id, subjects: [subject], contentIds, group: "daily",
         count: Math.max(1, Math.min(100, count || 1)) }),
     });
     const focusIds = new Set([...queued.map(item => item.id),
       ...session.items.filter(item => !previous.has(item.id)).map(item => item.id)]);
-    Object.assign(currentStudy, { session, focusIds, lastAnswer: null, selected: null, pendingReason: null });
+    Object.assign(currentStudy, { session, focusIds, lastAnswer: null, selected: null, pendingReason: null, group: "daily" });
     updateTrainingCounters(session);
     renderToday();
     toast(`Bloco do calendário: ${focusIds.size} ${focusIds.size === 1 ? "questão" : "questões"} de ${subject}. Elas vêm primeiro; a tarefa diária continua depois.`);
@@ -2385,6 +2441,7 @@ function bindEvents() {
   $("#refresh-today").addEventListener("click", refreshToday);
   bindErrorNotebook();
   bindLadders();
+  $$("[data-training-group]").forEach(tab => tab.addEventListener("click", () => switchTrainingGroup(tab.dataset.trainingGroup)));
   $("#training-course").addEventListener("change", () => {
     try { localStorage.setItem("studai-today-course", $("#training-course").value); } catch {}
     renderTrainingSubjects();
