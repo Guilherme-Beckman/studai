@@ -30,7 +30,7 @@ from studai.features.classification.taxonomy import CONTENT_INDEX, DEFAULT_SUBJE
 from studai.features.diagnostics import depth, mastery
 from studai.features.reports.service import HALF_LIFE_DAYS, _course, exam_label
 from studai.features.questions.origin import is_fuvest
-from studai.features.study import projection
+from studai.features.study import projection, readings
 from studai.features.study import service as study
 
 PHASES = {"fase1": "1ª fase", "fase2": "2ª fase", "outra": "Outra prova"}
@@ -529,6 +529,10 @@ def calendar_overview(db: sqlite3.Connection, pool: list[dict], config: dict, co
                "availability": get_availability(db, course_id)}
     if target:
         payload["target"] = {**target, "subjects": list(weights)}
+        # Leituras obrigatórias: só a 1ª fase cobra as obras da lista.
+        if target["phase"] == "fase1" and "Literatura" in profile["pesos"]:
+            listed = readings.list_readings(db, pool, course_id, today, date.fromisoformat(target["date"]))
+            payload["readings"] = {"read": listed["read"], "total": listed["total"], "plan": listed["plan"]}
     if not target or target["phase"] == "fase1":
         # Acertos estimados na 1ª fase (cada questão vale 1 ponto: pesos F1).
         first_phase = resolved["weights"] if target else _course(config, course_id, pool, "fase1")[1]["weights"]

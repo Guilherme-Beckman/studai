@@ -10,7 +10,7 @@ import secrets
 import shutil
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import os
 import time
 import warnings
@@ -1594,7 +1594,11 @@ class Handler(BaseHTTPRequestHandler):
                 course_id = _report_course_id(parse_qs(parsed.query))
                 db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
-                    return self._json(200, readings.list_readings(db, _reports_pool(db, config, course_id), course_id))
+                    today = study.local_date(datetime.now(timezone.utc))
+                    target = study_calendar.next_exam(study_calendar.list_exams(db, course_id, today))
+                    return self._json(200, readings.list_readings(
+                        db, _reports_pool(db, config, course_id), course_id, today,
+                        date.fromisoformat(target["date"]) if target else None))
                 finally:
                     db.close()
             if path == "/api/study/proficiency":

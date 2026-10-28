@@ -51,3 +51,30 @@ class ReadingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReadingPlanTests(unittest.TestCase):
+    def works(self, statuses):
+        return [{"contentId": f"w{index}", "name": f"Obra {index}", "status": status}
+                for index, status in enumerate(statuses)]
+
+    def test_unread_works_spread_until_sixty_days_before_the_exam(self):
+        from datetime import date
+        today, exam = date(2026, 10, 28), date(2027, 11, 1)
+        works = self.works(["read", "not_started", "reading", "not_started"])
+        plan = readings.reading_plan(works, today, exam)
+        self.assertEqual(plan["until"], "2027-09-02")
+        deadlines = plan["deadlines"]
+        self.assertNotIn("w0", deadlines)  # já lida
+        self.assertEqual(list(deadlines), ["w2", "w1", "w3"])  # a que está em leitura primeiro
+        self.assertEqual(deadlines["w3"], "2027-09-02")
+        self.assertLess(deadlines["w2"], deadlines["w1"])
+
+    def test_close_exam_and_no_exam(self):
+        from datetime import date
+        today = date(2026, 10, 28)
+        plan = readings.reading_plan(self.works(["not_started"]), today, date(2026, 11, 27))
+        self.assertEqual(plan["until"], "2026-11-13")  # prova perto: até 2 semanas antes
+        self.assertIsNone(readings.reading_plan(self.works(["not_started"]), today, None))
+        done = readings.reading_plan(self.works(["read", "reviewed"]), today, date(2027, 11, 1))
+        self.assertEqual(done["deadlines"], {})
