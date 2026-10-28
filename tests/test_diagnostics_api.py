@@ -114,5 +114,24 @@ class DiagnosticsApiTests(unittest.TestCase):
         self.assertEqual(len(payload["questions"]), 2)
 
 
+    def test_answer_key_only_after_the_diagnostic_is_finished(self):
+        status, payload = self.request(f"/api/diagnostics/{self.adaptive['id']}")
+        self.assertNotIn("correctAnswer", payload["questions"][0])
+        self.assertEqual(payload["questions"][0]["number"], payload["questions"][0]["question"]["numero"])
+        ordinal, done = 1, False
+        while not done:  # o adaptativo acrescenta a próxima questão a cada resposta
+            _, result = self.request(f"/api/diagnostics/{self.adaptive['id']}/answers", "POST",
+                                     {"ordinal": ordinal, "answer": "B", "reason": "calc_error"})
+            ordinal, done = result["next_ordinal"], result["done"]
+        db = diagnostics.connect_db(self.db_path)
+        try:
+            diagnostics.finalize_attempt(db, self.adaptive["id"], None, include_analysis=False)
+        finally:
+            db.close()
+        status, payload = self.request(f"/api/diagnostics/{self.adaptive['id']}")
+        first = payload["questions"][0]
+        self.assertEqual((first["correctAnswer"], first["correct"]), ("A", False))
+
+
 if __name__ == "__main__":
     unittest.main()

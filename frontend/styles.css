@@ -3484,6 +3484,8 @@ textarea {
 .sim-error > summary { cursor: pointer; font-size: 14px; }
 .sim-pending { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn-ink); font-size: 12px; }
 .sim-reason { color: var(--ink-2); font-size: 13.5px; }
+.diagnostic-review { margin-top: 22px; }
+.diagnostic-review h3 { margin: 0 0 4px; font-size: 16px; }
 
 /* Tempo livre por dia da semana */
 .cal-availability { margin-top: 14px; font-size: 13.5px; }
