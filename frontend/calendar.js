@@ -12,11 +12,12 @@
   const COURSE_KEY = "studai-calendar-course";
   const PALETTE = ["#2f7de1", "#e0663a", "#2fa77f", "#8b63e0", "#d4a017", "#d24f8a", "#1f9eb3", "#7d8a2e",
     "#b8642e", "#5a6fd6", "#c0453f", "#3c9a4f", "#9a5bb4"];
-  const KIND = { study: "Treino", simulado: "Simulado", eve: "Véspera", exam: "Prova", past: "" };
+  const KIND = { study: "Treino", simulado: "Simulado", eve: "Véspera", exam: "Prova", rest: "Folga", past: "" };
   const PHASE = { construcao: "Construção", reta_final: "Reta final" };
   const STATUS = { done: "Concluído", partial: "Em andamento", missed: "Não feito", pending: "Pendente",
-    exam: "Dia da prova", active: "Estudou", idle: "" };
+    exam: "Dia da prova", active: "Estudou", idle: "", rest: "Folga" };
   const WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+  const QUESTION_MINUTES = 4; // como study/calendar.py: minutos por questão do plano
 
   const state = { courseId: null, courses: [], data: null, month: null, selected: null, loading: false };
 
@@ -133,7 +134,33 @@
         <label>Fase<select name="phase"><option value="fase1">1ª fase</option><option value="fase2">2ª fase</option><option value="outra">Outra prova</option></select></label>
         <label>Nota de corte<input name="cutoff" type="number" min="0" max="90" inputmode="numeric" placeholder="acertos (opcional)"></label>
         <button class="button button-primary" type="submit">Adicionar</button>
-      </form></div>`;
+      </form>${availabilityForm(data)}</div>`;
+  }
+
+  // Tempo livre por dia da semana: o plano põe folga onde não há tempo e ajusta a carga de cada dia.
+  const WEEKDAY_NAMES = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+  function availabilityForm(data) {
+    const minutes = data.availability || {};
+    const inputs = WEEKDAY_NAMES.map((name, index) => `<label>${name}<input name="d${index}" type="number" min="0" max="720" step="15" inputmode="numeric" value="${data.availability ? esc(minutes[index] ?? 0) : ""}" placeholder="min"></label>`).join("");
+    const note = data.availability
+      ? `Cerca de ${QUESTION_MINUTES} min por questão; simulado só em dia com 3 h livres; dia com 0 vira folga.`
+      : "Sem tempo informado, o plano distribui a carga por igual em todos os dias.";
+    return `<details class="cal-availability" ${data.availability ? "" : "open"}><summary>Seu tempo de estudo por dia${data.availability ? ` · ${Math.round(Object.values(minutes).reduce((sum, value) => sum + value, 0) / 60)} h por semana` : ""}</summary>
+      <form id="cal-availability-form"><div class="cal-availability-days">${inputs}</div><p class="help-copy">${note} Minutos por dia; o dia de hoje fica como está.</p>
+      <div class="cal-availability-actions"><button class="button button-secondary" type="submit">Salvar tempo</button>${data.availability ? `<button class="text-button" type="button" data-cal-availability-clear>Sem limite</button>` : ""}</div></form></details>`;
+  }
+
+  async function saveAvailability(minutes) {
+    try {
+      await request("/api/calendar/availability", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId: state.courseId, minutes }),
+      });
+      toast(minutes ? "Tempo salvo: o plano dos próximos dias foi recalculado." : "Plano sem limite de tempo.");
+      await refreshCalendar();
+    } catch (error) {
+      toast(error.message, true);
+    }
   }
 
   function readinessPanel(data) {
@@ -199,7 +226,7 @@
       return `<div class="cal-block"><div class="cal-block-main"><span class="cal-chip sim">Simulado</span><p>${esc(sim.label)} · ${plural(sim.questions, "questão", "questões")}${sim.answered ? " (já respondida antes)" : ""}</p></div>
         <div class="cal-block-side">${entry.frozen ? `<b>${entry.done}/${entry.target}</b><small>respondidas</small>` : ""}${action}</div></div>`;
     }
-    if (!entry.blocks.length) return `<p class="help-copy">${entry.kind === "past" ? (entry.answered ? `${plural(entry.answered, "questão respondida", "questões respondidas")} neste dia.` : "Sem plano para este dia.") : "Sem questões disponíveis para este dia."}</p>`;
+    if (!entry.blocks.length) return `<p class="help-copy">${entry.kind === "past" ? (entry.answered ? `${plural(entry.answered, "questão respondida", "questões respondidas")} neste dia.` : "Sem plano para este dia.") : entry.kind === "rest" ? "Folga: você não tem tempo livre neste dia da semana." : "Sem questões disponíveis para este dia."}</p>`;
     return entry.blocks.map(block => blockRow(block, entry, { actions })).join("")
       + (entry.kind === "eve" ? `<p class="help-copy">Véspera: revisão leve. Durma bem.</p>` : "");
   }
@@ -287,6 +314,11 @@
       refreshCalendar();
     });
     root.addEventListener("submit", event => {
+      if (event.target.id === "cal-availability-form") {
+        event.preventDefault();
+        const form = event.target;
+        return saveAvailability(Object.fromEntries(WEEKDAY_NAMES.map((_, index) => [String(index), Number(form[`d${index}`].value || 0)])));
+      }
       if (event.target.id !== "cal-exam-form") return;
       event.preventDefault();
       addExam(event.target);
@@ -295,6 +327,7 @@
       const target = event.target.closest("button");
       if (!target) return;
       if (target.dataset.calRemove) return removeExam(target.dataset.calRemove, target.dataset.name);
+      if ("calAvailabilityClear" in target.dataset) return saveAvailability(null);
       if (target.dataset.calCutoff) return editCutoff(target.dataset.calCutoff, target.dataset.value);
       if (target.dataset.calTrain) return train(target);
       if (target.dataset.calSimulado) return simulado(target.dataset.calSimulado);

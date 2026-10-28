@@ -3485,6 +3485,20 @@ textarea {
 .sim-pending { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--warn-soft); color: var(--warn-ink); font-size: 12px; }
 .sim-reason { color: var(--ink-2); font-size: 13.5px; }
 
+/* Tempo livre por dia da semana */
+.cal-availability { margin-top: 14px; font-size: 13.5px; }
+.cal-availability summary { cursor: pointer; color: var(--accent-ink); font-weight: 600; }
+.cal-availability-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+.cal-availability-days label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); text-align: center; }
+.cal-availability-days input { width: 100%; min-width: 0; text-align: center; }
+.cal-availability-actions { display: flex; gap: 10px; align-items: center; }
+@media (max-width: 520px) { .cal-availability-days { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
 /* Acertos estimados e tendência no Calendário */
 .cal-projection {
   display: grid;

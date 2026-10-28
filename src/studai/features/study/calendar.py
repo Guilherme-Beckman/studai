@@ -44,6 +44,11 @@ REVIEW_CONTENTS = 3
 MAX_HORIZON_DAYS = 730
 SIMULADO_DONE_SHARE = 0.8
 FIRST_PHASE_QUESTIONS = 90
+# Disponibilidade por dia da semana: cada questão do plano conta ~4 min (3,3 de prova +
+# conferir a resolução); simulado só em dia com pelo menos 3 h livres.
+QUESTION_MINUTES = 4
+MIN_SIMULADO_MINUTES = 180
+MAX_DAY_MINUTES = 12 * 60
 
 
 class ExamNotFound(FileNotFoundError):
@@ -191,6 +196,48 @@ def content_demand(nodes: dict[str, dict], weights: dict[str, float], gaps: set[
     return demand
 
 
+def _ensure_availability(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE IF NOT EXISTS study_availability (
+        course_id TEXT NOT NULL, weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+        minutes INTEGER NOT NULL CHECK(minutes BETWEEN 0 AND 720), PRIMARY KEY(course_id, weekday))""")
+
+
+def get_availability(db: sqlite3.Connection, course_id: str) -> dict[int, int] | None:
+    """Minutos livres por dia da semana (0 = segunda); ``None`` se o aluno não informou."""
+    _ensure_availability(db)
+    rows = db.execute("SELECT weekday, minutes FROM study_availability WHERE course_id=?", (course_id,)).fetchall()
+    return {int(row[0]): int(row[1]) for row in rows} if rows else None
+
+
+def set_availability(db: sqlite3.Connection, course_id: str, minutes: dict | None) -> dict[int, int] | None:
+    """Grava os minutos por dia da semana (``{"0": 60, ..., "6": 0}``); ``None`` volta ao plano sem limite."""
+    _ensure_availability(db)
+    if minutes is None:
+        with db:
+            db.execute("DELETE FROM study_availability WHERE course_id=?", (course_id,))
+        return None
+    if not isinstance(minutes, dict):
+        raise ValueError("informe os minutos por dia da semana")
+    values = {}
+    for weekday in range(7):
+        raw = minutes.get(str(weekday), minutes.get(weekday, 0))
+        if isinstance(raw, bool):
+            raise ValueError("minutos inválidos")
+        try:
+            value = int(raw or 0)
+        except (TypeError, ValueError):
+            raise ValueError("os minutos devem ser números inteiros") from None
+        if not 0 <= value <= MAX_DAY_MINUTES:
+            raise ValueError(f"cada dia aceita de 0 a {MAX_DAY_MINUTES} minutos")
+        values[weekday] = value
+    if not any(values.values()):
+        raise ValueError("informe tempo em pelo menos um dia da semana")
+    with db:
+        db.executemany("INSERT OR REPLACE INTO study_availability(course_id,weekday,minutes) VALUES(?,?,?)",
+                       [(course_id, weekday, value) for weekday, value in values.items()])
+    return values
+
+
 def daily_load(total_demand: int, study_days: int) -> dict:
     """Questões por dia para cumprir a demanda até a prova, dentro de ``[MIN_DAILY, MAX_DAILY]``."""
     if study_days <= 0:
@@ -226,18 +273,42 @@ def _block(subject: str, parts: list[tuple[dict, int]], kind: str) -> dict:
 
 
 def build_schedule(today: date, exam_day: date, demand: list[dict], weights: dict[str, float],
-                   review_pool: dict[str, list[dict]], simulados: list[dict]) -> tuple[list[dict], dict]:
+                   review_pool: dict[str, list[dict]], simulados: list[dict],
+                   availability: dict[int, int] | None = None) -> tuple[list[dict], dict]:
     """Dias de ``today`` até ``exam_day`` e a carga diária usada.
 
     ``review_pool`` lista, por matéria, os conteúdos mais fracos (para revisão quando
     a fila de demanda acaba); ``simulados`` são as provas sugeridas, em ordem.
+    ``availability`` (minutos por dia da semana): dia sem tempo vira folga, simulado só
+    cabe em dia com 3 h, e a carga de cada dia segue o tempo livre dele.
     """
     days = [today + timedelta(days=offset) for offset in range((exam_day - today).days + 1)]
     kinds = {day: _day_kind(day, exam_day) for day in days}
-    study_days = sum(1 for day in days if kinds[day][0] == "study")
-    load = daily_load(sum(item["questions"] for item in demand), study_days)
+    if availability:
+        for day in days:
+            kind, phase = kinds[day]
+            minutes = availability.get(day.weekday(), 0)
+            if kind in ("study", "simulado") and minutes <= 0:
+                kinds[day] = ("rest", phase)
+            elif kind == "simulado" and minutes < MIN_SIMULADO_MINUTES:
+                kinds[day] = ("study", phase)
+    study_list = [day for day in days if kinds[day][0] == "study"]
+    total_demand = sum(item["questions"] for item in demand)
+    if availability:
+        fits = {day: max(1, availability.get(day.weekday(), 0) // QUESTION_MINUTES) for day in study_list}
+        total_fit = sum(fits.values())
+        share = min(1.0, total_demand / total_fit) if total_fit else 0.0
+        # Cada dia recebe a sua parte da demanda, sem passar do que cabe no tempo dele.
+        targets = {day: min(fits[day], max(min(fits[day], MIN_DAILY), math.ceil(fits[day] * share)))
+                   for day in study_list}
+        load = {"questionsPerDay": round(sum(targets.values()) / len(targets)) if targets else 0,
+                "demand": total_demand, "studyDays": len(study_list), "feasible": total_demand <= total_fit,
+                "byAvailability": True}
+    else:
+        load = daily_load(total_demand, len(study_list))
+        targets = {day: load["questionsPerDay"] or MIN_DAILY for day in study_list}
     per_day = load["questionsPerDay"] or MIN_DAILY
-    capacity = per_day * study_days
+    capacity = sum(targets.values())
     # Sem tempo para tudo: fica de fora o fim da fila (menor prioridade).
     queues: dict[str, list[list]] = defaultdict(list)
     kept = 0
@@ -283,13 +354,17 @@ def build_schedule(today: date, exam_day: date, demand: list[dict], weights: dic
                 block = review_block(per_day)
                 entry["blocks"] = [block] if block else []
         elif kind == "eve":
-            block = review_block(max(MIN_DAILY, per_day // 2))
+            amount = max(MIN_DAILY, per_day // 2)
+            if availability:
+                amount = min(amount, max(1, availability.get(day.weekday(), 0) // QUESTION_MINUTES))
+            block = review_block(amount)
             entry["blocks"] = [block] if block else []
         elif kind == "study":
             remaining_total = sum(count for queue in queues.values() for _, count in queue)
-            left = per_day
+            day_target = targets[day]
+            left = day_target
             # Carga grande se divide entre duas matérias em vez de um dia inteiro numa só.
-            cap = max(MIN_DAILY, math.ceil(per_day / MAX_SUBJECTS_PER_DAY))
+            cap = max(MIN_DAILY, math.ceil(day_target / MAX_SUBJECTS_PER_DAY))
             taken: dict[str, list[tuple[dict, int]]] = {}
 
             def take(subject: str, amount: int) -> None:
@@ -387,6 +462,8 @@ def attach_progress(entry: dict, activity: dict, today: date) -> dict:
     target = entry.get("target") or 0
     if entry["kind"] == "exam":
         entry["status"] = "exam"
+    elif entry["kind"] == "rest":  # folga: só conta se estudou mesmo assim
+        entry["status"] = "active" if activity["total"] else "rest"
     elif entry["kind"] == "past":  # dia anterior ao calendário: só mostra se houve estudo
         entry["status"] = "active" if activity["total"] else "idle"
     elif target and done >= (math.ceil(target * SIMULADO_DONE_SHARE) if entry.get("simulado") else target):
@@ -448,7 +525,8 @@ def calendar_overview(db: sqlite3.Connection, pool: list[dict], config: dict, co
                                 now=now)
     payload = {"course": {"id": course_id, "name": profile.get("nome", course_id)}, "today": today.isoformat(),
                "exams": exams, "target": target, "subjects": list(weights),
-               "readiness": readiness(nodes, weights), "load": None, "days": [], "weeks": [], "months": []}
+               "readiness": readiness(nodes, weights), "load": None, "days": [], "weeks": [], "months": [],
+               "availability": get_availability(db, course_id)}
     if target:
         payload["target"] = {**target, "subjects": list(weights)}
     if not target or target["phase"] == "fase1":
@@ -468,7 +546,7 @@ def calendar_overview(db: sqlite3.Connection, pool: list[dict], config: dict, co
             review_pool[node["subject"]].append({"id": node["id"], "name": node["name"]})
     simulados = simulado_suggestions(db, pool, course_id, subjects)
     schedule, load = build_schedule(today, date.fromisoformat(target["date"]), demand, weights,
-                                    review_pool, simulados)
+                                    review_pool, simulados, payload["availability"])
 
     # Hoje fixo: a primeira consulta do dia grava o plano; mudar de prova-alvo regrava.
     key = today.isoformat()

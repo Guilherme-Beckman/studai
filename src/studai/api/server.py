@@ -2059,6 +2059,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(201, _calendar_add_exam(self._read_json()))
             if path == "/api/study/training/next":
                 return self._json(200, _study_training_next(self._read_json()))
+            if path == "/api/calendar/availability":
+                body = self._read_json()
+                course_id = _report_course_id({}, body)
+                db = study.connect_db(DEFAULT_DIAGNOSTICS_DB)
+                try:
+                    saved = study_calendar.set_availability(db, course_id, body.get("minutes"))
+                    # O dia de hoje fica como estava; os próximos se recalculam com o novo tempo.
+                    return self._json(200, {"availability": saved})
+                finally:
+                    db.close()
             if path == "/api/study/ladders/fill":
                 # Trilhas ativas sem questões no nível atual: pede à IA (o frontend chama ao abrir o Treinamento).
                 body = self._read_json()
