@@ -2874,6 +2874,50 @@ textarea {
 .rp-col-label {
   display: none;
 }
+/* Resumo da semana */
+.rp-week-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.rp-week-tile {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--sunken);
+}
+.rp-week-tile span, .rp-week-tile small { color: var(--muted); font-size: 12px; }
+.rp-week-tile strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.rp-week-up { color: var(--ok-ink); }
+.rp-week-down { color: var(--bad-ink); }
+.rp-week-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+.rp-week-cols h3 { margin: 0 0 6px; font: 700 13px var(--font-ui); color: var(--ink-2); }
+.rp-week-cols ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
+.rp-week-cols li + li { margin-top: 4px; }
+.rp-week-cols small { color: var(--muted); }
+.rp-week-extras { margin-top: 12px; font-size: 13.5px; color: var(--ink-2); }
+.rp-week-extras p { margin: 4px 0 0; }
+/* Fechamento do dia no Treinamento */
+.day-closing {
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--ok-line);
+  border-radius: var(--radius-panel);
+  background: var(--ok-soft);
+  color: var(--ink);
+  font-size: 14px;
+}
+.day-closing h3 { margin: 0 0 6px; font-size: 15px; color: var(--ok-ink); }
+.day-closing p { margin: 4px 0; }
+.day-closing ul { margin: 4px 0; padding-left: 18px; }
+
 /* confiança e ritmo por matéria */
 .rp-conf-head,
 .rp-conf-row {

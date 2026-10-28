@@ -427,6 +427,44 @@
     return `<section class="panel rp-panel rp-subjects" aria-labelledby="rp-subjects-title"><div class="rp-panel-head"><div><h2 id="rp-subjects-title">Domínio por matéria</h2><p>Ordenado pelo peso no curso. A barra é o domínio estimado; o traço escuro, o intervalo de 80%. Clique para abrir os conteúdos.</p></div></div><div class="rp-subject-head" aria-hidden="true"><span>Matéria</span><span>Peso</span><span>Domínio · IC 80%</span><span>Situação</span><span>Evolução</span><span>Variação</span></div><div class="rp-subject-list">${rows}</div></section>`;
   }
 
+  // Resumo da semana: o que foi feito nos últimos 7 dias e como isso mexeu na prontidão.
+  const REASON_TEXT = { unknown_content: "não sabia o conteúdo", concept_confusion: "confundiu um detalhe",
+    calc_error: "erro de conta", misread: "interpretação", trap: "pegadinha", time_pressure: "faltou tempo" };
+  function duration(seconds) {
+    const minutes = Math.round((seconds || 0) / 60);
+    return minutes >= 60 ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}` : `${minutes} min`;
+  }
+  function change(pair, format) {
+    if (!pair || pair.to == null) return "—";
+    if (pair.from == null || Math.abs(pair.to - pair.from) < 1e-9) return format(pair.to);
+    const up = pair.to > pair.from;
+    return `${format(pair.from)} → <b class="${up ? "rp-week-up" : "rp-week-down"}">${format(pair.to)}</b>`;
+  }
+  function weekPanel(week) {
+    if (!week || !week.answered) return "";
+    const tiles = [
+      ["Questões", intFmt(week.answered), week.accuracy == null ? "" : `${pct(week.accuracy)} de acerto`],
+      ["Tempo de estudo", duration(week.studySeconds), `${week.activeDays} ${week.activeDays === 1 ? "dia" : "dias"} com estudo`],
+      ["Sequência", `${week.streak} ${week.streak === 1 ? "dia" : "dias"}`, "seguidos estudando"],
+      ["Prontidão", change(week.readiness, value => pct(value)), "para a prova-alvo"],
+      ["Acertos estimados", change(week.estimate, value => `${Math.round(value)}/${week.estimate.questions}`), "na 1ª fase"],
+    ].map(([label, value, hint]) => `<div class="rp-week-tile"><span>${label}</span><strong>${value}</strong><small>${hint}</small></div>`).join("");
+    const list = (items, render) => items.length ? `<ul>${items.map(render).join("")}</ul>` : `<p class="muted">—</p>`;
+    const improved = list(week.improved, item => `<li><b>${esc(item.name)}</b> <small>${esc(item.subject)} · ${pct(item.from)} → ${pct(item.to)}</small></li>`);
+    const consolidated = list(week.consolidated, item => `<li>${esc(item.name)} <small>${esc(item.subject)}</small></li>`);
+    const reasons = Object.entries(week.reasons || {});
+    const ladders = week.ladders || { active: [], done: [] };
+    const extras = [
+      reasons.length ? `Erros mais comuns: ${reasons.map(([reason, count]) => `${esc(REASON_TEXT[reason] || reason)} (${count})`).join(", ")}.` : "",
+      ladders.done.length ? `${ladders.done.length} ${ladders.done.length === 1 ? "trilha concluída" : "trilhas concluídas"}.` : "",
+      ladders.active.length ? `${ladders.active.length} ${ladders.active.length === 1 ? "trilha em andamento" : "trilhas em andamento"}: ${ladders.active.slice(0, 3).map(item => `${esc(item.name)} (nível ${item.level}/4)`).join(", ")}.` : "",
+    ].filter(Boolean).map(text => `<p>${text}</p>`).join("");
+    return `<section class="panel rp-panel rp-week" aria-labelledby="rp-week-title"><div class="rp-panel-head"><div><h2 id="rp-week-title">Resumo da semana</h2><p>Últimos 7 dias, comparados com uma semana atrás.</p></div></div>
+      <div class="rp-week-tiles">${tiles}</div>
+      <div class="rp-week-cols"><div><h3>Mais evoluíram</h3>${improved}</div><div><h3>Consolidados na semana</h3>${consolidated}</div></div>
+      ${extras ? `<div class="rp-week-extras">${extras}</div>` : ""}</section>`;
+  }
+
   // Confiança declarada ao responder: certeza, dúvida, chute e erro, mais o ritmo.
   const CONFIDENCE_BUCKETS = [["sure", "Certeza"], ["doubt", "Dúvida"], ["guess", "Chute"], ["wrong", "Erro"]];
   function clock(seconds) {
@@ -657,9 +695,9 @@
     const nameEl = document.getElementById("reports-course-name");
     if (nameEl) nameEl.textContent = overview.course?.name ? `${overview.course.name}. Domínio estimado por conteúdo, ponderado pelo peso de cada matéria no curso.` : "Domínio estimado por conteúdo da taxonomia.";
     const timeline = Array.isArray(overview.timeline) ? overview.timeline : [];
-    if (!timeline.length) { root.innerHTML = emptyHtml(overview) + proficiencyPanel(state.proficiency); return; }
+    if (!timeline.length) { root.innerHTML = emptyHtml(overview) + weekPanel(state.week) + proficiencyPanel(state.proficiency); return; }
     const report = overview.latest_report ? `<section class="panel rp-panel rp-latest" aria-labelledby="rp-latest-title"><div class="rp-panel-head"><div><h2 id="rp-latest-title">Último relatório de diagnóstico</h2><p>Gerado ao concluir o diagnóstico mais recente.</p></div></div>${renderStudyReport(overview.latest_report, { interactive: true, title: false })}</section>` : "";
-    root.innerHTML = `${weightsNote(overview.course)}${kpiRow(overview.kpis, timeline)}<div class="rp-grid-2">${evolutionPanel(timeline)}${prioritiesPanel(overview)}</div>${subjectsPanel(overview)}${proficiencyPanel(state.proficiency)}<div class="rp-explorer">${treePanel()}<aside class="panel rp-panel rp-detail" id="rp-detail" aria-live="polite" aria-label="Detalhe do conteúdo"></aside></div>${report}`;
+    root.innerHTML = `${weightsNote(overview.course)}${weekPanel(state.week)}${kpiRow(overview.kpis, timeline)}<div class="rp-grid-2">${evolutionPanel(timeline)}${prioritiesPanel(overview)}</div>${subjectsPanel(overview)}${proficiencyPanel(state.proficiency)}<div class="rp-explorer">${treePanel()}<aside class="panel rp-panel rp-detail" id="rp-detail" aria-live="polite" aria-label="Detalhe do conteúdo"></aside></div>${report}`;
     drawEvolution();
     renderTree();
     renderDetail();
@@ -702,12 +740,14 @@
     state.error = null;
     const courseId = state.courseId;
     try {
-      const [overview, proficiency] = await Promise.all([
+      const [overview, proficiency, week] = await Promise.all([
         fetchJson(`/api/reports/overview?courseId=${encodeURIComponent(courseId)}`),
         fetchJson(`/api/study/proficiency?courseId=${encodeURIComponent(courseId)}`).catch(() => null),
+        fetchJson(`/api/study/summary?period=week&courseId=${encodeURIComponent(courseId)}`).catch(() => null),
       ]);
       if (courseId !== state.courseId) return;
       state.proficiency = proficiency;
+      state.week = week;
       const courseChanged = state.overview?.course?.id !== overview?.course?.id;
       state.overview = overview;
       state.maxPriority = Math.max(0, ...Object.values(overview.nodes || {}).map(node => isNum(node.priority) ? node.priority : 0));
