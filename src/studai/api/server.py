@@ -1520,8 +1520,11 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/diagnostics":
                 db = diagnostics.connect_db(DEFAULT_DIAGNOSTICS_DB)
                 try:
-                    rows = db.execute("SELECT id,course_name,status,requested_count,actual_count,created_at,mode "
-                                      "FROM attempts WHERE mode!='exam' ORDER BY created_at DESC").fetchall()
+                    # "answered": quantas já foram respondidas (diagnóstico pausado retoma de onde parou).
+                    rows = db.execute("""SELECT a.id,a.course_name,a.status,a.requested_count,a.actual_count,
+                        a.created_at,a.mode,(SELECT COUNT(*) FROM attempt_questions aq WHERE aq.attempt_id=a.id
+                        AND aq.answered_at IS NOT NULL) AS answered
+                        FROM attempts a WHERE a.mode!='exam' ORDER BY a.created_at DESC""").fetchall()
                     return self._json(200, [dict(row) for row in rows])
                 finally:
                     db.close()
