@@ -241,6 +241,7 @@ Ideia: dar começo, meio e fim ao estudo — o aluno vê o que fez na semana e n
 - [x] "Primeiros passos" na Visão geral (`study/setup.py`, `GET /api/study/setup`): prova cadastrada, nota de corte, tempo por dia, diagnóstico, 30 respostas (com o progresso) e leituras; cada passo pendente tem "Fazer agora" para a aba certa, e o cartão some quando tudo está feito (2026-10-28)
 - [x] Trilhas: "Resumo do assunto" (mini-resumo da IA, gerado ao abrir) e "Mais questões da IA" no nível atual em cada trilha ativa (2026-10-28)
 - [x] Correção: abrir o Treinamento logo depois de um diagnóstico dava "UNIQUE constraint failed: review_cards…" — três rotas sincronizavam as respostas ao mesmo tempo e criavam o mesmo cartão. A sincronização agora pega a trava de escrita antes de ler (`BEGIN IMMEDIATE`) e a sessão do dia aceita duas aberturas simultâneas (`tests/test_study_concurrency.py`) (2026-10-28)
+- [x] Pausar o diagnóstico: "Pausar e continuar depois" no diagnóstico em andamento (cada resposta já fica salva), aviso "Você tem um diagnóstico pausado · Continuar" na aba Diagnósticos e na Visão geral, e o histórico mostra "Pausado · N respondidas" (2026-10-29)
 - [x] Diagnóstico concluído mostra "Revise seus erros": gabarito, motivo, a questão e a resolução comentada de cada erro (o gabarito só sai depois de concluído, para não enviesar a medida) (2026-10-28)
 
 ## Processamento de provas
@@ -322,3 +323,4 @@ Ideia: dar começo, meio e fim ao estudo — o aluno vê o que fez na semana e n
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Correção da corrida na sincronização (UNIQUE em review_cards); resumo e geração nas trilhas | — |
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Resoluções com a figura via Gemini e fórmulas em texto simples | — |
 | 2026-10-28 | Claude / `claude/study-experience-improvements-98455f` | Acabamento: LaTeX das resoluções antigas, atalhos H/R, varredura no celular | — |
+| 2026-10-29 | Claude / `claude/study-experience-improvements-98455f` | Pausar e continuar o diagnóstico | — |

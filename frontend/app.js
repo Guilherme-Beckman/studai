@@ -109,7 +109,7 @@ function showView(name) {
   $$(".view").forEach(view => view.classList.toggle("active", view.id === `view-${name}`));
   $$(".nav-item").forEach(button => button.classList.toggle("active", button.dataset.view === name));
   if (name === "exams") refreshExams();
-  if (name === "overview") refreshSetup();
+  if (name === "overview") { refreshSetup(); refreshDiagnostics(); }
   if (name === "diagnostics") refreshDiagnostics();
   if (name === "reports") window.refreshReports?.();
   if (name === "map") window.refreshKnowledgeMap?.();
@@ -1691,13 +1691,46 @@ async function cancelProcess() {
 }
 
 function diagnosticCard(item) {
-  const state = item.status === "completed" ? "Concluído" : item.status === "analysis_failed" ? "Análise incompleta" : "Em andamento";
-  return `<div class="history-item"><span class="history-mark">◉</span><button class="history-open" type="button" data-diagnostic="${escapeHtml(item.id)}"><span class="history-main"><strong>${escapeHtml(item.course_name)}</strong><span>${state} · ${item.actual_count} questões · ${new Date(item.created_at).toLocaleDateString("pt-BR")}</span></span><span class="history-arrow">›</span></button><button class="history-delete" type="button" data-delete-diagnostic="${escapeHtml(item.id)}" aria-label="Remover diagnóstico" title="Remover diagnóstico">×</button></div>`;
+  const paused = item.status === "in_progress";
+  const state = item.status === "completed" ? "Concluído" : item.status === "analysis_failed" ? "Análise incompleta"
+    : `Pausado · ${item.answered ?? 0} ${item.answered === 1 ? "respondida" : "respondidas"}`;
+  const total = paused && item.mode === "adaptive" ? `até ${item.requested_count}` : item.actual_count;
+  return `<div class="history-item"><span class="history-mark">◉</span><button class="history-open" type="button" data-diagnostic="${escapeHtml(item.id)}"><span class="history-main"><strong>${escapeHtml(item.course_name)}</strong><span>${state} · ${total} questões · ${new Date(item.created_at).toLocaleDateString("pt-BR")}</span></span><span class="history-arrow">›</span></button><button class="history-delete" type="button" data-delete-diagnostic="${escapeHtml(item.id)}" aria-label="Remover diagnóstico" title="Remover diagnóstico">×</button></div>`;
+}
+
+// Diagnóstico pausado: cada resposta já fica salva; o aviso leva de volta ao ponto em que parou.
+function pausedDiagnostic(items) {
+  return items.find(item => item.status === "in_progress") || null;
+}
+
+function renderDiagnosticResume(item) {
+  const markup = item
+    ? `<div class="diagnostic-resume"><div><strong>Você tem um diagnóstico pausado</strong><p>${item.answered ?? 0} ${item.answered === 1 ? "questão respondida" : "questões respondidas"} · começado em ${new Date(item.created_at).toLocaleDateString("pt-BR")}. As respostas ficam salvas.</p></div><button type="button" class="button button-primary" data-resume-diagnostic="${escapeHtml(item.id)}">Continuar diagnóstico</button></div>` : "";
+  ["#diagnostic-resume", "#overview-diagnostic-resume"].forEach(selector => {
+    const box = $(selector);
+    if (!box) return;
+    box.innerHTML = markup;
+    $("[data-resume-diagnostic]", box)?.addEventListener("click", () => {
+      showView("diagnostics");
+      openDiagnostic(item.id);
+      $("#diagnostic-workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+function pauseDiagnostic() {
+  $("#diagnostic-workspace").classList.add("hidden");
+  currentDiagnostic = null;
+  diagnosticSelection = null;
+  diagnosticReasonPrompt = null;
+  toast("Diagnóstico pausado. Suas respostas estão salvas: continue quando quiser.");
+  refreshDiagnostics();
 }
 
 async function refreshDiagnostics() {
   try {
     const items = await api("/api/diagnostics");
+    renderDiagnosticResume(pausedDiagnostic(items));
     $("#diagnostic-list").innerHTML = items.length ? items.map(diagnosticCard).join("") : `<div class="empty-state"><div class="empty-icon">◉</div><strong>Nenhum diagnóstico ainda</strong><p>Gere um novo diagnóstico quando houver questões classificadas com gabarito.</p></div>`;
     $$("[data-diagnostic]").forEach(button => button.addEventListener("click", () => openDiagnostic(button.dataset.diagnostic)));
     $$('[data-delete-diagnostic]').forEach(button => button.addEventListener("click", async event => {
@@ -1808,12 +1841,13 @@ function renderDiagnostic(workspace, data) {
     body = `<div class="inline-result">${stop}Gere a análise para ver suas métricas e prioridades.</div><button class="button button-primary" id="finalize-diagnostic">Concluir e analisar</button>`;
   }
   const meta = adaptive ? `${answered} respondida(s) · adaptativo${data.requested ? ` · até ${data.requested}` : ""}` : `${answered} de ${data.total} respondidas`;
-  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Tentativa ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${meta} · ${escapeHtml(data.status)}</div></div><button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
+  workspace.innerHTML = `<div class="workspace-top"><div><p class="eyebrow">Tentativa ${escapeHtml(data.id)}</p><h2>${escapeHtml(data.course)}</h2><div class="workspace-meta">${meta} · ${escapeHtml(data.status)}</div></div><div class="diagnostic-top-actions">${!data.metrics && pending && !(adaptive && finished) ? `<button type="button" class="button button-secondary" id="pause-diagnostic" title="As respostas já ficam salvas">Pausar e continuar depois</button>` : ""}<button class="icon-button" id="close-diagnostic" title="Fechar">×</button></div></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>${body}`;
   window.studaiFocus?.attach(workspace, pending && !data.metrics && !(adaptive && finished)
     ? { current: answered + 1, total: adaptive ? data.requested : data.total, key: pending.ordinal }
     : { key: data.metrics ? "metrics" : "finished", label: "Diagnóstico concluído" });
   if (data.metrics) window.studaiExplain?.mount(workspace);
-  $("#close-diagnostic", workspace).addEventListener("click", () => { workspace.classList.add("hidden"); currentDiagnostic = null; });
+  $("#close-diagnostic", workspace).addEventListener("click", () => { workspace.classList.add("hidden"); currentDiagnostic = null; refreshDiagnostics(); });
+  $("#pause-diagnostic", workspace)?.addEventListener("click", () => { window.studaiFocus?.close(); pauseDiagnostic(); });
   if (pending && !data.metrics && !(adaptive && finished)) {
     $$("[data-answer]", workspace).forEach(button => button.addEventListener("click", () => {
       diagnosticSelection = { id: data.id, ordinal: pending.ordinal, answer: button.dataset.answer };

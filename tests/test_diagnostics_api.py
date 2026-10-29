@@ -114,6 +114,12 @@ class DiagnosticsApiTests(unittest.TestCase):
         self.assertEqual(len(payload["questions"]), 2)
 
 
+    def test_history_shows_how_many_were_answered(self):
+        self.request(f"/api/diagnostics/{self.adaptive['id']}/answers", "POST", {"ordinal": 1, "answer": "A"})
+        status, items = self.request("/api/diagnostics")
+        item = next(row for row in items if row["id"] == self.adaptive["id"])
+        self.assertEqual((status, item["status"], item["answered"]), (200, "in_progress", 1))
+
     def test_answer_key_only_after_the_diagnostic_is_finished(self):
         status, payload = self.request(f"/api/diagnostics/{self.adaptive['id']}")
         self.assertNotIn("correctAnswer", payload["questions"][0])
