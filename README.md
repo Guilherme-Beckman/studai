@@ -30,8 +30,9 @@ A interface fica em http://127.0.0.1:8787. Os containers sobem de novo sozinhos 
 reboot (`restart: unless-stopped`), desde que o serviço do Docker inicie com o sistema
 (`sudo systemctl enable docker`).
 
-- **app**: a API e a interface web, com OCR (Tesseract em português). Usa a rede do host, então
-  o Ollama local em `127.0.0.1:11434` funciona sem configuração extra. Chaves de IA vêm do `.env`.
+- **app**: a API e a interface web, com OCR (Tesseract em português), publicada só em
+  `127.0.0.1:8787` (funciona no Docker Engine e no Docker Desktop). O Ollama do PC é acessado em
+  `host.docker.internal:11434` (`STUDAI_DOCKER_OLLAMA_URL` muda isso). Chaves de IA vêm do `.env`.
 - **backup**: a cada 24 h (e ao subir) grava `backups/studai-AAAAMMDD-HHMMSS.tar.gz` com
   `diagnostico/`, `simulados/processados/`, `simulados/uploads/` e `simulados/cache/`, mantendo
   os 7 mais recentes. Os bancos SQLite são copiados de forma consistente mesmo com a app gravando.

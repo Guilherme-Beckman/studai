@@ -1,5 +1,5 @@
 # StudAI rodando como aplicação local, com backup automático.
-#   docker compose up -d --build   → http://127.0.0.1:8787
+#   docker compose up -d --build   → http://127.0.0.1:8787 (Docker Engine ou Docker Desktop)
 # Os dados continuam nas pastas do repositório (montadas abaixo); os backups vão para ./backups.
 
 x-studai: &studai
@@ -21,9 +21,18 @@ x-studai: &studai
 services:
   app:
     <<: *studai
-    # Rede do host: a interface fica em 127.0.0.1:8787 e o Ollama local (127.0.0.1:11434)
-    # continua acessível sem mudar a configuração dele.
-    network_mode: host
+    # Porta publicada só no próprio PC. Funciona no Docker Engine e no Docker Desktop (que roda
+    # os containers numa VM: com "network_mode: host" a porta abria na VM, não no PC).
+    command: ["python", "api.py", "--host", "0.0.0.0", "--port", "8787"]
+    ports:
+      - "127.0.0.1:8787:8787"
+    # O Ollama do PC fica em host.docker.internal; o .env costuma apontar para 127.0.0.1, que
+    # dentro do container é o próprio container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      TZ: ${TZ:-America/Campo_Grande}
+      OLLAMA_BASE_URL: ${STUDAI_DOCKER_OLLAMA_URL:-http://host.docker.internal:11434}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/', timeout=5)"]
       interval: 30s
